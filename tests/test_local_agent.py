@@ -106,6 +106,29 @@ async def test_defaults_target_tool_capable_ollama_model(tmp_path) -> None:  # t
     assert agent._model == DEFAULT_MODEL == "gemma4:latest"
 
 
+async def test_history_budget_scales_with_model_context_window(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """LocalAgent derives `max_history_chars` from the model's window so a
+    big-context model like `gemma4:latest` (128K) actually uses the room."""
+    big = LocalAgent(model="gemma4:latest", paths=_paths(tmp_path))
+    small = LocalAgent(model="gemma3:4b", paths=_paths(tmp_path))
+    # Big model should have a strictly larger budget than the small one.
+    assert big._max_history_chars > small._max_history_chars
+    # Small model falls back to the conservative 24K char floor.
+    assert small._max_history_chars == 24_000
+    # Big model leaves clear room for tool output but stays under the
+    # full window so the model still has space for its reply.
+    assert 100_000 < big._max_history_chars < 300_000
+
+
+async def test_history_budget_explicit_override_wins(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    agent = LocalAgent(
+        model="gemma4:latest",
+        max_history_chars=10_000,
+        paths=_paths(tmp_path),
+    )
+    assert agent._max_history_chars == 10_000
+
+
 async def test_simple_stop_reply(tmp_path) -> None:  # type: ignore[no-untyped-def]
     agent, mock = _make_agent_with_responses([_response_text("hello back")], tmp_path)
     outs = await _collect(agent, _inbound("hi"))

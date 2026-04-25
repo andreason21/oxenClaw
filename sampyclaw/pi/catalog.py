@@ -89,12 +89,51 @@ def default_registry() -> InMemoryModelRegistry:
                 supports_image_input=True,
             ),
             # ── Local / Ollama ──
+            # gemma4 family — multimodal, native function calling, 128K
+            # ctx on E-class (2B/4B effective) and 256K on the 26B/31B
+            # MoE variants. `gemma4:latest` aliases to e4b (~9.6 GB).
+            # NOTE: there is NO `gemma4:9b` — the closest size is e4b
+            # (effective 4B parameters) or 26b/31b for higher quality.
             Model(
                 id="gemma4:latest",
                 provider="ollama",
-                context_window=32_768,
-                max_output_tokens=4_096,
+                context_window=131_072,  # 128K
+                max_output_tokens=8_192,
                 supports_tools=True,
+                supports_image_input=True,
+                aliases=("gemma4:e4b",),
+            ),
+            Model(
+                id="gemma4:e2b",
+                provider="ollama",
+                context_window=131_072,
+                max_output_tokens=8_192,
+                supports_tools=True,
+                supports_image_input=True,
+            ),
+            Model(
+                id="gemma4:e4b",
+                provider="ollama",
+                context_window=131_072,
+                max_output_tokens=8_192,
+                supports_tools=True,
+                supports_image_input=True,
+            ),
+            Model(
+                id="gemma4:26b",
+                provider="ollama",
+                context_window=262_144,  # 256K
+                max_output_tokens=8_192,
+                supports_tools=True,
+                supports_image_input=True,
+            ),
+            Model(
+                id="gemma4:31b",
+                provider="ollama",
+                context_window=262_144,
+                max_output_tokens=8_192,
+                supports_tools=True,
+                supports_image_input=True,
             ),
             Model(
                 id="qwen2.5:7b-instruct",

@@ -59,11 +59,35 @@ DEFAULT_MAX_TOOL_ITERATIONS = 8
 DEFAULT_TEMPERATURE = 0.0
 DEFAULT_CHUNK_LIMIT = 4000
 DEFAULT_TIMEOUT = 300.0  # local models can be slow
-DEFAULT_MAX_HISTORY_CHARS = 24_000  # ~6K tokens, fits 8K-context models
+# Conservative *floor* — kept low to fit small-context models like
+# `gemma3:4b` (8K). When the runtime knows the actual model's context
+# window (via `pi.tokens.model_context_window`), it scales this up to
+# roughly half the window so large-context models like `gemma4:latest`
+# (128K) actually use the room they have. The constructor still accepts
+# an explicit override.
+DEFAULT_MAX_HISTORY_CHARS = 24_000  # ~6K tokens, safe even for 8K-ctx
 DEFAULT_MAX_RETRIES = 3
 DEFAULT_BACKOFF_INITIAL = 0.5
 DEFAULT_BACKOFF_MAX = 8.0
 RETRYABLE_STATUS = frozenset({408, 425, 429, 500, 502, 503, 504, 529})
+
+
+def _derive_history_budget_chars(model_id: str) -> int:
+    """Pick a reasonable `max_history_chars` based on the model's window.
+
+    Heuristic: leave half the context window for system prompt + tools +
+    the new turn + the model's reply. Use ~3.5 chars/token (English-ish
+    ratio also used by `pi.tokens.estimate_tokens`).
+
+    Floor at `DEFAULT_MAX_HISTORY_CHARS` so we never under-cut a model
+    that reports an unusually small (or unknown) context window.
+    """
+    from sampyclaw.pi.tokens import model_context_window
+
+    window_tokens = model_context_window(model_id, default=8_192)
+    budget_tokens = max(2_048, window_tokens // 2)
+    chars = int(budget_tokens * 3.5)
+    return max(DEFAULT_MAX_HISTORY_CHARS, chars)
 
 
 class LocalAgent:
@@ -88,7 +112,7 @@ class LocalAgent:
         include_skills: bool = True,
         memory: MemoryRetriever | None = None,
         memory_top_k: int = 5,
-        max_history_chars: int = DEFAULT_MAX_HISTORY_CHARS,
+        max_history_chars: int | None = None,
         max_retries: int = DEFAULT_MAX_RETRIES,
         backoff_initial: float = DEFAULT_BACKOFF_INITIAL,
         backoff_max: float = DEFAULT_BACKOFF_MAX,
@@ -118,7 +142,11 @@ class LocalAgent:
         self._include_skills = include_skills
         self._memory = memory
         self._memory_top_k = memory_top_k
-        self._max_history_chars = max_history_chars
+        self._max_history_chars = (
+            max_history_chars
+            if max_history_chars is not None
+            else _derive_history_budget_chars(model)
+        )
         self._max_retries = max_retries
         self._backoff_initial = backoff_initial
         self._backoff_max = backoff_max

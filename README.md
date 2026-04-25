@@ -62,15 +62,19 @@ small enough to run on a laptop, and the sampyClaw provider catalog
 ships with a 32K context window entry for it. Other tested models —
 override with `--model <id>`:
 
-| Model | Notes |
-|---|---|
-| `gemma4:latest` | **Recommended default.** Tool-capable, lightweight. |
-| `qwen2.5:7b-instruct` | Strong tool calling, 32K ctx. |
-| `llama3.1:8b` | 128K ctx, broadly capable. |
-| `mistral-nemo:12b` | 128K ctx, slower but verbose. |
+| Model | Context | Notes |
+|---|---|---|
+| `gemma4:latest` (= `e4b`) | **128K** | **Recommended default.** Multimodal (text+image), native function calling, ~9.6 GB. |
+| `gemma4:e2b` | 128K | Lighter (~7.2 GB) — same family, smaller. |
+| `gemma4:26b` / `31b` | **256K** | Heavier MoE variants when you have the RAM. |
+| `qwen2.5:7b-instruct` | 32K | Strong tool calling alternative. |
+| `llama3.1:8b` | 128K | Broadly capable. |
+| `mistral-nemo:12b` | 128K | Slower, more verbose. |
 
-Avoid `gemma3:4b` (in catalog with `supports_tools=False`) — earlier
-gemma's tool support is unreliable.
+> **There is no `gemma4:9b` tag.** Gemma 4's size variants are `e2b` /
+> `e4b` / `26b` / `31b`. `gemma4:latest` resolves to `e4b` (effective 4B
+> parameters). Avoid `gemma3:4b` — earlier-gemma tool support is
+> unreliable (catalog marks it `supports_tools=False`).
 
 You can run sampyClaw with no LLM (RPC + tools only) by using
 `--provider echo` for testing.
@@ -347,15 +351,19 @@ ollama pull gemma4:latest
 돌아가는 크기, sampyClaw 프로바이더 카탈로그에 32K 컨텍스트 윈도우로
 등록됨. 다른 검증된 모델 — `--model <id>`로 오버라이드:
 
-| 모델 | 비고 |
-|---|---|
-| `gemma4:latest` | **권장 기본.** 도구 호출 지원, 경량. |
-| `qwen2.5:7b-instruct` | 강한 도구 호출, 32K ctx. |
-| `llama3.1:8b` | 128K ctx, 범용성 좋음. |
-| `mistral-nemo:12b` | 128K ctx, 느리지만 verbose. |
+| 모델 | 컨텍스트 | 비고 |
+|---|---|---|
+| `gemma4:latest` (= `e4b`) | **128K** | **권장 기본.** 멀티모달(text+image), 네이티브 함수 호출, 약 9.6 GB. |
+| `gemma4:e2b` | 128K | 더 가벼움 (약 7.2 GB) — 같은 계열의 작은 변종. |
+| `gemma4:26b` / `31b` | **256K** | 고RAM 환경용 MoE 변종. |
+| `qwen2.5:7b-instruct` | 32K | 강한 도구 호출 대안. |
+| `llama3.1:8b` | 128K | 범용성 좋음. |
+| `mistral-nemo:12b` | 128K | 느리지만 verbose. |
 
-`gemma3:4b`는 피하기 (카탈로그에 `supports_tools=False`로 등록됨) —
-이전 gemma는 도구 지원이 불안정.
+> **`gemma4:9b` 태그는 존재하지 않음.** Gemma 4의 사이즈 변종은 `e2b` /
+> `e4b` / `26b` / `31b`. `gemma4:latest`는 `e4b` (effective 4B 파라미터)로
+> 리졸브된다. `gemma3:4b`는 피하기 — 이전 gemma 도구 지원이 불안정
+> (카탈로그에 `supports_tools=False`로 등록).
 
 LLM 없이 RPC + 도구만 테스트하려면 `--provider echo` 사용.
 

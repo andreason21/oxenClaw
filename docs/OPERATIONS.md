@@ -344,6 +344,39 @@ Recommended cadence: run a 4h soak in CI before each release.
 | `/` `/dashboard` `/app.html` `/static/*` | open (assets) | Bundled web dashboard SPA. Loads anonymously; the JS renders an in-app login gate when no token is found and uses it for the WS connect. |
 | WS upgrade | **token** | Real auth boundary. Token via `Authorization: Bearer`, `?token=` on the WS URL, or the `sampyclaw_token` cookie. |
 
+### First-run token bootstrap
+
+When `sampyclaw gateway start` boots without `--auth-token` and without
+`SAMPYCLAW_GATEWAY_TOKEN`, the gateway auto-generates a 48-character hex
+token, persists it to `~/.sampyclaw/gateway-token` (mode `0600`), and
+prints a banner with the value plus a one-shot URL:
+
+```
+────────────────────────────────────────────────────────────
+  sampyClaw gateway ready
+────────────────────────────────────────────────────────────
+  • a fresh gateway token was generated and saved to /home/me/.sampyclaw/gateway-token
+  • token: e97856a899ee6c990bc2c59941d5dc9f995560ce444ce10e
+  • open: http://127.0.0.1:7331/?token=e97856a899ee6c990bc2c59941d5dc9f995560ce444ce10e
+────────────────────────────────────────────────────────────
+```
+
+Subsequent starts read the same token from the file and reuse it.
+Resolution precedence (highest first): `--auth-token <value>` →
+`SAMPYCLAW_GATEWAY_TOKEN` env → persisted file → freshly generated.
+
+Manage the token with:
+
+```bash
+sampyclaw gateway token             # show current token + path
+sampyclaw gateway token --rotate    # generate a new one (invalidates previous)
+sampyclaw gateway token --no-show   # print only the path
+```
+
+For production: prefer setting `SAMPYCLAW_GATEWAY_TOKEN` from a real
+secret manager and not relying on the persisted file. The file is
+convenient for single-host installs and dev loops.
+
 ### Dashboard authentication flow
 
 1. Operator opens `http://host:7331/` in a browser. The HTML, CSS, and

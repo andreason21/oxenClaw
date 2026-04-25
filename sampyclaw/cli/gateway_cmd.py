@@ -103,6 +103,10 @@ def start(
     ),
 ) -> None:
     """Start the gateway server + every discovered channel + cron scheduler."""
+    from sampyclaw.config.auth_token import (
+        format_startup_banner,
+        resolve_or_generate_token,
+    )
     from sampyclaw.observability import configure_logging
     from sampyclaw.plugin_sdk.runtime_env import describe_platform, is_wsl
 
@@ -113,6 +117,14 @@ def start(
             "WSL2 detected — see docs/INSTALL_WSL.md for networking and "
             "Ollama configuration tips"
         )
+    # Resolve / auto-generate the gateway token before the rest of the
+    # boot. This way the operator sees the token (or its file location)
+    # in the startup banner, which is the openclaw UX.
+    resolved_token = resolve_or_generate_token(explicit=auth_token)
+    auth_token = resolved_token.token
+    logger.info("\n%s", format_startup_banner(
+        resolved_token, host=host, port=port
+    ))
     if not skip_preflight:
         from sampyclaw.config.preflight import run_preflight
 
@@ -142,6 +154,38 @@ def start(
             auth_token=auth_token,
         )
     )
+
+
+@app.command("token")
+def token_cmd(
+    rotate: bool = typer.Option(
+        False, "--rotate", help="Discard the persisted token and generate a new one."
+    ),
+    show: bool = typer.Option(
+        True, "--show/--no-show", help="Print the token value (off → just print the path)."
+    ),
+) -> None:
+    """Show, generate, or rotate the persistent gateway token.
+
+    The token is stored at `~/.sampyclaw/gateway-token` (mode 0600) and
+    used as the default by `sampyclaw gateway start`. Override at runtime
+    with `--auth-token` or `SAMPYCLAW_GATEWAY_TOKEN`.
+    """
+    from sampyclaw.config.auth_token import (
+        resolve_or_generate_token,
+        token_file_path,
+    )
+
+    resolved = resolve_or_generate_token(rotate=rotate)
+    path = resolved.path or token_file_path()
+    typer.echo(f"path:   {path}")
+    typer.echo(f"source: {resolved.source}")
+    if show:
+        typer.echo(f"token:  {resolved.token}")
+    else:
+        typer.echo("token:  (suppressed; pass --show to print)")
+    if resolved.source == "generated":
+        typer.echo("\n  (the previous token, if any, is now invalid)")
 
 
 def build_agent(

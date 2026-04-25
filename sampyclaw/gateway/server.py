@@ -215,28 +215,6 @@ def _set_token_cookie(response: Response, token: str | None) -> None:
     response.headers["Set-Cookie"] = cookie
 
 
-def _unauthorized_response(
-    connection: ServerConnection, path: str
-) -> Response:
-    """Render a small JSON 401 with a hint about the token query param."""
-    body = json.dumps(
-        {
-            "error": "unauthorized",
-            "hint": (
-                "append ?token=<SAMPYCLAW_GATEWAY_TOKEN> to the URL or "
-                "send Authorization: Bearer <token>"
-            ),
-            "path": path,
-        }
-    ) + "\n"
-    response = connection.respond(HTTPStatus.UNAUTHORIZED, body)
-    del response.headers["Content-Type"]
-    response.headers["Content-Type"] = "application/json"
-    response.headers["Cache-Control"] = "no-store"
-    # `WWW-Authenticate` makes some clients (curl, browser dev tools) more
-    # helpful about the failure mode.
-    response.headers["WWW-Authenticate"] = 'Bearer realm="sampyclaw"'
-    return response
 
 # Cookie used by the dashboard to remember a token resolved from the
 # initial `?token=...` URL so reloads / bookmarks Just Work without
@@ -423,31 +401,23 @@ class GatewayServer:
                 return connection.respond(HTTPStatus.UNAUTHORIZED, "unauthorized\n")
             return None
         path = request.path.split("?", 1)[0]
-        # Health/metrics endpoints are intentionally unauthenticated so a
-        # k8s/systemd probe can hit them without needing a token.
-        # Everything else under static_routes (the dashboard + its
-        # CSS/JS) is treated as authenticated content: we don't want
-        # unauthenticated visitors to fingerprint the deployment by
-        # pulling the dashboard HTML, and we want the same token the WS
-        # connect requires.
-        is_public = path in PUBLIC_HTTP_PATHS
-        if not is_public and not self._auth_ok(request):
-            logger.warning(
-                "rejecting HTTP %s: missing/invalid token", path
-            )
-            return _unauthorized_response(connection, path)
+        # Static routes (dashboard HTML / CSS / JS / health probes) all
+        # load unauthenticated. The dashboard SPA itself renders a login
+        # gate when no token is detected and uses it to authenticate the
+        # WS upgrade — matches openclaw's `control-ui` UX.
+        # We *do* still validate `?token=` if present, so that pasting
+        # `http://host/?token=...` continues to work as a one-shot login
+        # (the gateway sets a cookie so the SPA picks it up on reload).
         handler = self._static_routes.get(path)
         if handler is not None:
             try:
                 result = handler(connection, request)
                 if asyncio.iscoroutine(result):
                     result = await result
-                # If the auth was via the query string, set a short-lived
-                # cookie so the next navigation works without `?token=`.
                 if (
-                    not is_public
-                    and self._auth_token is not None
+                    self._auth_token is not None
                     and _query_token_present(request)
+                    and self._auth_ok(request)
                     and result is not None
                 ):
                     _set_token_cookie(result, _query_token(request))

@@ -64,6 +64,53 @@
     </main>
 
     <div class="toasts" id="toasts"></div>
+
+    <div id="login-gate" class="login-gate" hidden>
+      <div class="login-gate__card">
+        <div class="login-gate__header">
+          <span class="login-gate__logo" aria-hidden="true">🦞</span>
+          <h2 class="login-gate__title">sampyClaw</h2>
+          <p class="login-gate__sub" id="login-gate-sub">Enter the gateway token to continue.</p>
+        </div>
+        <form id="login-gate-form" class="login-gate__form" autocomplete="off">
+          <label class="field">
+            <span>Gateway URL</span>
+            <input id="login-gate-url" type="text" spellcheck="false" />
+          </label>
+          <label class="field">
+            <span>Gateway token</span>
+            <div class="login-gate__secret-row">
+              <input
+                id="login-gate-token"
+                type="password"
+                autocomplete="off"
+                spellcheck="false"
+                placeholder="SAMPYCLAW_GATEWAY_TOKEN"
+                required
+              />
+              <button
+                type="button"
+                id="login-gate-toggle"
+                class="btn btn-ghost btn-sm"
+                aria-pressed="false"
+                aria-label="Toggle token visibility"
+              >👁</button>
+            </div>
+          </label>
+          <label class="field field--row">
+            <input id="login-gate-remember" type="checkbox" checked />
+            <span>Remember on this device (12h cookie)</span>
+          </label>
+          <button class="btn primary" type="submit">Connect</button>
+          <div id="login-gate-error" class="login-gate__error" hidden></div>
+        </form>
+        <p class="login-gate__help">
+          The token is the value of <code>SAMPYCLAW_GATEWAY_TOKEN</code> on the
+          host running <code>sampyclaw gateway start</code>. If auth wasn't
+          configured (a warning printed at startup), leave it empty.
+        </p>
+      </div>
+    </div>
     <div class="cmd-help" id="cmd-help" hidden>
       <div class="cmd-help-card">
         <h3>Keyboard shortcuts</h3>

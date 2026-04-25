@@ -19,22 +19,41 @@ const Rpc = (() => {
   let onStateChange = () => {};
 
   // Token resolution: precedence is (1) ?token=... in the current URL,
-  // (2) the sampyclaw_token cookie set by the gateway after the first
-  // authenticated load, (3) none. The token is forwarded to the WS
-  // connect as a query string because browsers can't set Authorization
-  // headers on a WS upgrade.
+  // (2) sampyclaw_token cookie, (3) localStorage["sampyclaw_token"]
+  // (set by the in-app login gate), (4) none. The chosen token is
+  // forwarded to the WS connect as a query string because browsers
+  // can't set Authorization headers on a WS upgrade.
+  const TOKEN_KEY = "sampyclaw_token";
+
   function readToken() {
     const params = new URLSearchParams(location.search);
     const fromQuery = params.get("token");
     if (fromQuery) return fromQuery;
     const m = document.cookie.match(/(?:^|;\s*)sampyclaw_token=([^;]+)/);
-    return m ? decodeURIComponent(m[1]) : "";
+    if (m) return decodeURIComponent(m[1]);
+    try { return localStorage.getItem(TOKEN_KEY) || ""; } catch { return ""; }
+  }
+
+  function storeToken(token, { remember }) {
+    if (!token) return;
+    if (remember) {
+      // 12h cookie. The gateway's own Set-Cookie uses Max-Age=43200; we
+      // mirror that so the client TTL doesn't outlive a server-side
+      // rotation by accident.
+      const ttl = 12 * 3600;
+      document.cookie =
+        `${TOKEN_KEY}=${encodeURIComponent(token)}; Max-Age=${ttl}; Path=/; SameSite=Strict`;
+      try { localStorage.setItem(TOKEN_KEY, token); } catch {}
+    }
+  }
+
+  function clearStoredToken() {
+    document.cookie = `${TOKEN_KEY}=; Max-Age=0; Path=/; SameSite=Strict`;
+    try { localStorage.removeItem(TOKEN_KEY); } catch {}
   }
 
   // Strip the token from the address bar after the page loads so it
-  // doesn't sit in browser history / get pasted accidentally. The
-  // gateway has already issued a Set-Cookie header, so subsequent reloads
-  // continue to authenticate.
+  // doesn't sit in browser history / get pasted accidentally.
   function scrubTokenFromUrl() {
     const params = new URLSearchParams(location.search);
     if (params.has("token")) {
@@ -55,18 +74,45 @@ const Rpc = (() => {
     return `${proto}//${location.host}${suffix}`;
   }
 
+  function urlWithToken(baseUrl, token) {
+    if (!token) return baseUrl;
+    try {
+      const u = new URL(baseUrl);
+      u.searchParams.set("token", token);
+      return u.toString();
+    } catch {
+      // Fallback for relative or malformed URLs.
+      return `${baseUrl}${baseUrl.includes("?") ? "&" : "?"}token=${encodeURIComponent(token)}`;
+    }
+  }
+
   function pushLog(direction, payload, error) {
     log.unshift({ ts: new Date(), direction, payload, error });
     if (log.length > logCap) log.length = logCap;
   }
 
+  // Track whether the most recent WS connection actually opened. When
+  // `onclose` fires without a preceding `onopen`, the upgrade was
+  // rejected (auth failure / connection refused / wrong host) — the UI
+  // uses this to surface the login gate instead of silently sitting in
+  // the "down" state.
+  let lastOpened = false;
+  let onAuthFailure = () => {};
+
   function connect(target) {
     url = target || defaultUrl();
     if (ws) try { ws.close(); } catch {}
     onStateChange("connecting", url);
+    lastOpened = false;
     ws = new WebSocket(url);
-    ws.onopen = () => onStateChange("up", url);
-    ws.onclose = () => onStateChange("down", url);
+    ws.onopen = () => { lastOpened = true; onStateChange("up", url); };
+    ws.onclose = (ev) => {
+      onStateChange("down", url);
+      if (!lastOpened) {
+        // Upgrade rejected before any frame — most likely auth.
+        try { onAuthFailure({ code: ev.code, reason: ev.reason || "" }); } catch {}
+      }
+    };
     ws.onerror = () => onStateChange("down", url);
     ws.onmessage = (ev) => {
       let frame;
@@ -109,8 +155,24 @@ const Rpc = (() => {
 
   function onEvent(h) { eventHandlers.add(h); return () => eventHandlers.delete(h); }
   function setStateListener(fn) { onStateChange = fn; }
+  function setAuthFailureListener(fn) { onAuthFailure = fn || (() => {}); }
 
-  return { connect, call, onEvent, setStateListener, defaultUrl, scrubTokenFromUrl, get url() { return url; }, log, RpcError };
+  return {
+    connect,
+    call,
+    onEvent,
+    setStateListener,
+    setAuthFailureListener,
+    defaultUrl,
+    urlWithToken,
+    scrubTokenFromUrl,
+    readToken,
+    storeToken,
+    clearStoredToken,
+    get url() { return url; },
+    log,
+    RpcError,
+  };
 })();
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -1181,6 +1243,7 @@ function boot() {
   $("cmd-help-close").onclick = hideHelp;
 
   bindShortcuts();
+  bindLoginGate();
 
   Rpc.connect($("ws-url").value);
   // Token has been captured into the WS URL + (server-set) cookie; clean
@@ -1192,6 +1255,76 @@ function boot() {
   // Periodic cheap refreshes for nav badges + approvals event channel.
   setInterval(refreshNavBadges, 4000);
   Rpc.onEvent(() => refreshNavBadges());
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Login gate
+//
+// Shown when the WS upgrade is refused (almost always: missing/wrong
+// token) or when the server actively closes early. Lets the user paste
+// the gateway token, optionally remember it for 12 hours, and retry the
+// connect — exactly the same UX as openclaw's control-ui.
+// ─────────────────────────────────────────────────────────────────────────
+function bindLoginGate() {
+  const gate = $("login-gate");
+  const form = $("login-gate-form");
+  const urlInput = $("login-gate-url");
+  const tokenInput = $("login-gate-token");
+  const remember = $("login-gate-remember");
+  const toggle = $("login-gate-toggle");
+  const errorBox = $("login-gate-error");
+  const sub = $("login-gate-sub");
+
+  if (!gate || !form) return;
+
+  let armed = false; // suppress an early-close blip during the very
+                     // first connect when no token is configured.
+  // Wait one tick before treating early-close as "show login" so the
+  // anonymous server-with-no-auth case doesn't flash the gate.
+  setTimeout(() => { armed = true; }, 250);
+
+  function show(reason) {
+    if (!armed) return;
+    urlInput.value = $("ws-url").value || Rpc.defaultUrl();
+    tokenInput.value = Rpc.readToken();
+    errorBox.hidden = !reason;
+    if (reason) errorBox.textContent = reason;
+    sub.textContent = reason
+      ? "Connection rejected — check the gateway URL and token."
+      : "Enter the gateway token to continue.";
+    gate.hidden = false;
+    setTimeout(() => tokenInput.focus(), 50);
+  }
+
+  function hide() { gate.hidden = true; errorBox.hidden = true; }
+
+  Rpc.setAuthFailureListener(({ code, reason }) => {
+    show(`WS upgrade failed (code ${code || "?"}${reason ? ": " + reason : ""}).`);
+  });
+
+  toggle.addEventListener("click", () => {
+    const showing = tokenInput.type === "text";
+    tokenInput.type = showing ? "password" : "text";
+    toggle.setAttribute("aria-pressed", String(!showing));
+  });
+
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const token = tokenInput.value.trim();
+    const target = urlInput.value.trim() || Rpc.defaultUrl();
+    if (token) Rpc.storeToken(token, { remember: remember.checked });
+    else Rpc.clearStoredToken();
+    const wsTarget = token ? Rpc.urlWithToken(target, token) : target;
+    $("ws-url").value = wsTarget;
+    hide();
+    Rpc.connect(wsTarget);
+  });
+
+  // If the page boots with no stored token AND we can't tell whether
+  // the server requires one, let the WS connect attempt fire first;
+  // the auth-failure listener will surface the gate if needed. If the
+  // user explicitly pressed "Logout" via cmd-help in the future, we'd
+  // call show() here directly.
 }
 
 boot();

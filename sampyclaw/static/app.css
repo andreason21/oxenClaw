@@ -454,3 +454,63 @@ kbd {
   border-bottom-width: 2px;
   border-radius: 3px; color: var(--fg);
 }
+
+/* ─── Login gate (full-screen overlay shown when WS auth fails) ──── */
+.login-gate {
+  position: fixed; inset: 0; z-index: 1000;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+.login-gate[hidden] { display: none; }
+.login-gate__card {
+  background: var(--bg-1);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-3);
+  padding: var(--sp-6);
+  min-width: 360px; max-width: 460px;
+  box-shadow: var(--shadow-1);
+}
+.login-gate__header { text-align: center; margin-bottom: var(--sp-5); }
+.login-gate__logo { font-size: 36px; line-height: 1; }
+.login-gate__title { margin: var(--sp-2) 0 4px; font-size: 18px; }
+.login-gate__sub { margin: 0; color: var(--fg-muted); font-size: 13px; }
+.login-gate__form { display: flex; flex-direction: column; gap: var(--sp-3); }
+.login-gate__form .field {
+  display: flex; flex-direction: column; gap: 6px; font-size: 12px;
+}
+.login-gate__form .field--row {
+  flex-direction: row; align-items: center; gap: 8px;
+}
+.login-gate__form .field span { color: var(--fg-muted); }
+.login-gate__form input[type="text"],
+.login-gate__form input[type="password"] {
+  background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--r-2);
+  padding: 8px 10px; color: var(--fg); font: 13px var(--mono);
+}
+.login-gate__form input[type="text"]:focus,
+.login-gate__form input[type="password"]:focus {
+  outline: 2px solid var(--accent);
+}
+.login-gate__secret-row { display: flex; gap: 6px; }
+.login-gate__secret-row input { flex: 1; }
+.login-gate__error {
+  background: rgba(220, 38, 38, 0.12);
+  border: 1px solid rgba(220, 38, 38, 0.35);
+  color: #fca5a5;
+  border-radius: var(--r-2);
+  padding: 8px 10px;
+  font-size: 12px;
+}
+.login-gate__error[hidden] { display: none; }
+.login-gate__help {
+  margin: var(--sp-4) 0 0; font-size: 11px; color: var(--fg-muted);
+  line-height: 1.5;
+}
+.login-gate__help code {
+  font-family: var(--mono);
+  background: var(--bg-3);
+  padding: 1px 4px;
+  border-radius: 3px;
+}

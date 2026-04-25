@@ -124,17 +124,18 @@ sampyclaw gateway start --provider local
 ```
 
 The bundled dashboard is at `http://127.0.0.1:7331/` and Prometheus
-metrics at `/metrics`. **The dashboard is gated behind the same token
-as the WS API** — open it the first time with the token in the URL:
+metrics at `/metrics`. **Open the dashboard URL in any browser** — when
+auth is configured, the page detects the missing token and renders an
+in-app login gate. Paste the value of `SAMPYCLAW_GATEWAY_TOKEN`, click
+*Connect*, and the dashboard remembers it for 12 hours via cookie +
+`localStorage` so reloads need nothing extra.
 
-```text
-http://127.0.0.1:7331/?token=<SAMPYCLAW_GATEWAY_TOKEN>
-```
-
-The page reads the token, sets a 12-hour `sampyclaw_token` cookie, and
-strips the token from the address bar. Subsequent reloads work without
-the query parameter. `/healthz`, `/readyz`, `/metrics` remain
-unauthenticated so orchestrators can probe them.
+You can also bypass the form entirely with
+`http://127.0.0.1:7331/?token=<SAMPYCLAW_GATEWAY_TOKEN>` — the gateway
+sets the cookie on first response and the dashboard JS strips the
+token out of the address bar so it doesn't leak via screenshots or
+browser history. `/healthz`, `/readyz`, `/metrics` always remain
+unauthenticated for orchestrator probes.
 
 Send a Telegram DM to your bot — it replies via the local model with
 full tool access.
@@ -423,16 +424,15 @@ sampyclaw gateway start --provider local
 ```
 
 번들 대시보드: `http://127.0.0.1:7331/`. Prometheus: `/metrics`.
-**대시보드는 WS API와 동일 토큰으로 게이트** — 처음 열 때 URL에 토큰
-포함:
+**브라우저에서 대시보드 URL을 그냥 열기** — 인증이 설정된 상태면 SPA가
+토큰 없음을 감지하고 화면 안에 로그인 폼을 띄움. `SAMPYCLAW_GATEWAY_TOKEN`
+값을 붙여넣고 *Connect* — 12시간 쿠키 + `localStorage`에 저장되어 새로고침
+시 별도 입력 불필요.
 
-```text
-http://127.0.0.1:7331/?token=<SAMPYCLAW_GATEWAY_TOKEN>
-```
-
-페이지가 토큰을 읽고 12시간 `sampyclaw_token` 쿠키 설정 후 주소창에서
-토큰 제거. 이후 새로고침은 쿼리 파라미터 없이 동작. `/healthz`,
-`/readyz`, `/metrics`는 오케스트레이터 프로브 위해 비인증 유지.
+URL 한 방으로 끝내고 싶으면 `http://127.0.0.1:7331/?token=<SAMPYCLAW_GATEWAY_TOKEN>`
+도 가능 — 게이트웨이가 응답에 쿠키를 설정하고 SPA가 주소창에서 토큰을
+제거 (스크린샷·브라우저 히스토리 누출 방지). `/healthz`, `/readyz`,
+`/metrics`는 오케스트레이터 프로브용으로 항상 비인증 유지.
 
 Telegram DM을 보내면 로컬 모델이 도구를 사용해 답한다.
 

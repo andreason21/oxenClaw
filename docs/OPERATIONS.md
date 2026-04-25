@@ -341,22 +341,27 @@ Recommended cadence: run a 4h soak in CI before each release.
 | `/healthz` | open | k8s liveness, systemd watchdog |
 | `/readyz` | open | k8s readiness |
 | `/metrics` | open | Prometheus scrape |
-| `/` `/dashboard` `/app.html` `/static/*` | **token** | Bundled web dashboard. Open with `?token=<SAMPYCLAW_GATEWAY_TOKEN>`; the gateway sets a 12-hour `sampyclaw_token` cookie so subsequent loads need no query param. |
-| WS upgrade | **token** | All RPC traffic (`Authorization: Bearer` or `?token=` on the WS URL) |
+| `/` `/dashboard` `/app.html` `/static/*` | open (assets) | Bundled web dashboard SPA. Loads anonymously; the JS renders an in-app login gate when no token is found and uses it for the WS connect. |
+| WS upgrade | **token** | Real auth boundary. Token via `Authorization: Bearer`, `?token=` on the WS URL, or the `sampyclaw_token` cookie. |
 
 ### Dashboard authentication flow
 
-1. Operator opens `http://host:7331/?token=$SAMPYCLAW_GATEWAY_TOKEN`.
-2. Gateway validates the token (constant-time compare against the
-   value from `--auth-token` / `SAMPYCLAW_GATEWAY_TOKEN` env). On
-   success it serves the HTML and sets `Set-Cookie:
-   sampyclaw_token=<token>; Max-Age=43200; Path=/; SameSite=Strict`.
-3. The dashboard JS reads the token from the URL or cookie and forwards
-   it to the WS connect (`ws://host:7331/?token=<token>` — browsers
-   can't set `Authorization` on a WS upgrade).
-4. After the first paint, JS strips `?token=...` from the address bar
-   via `history.replaceState` so it doesn't leak via screenshots or
-   browser history.
+1. Operator opens `http://host:7331/` in a browser. The HTML, CSS, and
+   JS load anonymously (matches openclaw's `control-ui` pattern).
+2. The dashboard JS calls `WebSocket(ws://host:7331/?token=...)` using
+   whatever token it can find in:
+   - the `?token=` query string (one-shot URL login),
+   - the `sampyclaw_token` cookie (set by the gateway after a
+     successful query-token load, or by the in-app form),
+   - `localStorage["sampyclaw_token"]` (also set by the in-app form).
+3. If the WS upgrade is rejected (the gateway 401's anything missing
+   the token), the JS shows a full-screen login gate with a token
+   input. The user pastes the token, optionally checks "Remember on
+   this device (12h cookie)", and clicks *Connect*.
+4. The submit handler stores the token (cookie + localStorage when
+   *Remember* is on) and retries the connect.
+5. On the next reload the dashboard finds the token in the cookie /
+   localStorage and connects without prompting.
 
 For headless / scripted clients, `Authorization: Bearer <token>` is
-still accepted on every authenticated route (HTTP and WS).
+still accepted on the WS upgrade.

@@ -123,9 +123,21 @@ export SAMPYCLAW_GATEWAY_TOKEN=$(openssl rand -hex 32)
 sampyclaw gateway start --provider local
 ```
 
-The bundled dashboard is now at `http://127.0.0.1:7331/` and Prometheus
-metrics at `/metrics`. Send a Telegram DM to your bot — it replies via
-the local model with full tool access.
+The bundled dashboard is at `http://127.0.0.1:7331/` and Prometheus
+metrics at `/metrics`. **The dashboard is gated behind the same token
+as the WS API** — open it the first time with the token in the URL:
+
+```text
+http://127.0.0.1:7331/?token=<SAMPYCLAW_GATEWAY_TOKEN>
+```
+
+The page reads the token, sets a 12-hour `sampyclaw_token` cookie, and
+strips the token from the address bar. Subsequent reloads work without
+the query parameter. `/healthz`, `/readyz`, `/metrics` remain
+unauthenticated so orchestrators can probe them.
+
+Send a Telegram DM to your bot — it replies via the local model with
+full tool access.
 
 ### 4. Send a one-off message via CLI
 
@@ -411,6 +423,17 @@ sampyclaw gateway start --provider local
 ```
 
 번들 대시보드: `http://127.0.0.1:7331/`. Prometheus: `/metrics`.
+**대시보드는 WS API와 동일 토큰으로 게이트** — 처음 열 때 URL에 토큰
+포함:
+
+```text
+http://127.0.0.1:7331/?token=<SAMPYCLAW_GATEWAY_TOKEN>
+```
+
+페이지가 토큰을 읽고 12시간 `sampyclaw_token` 쿠키 설정 후 주소창에서
+토큰 제거. 이후 새로고침은 쿼리 파라미터 없이 동작. `/healthz`,
+`/readyz`, `/metrics`는 오케스트레이터 프로브 위해 비인증 유지.
+
 Telegram DM을 보내면 로컬 모델이 도구를 사용해 답한다.
 
 #### 4. CLI에서 일회성 메시지

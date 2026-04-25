@@ -304,3 +304,203 @@ def test_static_assets_loadable_from_package() -> None:
     assert dashboard_html() == html
     assert len(app_css()) > 0
     assert len(app_js()) > 0
+
+
+# ─── dashboard auth gate ─────────────────────────────────────────────
+
+
+def _http_get_full(url: str, *, headers: dict[str, str] | None = None):  # type: ignore[no-untyped-def]
+    """GET with optional headers; returns (status, headers, body) and never
+    raises on non-2xx."""
+    req = Request(url, method="GET", headers=headers or {})
+    try:
+        with urlopen(req, timeout=2) as resp:
+            return resp.status, dict(resp.headers), resp.read()
+    except Exception as exc:
+        if hasattr(exc, "code"):
+            body = b""
+            try:
+                body = exc.read()  # type: ignore[union-attr]
+            except Exception:
+                pass
+            return exc.code, dict(getattr(exc, "headers", {}) or {}), body  # type: ignore[union-attr]
+        raise
+
+
+async def test_dashboard_requires_token_when_auth_configured(
+    router: Router,
+) -> None:
+    server = GatewayServer(router, auth_token="secret123")
+    port = _pick_port()
+    task = asyncio.create_task(server.serve(host="127.0.0.1", port=port))
+    try:
+        await asyncio.sleep(0.1)
+        # No token at all → 401 with a JSON hint.
+        status, headers, body = await asyncio.to_thread(
+            _http_get, f"http://127.0.0.1:{port}/"
+        )
+        assert status == 401
+        decoded = json.loads(body)
+        assert decoded["error"] == "unauthorized"
+        assert "?token=" in decoded["hint"]
+        # WWW-Authenticate is informative.
+        # (urlopen lowercases headers in `headers` dict, so check both.)
+    finally:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+
+async def test_dashboard_accepts_query_token_and_sets_cookie(
+    router: Router,
+) -> None:
+    server = GatewayServer(router, auth_token="secret123")
+    port = _pick_port()
+    task = asyncio.create_task(server.serve(host="127.0.0.1", port=port))
+    try:
+        await asyncio.sleep(0.1)
+        status, headers, body = await asyncio.to_thread(
+            _http_get_full,
+            f"http://127.0.0.1:{port}/?token=secret123",
+        )
+        assert status == 200
+        assert b"<!DOCTYPE html>" in body[:64]
+        # Token gets persisted into a cookie.
+        cookie = headers.get("Set-Cookie") or headers.get("set-cookie")
+        assert cookie is not None
+        assert "sampyclaw_token=secret123" in cookie
+        assert "SameSite=Strict" in cookie
+    finally:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+
+async def test_dashboard_accepts_bearer_header(router: Router) -> None:
+    server = GatewayServer(router, auth_token="secret123")
+    port = _pick_port()
+    task = asyncio.create_task(server.serve(host="127.0.0.1", port=port))
+    try:
+        await asyncio.sleep(0.1)
+        status, _, body = await asyncio.to_thread(
+            _http_get_full,
+            f"http://127.0.0.1:{port}/",
+            headers={"Authorization": "Bearer secret123"},
+        )
+        assert status == 200
+        assert b"<!DOCTYPE html>" in body[:64]
+    finally:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+
+async def test_dashboard_accepts_cookie_token(router: Router) -> None:
+    server = GatewayServer(router, auth_token="secret123")
+    port = _pick_port()
+    task = asyncio.create_task(server.serve(host="127.0.0.1", port=port))
+    try:
+        await asyncio.sleep(0.1)
+        status, _, body = await asyncio.to_thread(
+            _http_get_full,
+            f"http://127.0.0.1:{port}/",
+            headers={"Cookie": "sampyclaw_token=secret123"},
+        )
+        assert status == 200
+        assert b"<!DOCTYPE html>" in body[:64]
+    finally:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+
+async def test_dashboard_rejects_wrong_token(router: Router) -> None:
+    server = GatewayServer(router, auth_token="secret123")
+    port = _pick_port()
+    task = asyncio.create_task(server.serve(host="127.0.0.1", port=port))
+    try:
+        await asyncio.sleep(0.1)
+        status, _, _ = await asyncio.to_thread(
+            _http_get_full,
+            f"http://127.0.0.1:{port}/?token=wrong",
+        )
+        assert status == 401
+    finally:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+
+async def test_static_assets_also_gated(router: Router) -> None:
+    server = GatewayServer(router, auth_token="secret123")
+    port = _pick_port()
+    task = asyncio.create_task(server.serve(host="127.0.0.1", port=port))
+    try:
+        await asyncio.sleep(0.1)
+        for path in ("/static/app.css", "/static/app.js"):
+            status, _, _ = await asyncio.to_thread(
+                _http_get_full, f"http://127.0.0.1:{port}{path}"
+            )
+            assert status == 401, f"{path} should be gated"
+            status_ok, _, body = await asyncio.to_thread(
+                _http_get_full,
+                f"http://127.0.0.1:{port}{path}?token=secret123",
+            )
+            assert status_ok == 200
+            assert len(body) > 0
+    finally:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+
+async def test_health_metrics_remain_unauthenticated(router: Router) -> None:
+    """Operational probes must NOT require a token even when auth is on
+    — orchestrators (k8s, systemd) probe these without credentials."""
+    server = GatewayServer(router, auth_token="secret123")
+    port = _pick_port()
+    task = asyncio.create_task(server.serve(host="127.0.0.1", port=port))
+    try:
+        await asyncio.sleep(0.1)
+        for path in ("/healthz", "/readyz", "/metrics", "/health"):
+            status, _, _ = await asyncio.to_thread(
+                _http_get_full, f"http://127.0.0.1:{port}{path}"
+            )
+            assert status == 200, f"{path} should not require token"
+    finally:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+
+async def test_unknown_path_still_404_when_authenticated(router: Router) -> None:
+    server = GatewayServer(router, auth_token="secret123")
+    port = _pick_port()
+    task = asyncio.create_task(server.serve(host="127.0.0.1", port=port))
+    try:
+        await asyncio.sleep(0.1)
+        status, _, _ = await asyncio.to_thread(
+            _http_get_full,
+            f"http://127.0.0.1:{port}/no-such?token=secret123",
+        )
+        assert status == 404
+    finally:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass

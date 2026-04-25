@@ -336,10 +336,27 @@ Recommended cadence: run a 4h soak in CI before each release.
 | List sessions | `sampyclaw session list` |
 | Wiki ops | `sampyclaw wiki list/show/lint/...` |
 
-| Endpoint | Use |
-|---|---|
-| `/healthz` | k8s liveness, systemd watchdog |
-| `/readyz` | k8s readiness |
-| `/metrics` | Prometheus scrape |
-| `/` | Bundled web dashboard |
-| WS upgrade | All RPC traffic (Authorization: Bearer required) |
+| Endpoint | Auth | Use |
+|---|---|---|
+| `/healthz` | open | k8s liveness, systemd watchdog |
+| `/readyz` | open | k8s readiness |
+| `/metrics` | open | Prometheus scrape |
+| `/` `/dashboard` `/app.html` `/static/*` | **token** | Bundled web dashboard. Open with `?token=<SAMPYCLAW_GATEWAY_TOKEN>`; the gateway sets a 12-hour `sampyclaw_token` cookie so subsequent loads need no query param. |
+| WS upgrade | **token** | All RPC traffic (`Authorization: Bearer` or `?token=` on the WS URL) |
+
+### Dashboard authentication flow
+
+1. Operator opens `http://host:7331/?token=$SAMPYCLAW_GATEWAY_TOKEN`.
+2. Gateway validates the token (constant-time compare against the
+   value from `--auth-token` / `SAMPYCLAW_GATEWAY_TOKEN` env). On
+   success it serves the HTML and sets `Set-Cookie:
+   sampyclaw_token=<token>; Max-Age=43200; Path=/; SameSite=Strict`.
+3. The dashboard JS reads the token from the URL or cookie and forwards
+   it to the WS connect (`ws://host:7331/?token=<token>` — browsers
+   can't set `Authorization` on a WS upgrade).
+4. After the first paint, JS strips `?token=...` from the address bar
+   via `history.replaceState` so it doesn't leak via screenshots or
+   browser history.
+
+For headless / scripted clients, `Authorization: Bearer <token>` is
+still accepted on every authenticated route (HTTP and WS).

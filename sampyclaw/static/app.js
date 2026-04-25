@@ -18,10 +18,41 @@ const Rpc = (() => {
   let url = "";
   let onStateChange = () => {};
 
+  // Token resolution: precedence is (1) ?token=... in the current URL,
+  // (2) the sampyclaw_token cookie set by the gateway after the first
+  // authenticated load, (3) none. The token is forwarded to the WS
+  // connect as a query string because browsers can't set Authorization
+  // headers on a WS upgrade.
+  function readToken() {
+    const params = new URLSearchParams(location.search);
+    const fromQuery = params.get("token");
+    if (fromQuery) return fromQuery;
+    const m = document.cookie.match(/(?:^|;\s*)sampyclaw_token=([^;]+)/);
+    return m ? decodeURIComponent(m[1]) : "";
+  }
+
+  // Strip the token from the address bar after the page loads so it
+  // doesn't sit in browser history / get pasted accidentally. The
+  // gateway has already issued a Set-Cookie header, so subsequent reloads
+  // continue to authenticate.
+  function scrubTokenFromUrl() {
+    const params = new URLSearchParams(location.search);
+    if (params.has("token")) {
+      params.delete("token");
+      const qs = params.toString();
+      const next = location.pathname + (qs ? `?${qs}` : "") + location.hash;
+      history.replaceState(null, "", next);
+    }
+  }
+
   function defaultUrl() {
     if (location.protocol === "file:") return "ws://127.0.0.1:7331";
     const proto = location.protocol === "https:" ? "wss:" : "ws:";
-    return `${proto}//${location.host}`;
+    const token = readToken();
+    const suffix = token
+      ? `/?token=${encodeURIComponent(token)}`
+      : "/";
+    return `${proto}//${location.host}${suffix}`;
   }
 
   function pushLog(direction, payload, error) {
@@ -79,7 +110,7 @@ const Rpc = (() => {
   function onEvent(h) { eventHandlers.add(h); return () => eventHandlers.delete(h); }
   function setStateListener(fn) { onStateChange = fn; }
 
-  return { connect, call, onEvent, setStateListener, defaultUrl, get url() { return url; }, log, RpcError };
+  return { connect, call, onEvent, setStateListener, defaultUrl, scrubTokenFromUrl, get url() { return url; }, log, RpcError };
 })();
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -1152,6 +1183,10 @@ function boot() {
   bindShortcuts();
 
   Rpc.connect($("ws-url").value);
+  // Token has been captured into the WS URL + (server-set) cookie; clean
+  // it out of the address bar so it doesn't leak via shared screenshots
+  // or browser history.
+  Rpc.scrubTokenFromUrl();
   Router.handleHash();
 
   // Periodic cheap refreshes for nav badges + approvals event channel.

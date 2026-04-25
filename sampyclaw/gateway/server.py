@@ -175,8 +175,80 @@ def _resolve_auth_token(explicit: str | None) -> str | None:
     return None
 
 
+# HTTP routes that are deliberately unauthenticated:
+#  - /healthz, /readyz, /metrics, /health (operational probes hit by
+#    orchestrators that don't carry the gateway token).
+# Everything else under static_routes (the dashboard + its CSS/JS bundle
+# + any user-supplied custom route) requires the same token the WS
+# upgrade does.
+PUBLIC_HTTP_PATHS: frozenset[str] = frozenset(
+    {"/healthz", "/readyz", "/metrics", "/health"}
+)
+
+
+def _query_token(request: Request) -> str | None:
+    """Extract the `?token=...` query value (if any), no header fallback."""
+    if "?" not in request.path:
+        return None
+    from urllib.parse import parse_qs
+
+    qs = parse_qs(request.path.split("?", 1)[1])
+    return qs.get("token", [None])[0]
+
+
+def _query_token_present(request: Request) -> bool:
+    return _query_token(request) is not None
+
+
+def _set_token_cookie(response: Response, token: str | None) -> None:
+    """Set the `sampyclaw_token` cookie on `response`. No-op if `token` is
+    None or empty. The cookie is `HttpOnly=false` because the dashboard
+    JS reads it back to assemble the WS URL."""
+    if not token:
+        return
+    cookie = (
+        f"{TOKEN_COOKIE_NAME}={token}"
+        f"; Max-Age={TOKEN_COOKIE_MAX_AGE_SECONDS}"
+        "; Path=/"
+        "; SameSite=Strict"
+    )
+    response.headers["Set-Cookie"] = cookie
+
+
+def _unauthorized_response(
+    connection: ServerConnection, path: str
+) -> Response:
+    """Render a small JSON 401 with a hint about the token query param."""
+    body = json.dumps(
+        {
+            "error": "unauthorized",
+            "hint": (
+                "append ?token=<SAMPYCLAW_GATEWAY_TOKEN> to the URL or "
+                "send Authorization: Bearer <token>"
+            ),
+            "path": path,
+        }
+    ) + "\n"
+    response = connection.respond(HTTPStatus.UNAUTHORIZED, body)
+    del response.headers["Content-Type"]
+    response.headers["Content-Type"] = "application/json"
+    response.headers["Cache-Control"] = "no-store"
+    # `WWW-Authenticate` makes some clients (curl, browser dev tools) more
+    # helpful about the failure mode.
+    response.headers["WWW-Authenticate"] = 'Bearer realm="sampyclaw"'
+    return response
+
+# Cookie used by the dashboard to remember a token resolved from the
+# initial `?token=...` URL so reloads / bookmarks Just Work without
+# leaving the secret in the address bar.
+TOKEN_COOKIE_NAME = "sampyclaw_token"
+TOKEN_COOKIE_MAX_AGE_SECONDS = 12 * 3600  # 12h — short enough to limit
+# stolen-cookie blast radius without forcing a re-login every refresh.
+
+
 def _bearer_from_request(request: Request) -> str | None:
-    """Extract a bearer token from `Authorization` or the `?token=` query."""
+    """Extract a bearer token from `Authorization`, `?token=`, or the
+    `sampyclaw_token` cookie."""
     auth = (
         request.headers.get("Authorization")
         or request.headers.get("authorization")
@@ -184,7 +256,8 @@ def _bearer_from_request(request: Request) -> str | None:
     )
     if auth.lower().startswith("bearer "):
         return auth[7:].strip() or None
-    # Browsers can't set Authorization on a WS upgrade — fall back to query.
+    # Browsers can't set Authorization on a WS upgrade or a top-level
+    # navigation — fall back to query string.
     path = request.path
     if "?" in path:
         from urllib.parse import parse_qs
@@ -193,6 +266,16 @@ def _bearer_from_request(request: Request) -> str | None:
         token = qs.get("token", [None])[0]
         if token:
             return token
+    # And finally a cookie set by the dashboard after the first
+    # `?token=` load — keeps reloads from re-prompting.
+    cookie_header = (
+        request.headers.get("Cookie") or request.headers.get("cookie") or ""
+    )
+    if cookie_header:
+        for pair in cookie_header.split(";"):
+            name, _, value = pair.strip().partition("=")
+            if name == TOKEN_COOKIE_NAME and value:
+                return value
     return None
 
 
@@ -341,15 +424,33 @@ class GatewayServer:
             return None
         path = request.path.split("?", 1)[0]
         # Health/metrics endpoints are intentionally unauthenticated so a
-        # k8s/systemd probe can hit them without needing a token. The
-        # bundled dashboard is also open — it carries no privileged data
-        # of its own and talks to the gateway via the authenticated WS.
+        # k8s/systemd probe can hit them without needing a token.
+        # Everything else under static_routes (the dashboard + its
+        # CSS/JS) is treated as authenticated content: we don't want
+        # unauthenticated visitors to fingerprint the deployment by
+        # pulling the dashboard HTML, and we want the same token the WS
+        # connect requires.
+        is_public = path in PUBLIC_HTTP_PATHS
+        if not is_public and not self._auth_ok(request):
+            logger.warning(
+                "rejecting HTTP %s: missing/invalid token", path
+            )
+            return _unauthorized_response(connection, path)
         handler = self._static_routes.get(path)
         if handler is not None:
             try:
                 result = handler(connection, request)
                 if asyncio.iscoroutine(result):
                     result = await result
+                # If the auth was via the query string, set a short-lived
+                # cookie so the next navigation works without `?token=`.
+                if (
+                    not is_public
+                    and self._auth_token is not None
+                    and _query_token_present(request)
+                    and result is not None
+                ):
+                    _set_token_cookie(result, _query_token(request))
                 return result
             except Exception:
                 logger.exception("static handler %s raised", path)

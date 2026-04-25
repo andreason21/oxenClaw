@@ -420,13 +420,26 @@ const ChatView = {
       sendBtn.disabled = true;
       textarea.value = "";
       try {
-        await safeRpc("chat.send", {
+        const result = await safeRpc("chat.send", {
           channel: ChatState.channel,
           account_id: ChatState.accountId,
           chat_id: ChatState.chatId,
           thread_id: ChatState.threadId || null,
           text,
         });
+        if (result && result.status === "dropped") {
+          // Real drop: no agent ran. Restore text so user can retry.
+          Toast.error(
+            "message dropped",
+            result.reason || "no agent matched the channel",
+            6000,
+          );
+          textarea.value = text;
+        } else if (result && result.message_id === "local" && result.reason) {
+          // Agent replied to history (chat.history poll renders it) but
+          // wire delivery failed — informational only.
+          Toast.info("delivery note", result.reason);
+        }
         await refresh();
         startPolling();
       } finally {

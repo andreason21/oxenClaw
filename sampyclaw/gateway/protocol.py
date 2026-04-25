@@ -92,6 +92,14 @@ class ChatSendResult(BaseModel):
 
     message_id: str
     timestamp: float
+    # `status="ok"` when the agent ran and produced at least one outbound;
+    # `"dropped"` when no agent was matched or the agent produced no
+    # output. `reason` carries a short human-readable explanation in the
+    # dropped case so dashboards can render a useful error toast instead
+    # of a silent no-op.
+    status: str = "ok"
+    reason: str | None = None
+    agent_id: str | None = None
 
 
 class AgentsListResult(RootModel[list[str]]):

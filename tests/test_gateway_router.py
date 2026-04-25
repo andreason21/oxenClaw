@@ -47,7 +47,12 @@ async def test_dispatch_validates_params_and_returns_result(router: Router) -> N
         }
     )
     assert resp.error is None
-    assert resp.result == {"message_id": "42:msg", "timestamp": 1.0}
+    # `status`/`reason`/`agent_id` are extra fields added in the
+    # multi-agent fallback work — the router test only cares that the
+    # core fields round-trip.
+    assert resp.result is not None
+    assert resp.result["message_id"] == "42:msg"
+    assert resp.result["timestamp"] == 1.0
 
 
 async def test_dispatch_unknown_method(router: Router) -> None:

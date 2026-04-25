@@ -134,7 +134,7 @@ async def test_chat_send_runs_dispatcher_through_channel_router(
     assert mocked_bot_factory[0].send_message.call_args.kwargs["text"] == "echo: hello"
 
 
-async def test_chat_send_unrouted_returns_sentinel(
+async def test_chat_send_unrouted_returns_local_ok_with_warning(
     tmp_path, mocked_bot_factory
 ) -> None:  # type: ignore[no-untyped-def]
     # Fresh agents + empty channel router → no telegram:main registered.
@@ -177,10 +177,16 @@ async def test_chat_send_unrouted_returns_sentinel(
             },
         }
     )
-    # ChannelRouter.send now raises UserVisibleError on no-route; the
-    # dispatcher logs and drops, so chat.send sees empty results and
-    # returns the "dropped" sentinel.
-    assert resp.result["message_id"] == "dropped"
+    # The agent ran (saving the reply into ConversationHistory which the
+    # dashboard reads via chat.history). The ChannelRouter has no
+    # plugin so the wire send fails — that's a delivery warning, not a
+    # drop. message_id="local" signals "no wire delivery, see history".
+    assert resp.result["status"] == "ok"
+    assert resp.result["message_id"] == "local"
+    assert resp.result["agent_id"] == "echo"
+    # The send failure surfaces as a non-blocking reason hint.
+    assert resp.result["reason"] is not None
+    assert "telegram" in resp.result["reason"]
 
 
 async def test_supervise_monitors_spawns_and_cancels_tasks(

@@ -446,12 +446,43 @@ def _build_router(
             text=p.text,
             received_at=0.0,
         )
-        results = await dispatcher.dispatch(envelope)
-        if results:
+        outcome = await dispatcher.dispatch_with_outcome(envelope)
+        if outcome.results:
             return ChatSendResult(
-                message_id=results[0].message_id, timestamp=results[0].timestamp
+                message_id=outcome.results[0].message_id,
+                timestamp=outcome.results[0].timestamp,
+                status="ok",
+                agent_id=outcome.agent_id,
             )
-        return ChatSendResult(message_id="dropped", timestamp=0.0)
+        # Agent ran but no outbound was successfully delivered. This is
+        # the dashboard's typical case: the user's `channel` value has no
+        # plugin loaded (it's a fake routing key just for session
+        # bookkeeping), so `channel_router.send` raises and we collect
+        # delivery warnings. The agent's reply IS in conversation
+        # history — the dashboard's chat.history poll renders it. So
+        # we report status="ok" with the warning attached, not a drop.
+        if outcome.agent_yielded > 0:
+            warning = "; ".join(outcome.delivery_warnings) or None
+            return ChatSendResult(
+                message_id="local",
+                timestamp=0.0,
+                status="ok",
+                reason=warning,
+                agent_id=outcome.agent_id,
+            )
+        # Real drop: no agent ran. Surface why so dashboards can render
+        # an informative error instead of a silent no-op.
+        reason = (
+            outcome.drop_reason
+            or "agent ran but produced no reply"
+        )
+        return ChatSendResult(
+            message_id="dropped",
+            timestamp=0.0,
+            status="dropped",
+            reason=reason,
+            agent_id=outcome.agent_id,
+        )
 
     register_agents_methods(router, agents)
     register_channels_methods(router, channel_router)

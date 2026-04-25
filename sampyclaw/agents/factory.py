@@ -7,6 +7,7 @@ Shared by the CLI (`gateway start --provider anthropic`) and the
 from __future__ import annotations
 
 import asyncio
+import os
 
 from sampyclaw.agents.anthropic_agent import AnthropicAgent
 from sampyclaw.agents.base import Agent
@@ -15,6 +16,25 @@ from sampyclaw.agents.echo import EchoAgent
 from sampyclaw.agents.local_agent import LocalAgent
 from sampyclaw.agents.pi_agent import PiAgent
 from sampyclaw.agents.tools import Tool, ToolRegistry
+
+
+def _maybe_browser_tools() -> list[Tool]:
+    """Append browser tools when SAMPYCLAW_ENABLE_BROWSER is set + playwright present.
+
+    Failures (missing optional dep) are logged once and swallowed so the
+    gateway still boots. The opt-in is opt-in: no env, no tools.
+    """
+    if os.environ.get("SAMPYCLAW_ENABLE_BROWSER", "").lower() not in ("1", "true", "yes"):
+        return []
+    try:
+        from sampyclaw.browser.policy import BrowserPolicy
+        from sampyclaw.tools_pkg.browser import default_browser_tools
+    except Exception:  # noqa: BLE001
+        return []
+    try:
+        return list(default_browser_tools(policy=BrowserPolicy.from_env()))
+    except Exception:  # noqa: BLE001
+        return []
 
 
 class UnknownProvider(ValueError):
@@ -46,6 +66,9 @@ def build_agent(
         if resolved_tools is None:
             resolved_tools = ToolRegistry()
             resolved_tools.register_all(default_tools())
+            browser_tools = _maybe_browser_tools()
+            if browser_tools:
+                resolved_tools.register_all(browser_tools)
         if mcp_tools:
             resolved_tools.register_all(list(mcp_tools))
         kwargs: dict = {"agent_id": agent_id, "tools": resolved_tools}  # type: ignore[type-arg]
@@ -61,6 +84,9 @@ def build_agent(
         if resolved_tools is None:
             resolved_tools = ToolRegistry()
             resolved_tools.register_all(default_tools())
+            browser_tools = _maybe_browser_tools()
+            if browser_tools:
+                resolved_tools.register_all(browser_tools)
         if mcp_tools:
             resolved_tools.register_all(list(mcp_tools))
         kwargs: dict = {"agent_id": agent_id, "tools": resolved_tools}  # type: ignore[type-arg]

@@ -97,6 +97,12 @@ Only start after B exit criteria met.
 **A.5** — Cron scheduling, approval prompts.
 **A.6** — Plugin discovery from third-party packages (entry points via `importlib.metadata`).
 
+### BR-1 — Browser tools (Playwright, fail-closed)
+
+Status: **Shipped 2026-04-26**. ~900 LOC across `sampyclaw/browser/{policy,errors,pinning,egress,session}.py` + `sampyclaw/tools_pkg/browser.py` + `sampyclaw/skills/browser/SKILL.md`. 29 new tests. Architecture: see [`BROWSER.md`](./BROWSER.md).
+
+What this replaces from openclaw `extensions/browser/` (~24K LOC, 156 files): the LLM-callable subset of `pw-tools-core.*` (`navigate`, `snapshot`, `screenshot`, `click`, `fill`, `evaluate`, `download`) and the egress security from `navigation-guard.ts` + `request-policy.ts` + `cdp-reachability-policy.ts`. The CDP bridge / `chrome-mcp` / `qa-lab` surface is intentionally out of scope — sampyClaw exposes browser tools in-process, not as a remote control plane.
+
 ## Risks & open decisions
 
 | Decision | Options | Default |

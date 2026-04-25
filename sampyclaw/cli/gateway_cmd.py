@@ -197,6 +197,7 @@ def build_agent(
     api_key: str | None = None,
     system_prompt: str | None = None,
     memory: MemoryRetriever | None = None,
+    tools: "ToolRegistry | None" = None,  # noqa: F821 — forward ref
 ) -> Agent:
     """Typer-friendly wrapper around the shared agent factory."""
     try:
@@ -208,6 +209,7 @@ def build_agent(
             api_key=api_key,
             system_prompt=system_prompt,
             memory=memory,
+            tools=tools,
         )
     except UnknownProvider as exc:
         raise typer.BadParameter(str(exc)) from exc
@@ -252,6 +254,27 @@ async def _run_gateway(
     # Memory must exist before the agent so we can wire it in.
     memory_retriever = MemoryRetriever.for_root(paths, OpenAIEmbeddings())
 
+    # Cron scheduler is created early so the cron tool can be wired
+    # into the agent's tool registry. Dispatcher gets a forward
+    # reference; we patch the scheduler's dispatcher pointer after the
+    # dispatcher is built.
+    cron_store = CronJobStore(paths=paths)
+
+    # Build the agent with bundled tools pre-registered, so the model
+    # has weather / web fetch / web search / github / skill_creator
+    # available out of the box without any config edits.
+    from sampyclaw.agents.builtin_tools import default_tools as _builtin_tools
+    from sampyclaw.agents.tools import ToolRegistry
+    from sampyclaw.tools_pkg.bundle import (
+        bundled_tools_with_deps,
+        default_bundled_tools,
+    )
+
+    tool_registry = ToolRegistry()
+    tool_registry.register_all(_builtin_tools())
+    tool_registry.register_all(default_bundled_tools())
+    # The dep-bound tools are added below once cron_scheduler exists.
+
     agents = AgentRegistry()
     agents.register(
         build_agent(
@@ -262,6 +285,7 @@ async def _run_gateway(
             api_key=api_key,
             system_prompt=system_prompt,
             memory=memory_retriever,
+            tools=tool_registry,
         )
     )
 
@@ -269,8 +293,16 @@ async def _run_gateway(
         agents=agents, config=config, send=channel_router.send
     )
 
-    cron_scheduler = CronScheduler(
-        store=CronJobStore(paths=paths), dispatcher=dispatcher
+    cron_scheduler = CronScheduler(store=cron_store, dispatcher=dispatcher)
+
+    # Now that scheduler + channel_router exist, register the
+    # dependency-bound tools (cron, message, healthcheck, session_logs).
+    tool_registry.register_all(
+        bundled_tools_with_deps(
+            channel_router=channel_router,
+            cron_scheduler=cron_scheduler,
+            memory=getattr(memory_retriever, "store", None),
+        )
     )
     approvals = ApprovalManager(state_path=paths.home / "approvals.json")
 

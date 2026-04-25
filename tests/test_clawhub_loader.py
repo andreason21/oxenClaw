@@ -42,13 +42,13 @@ def _setup_skill(home, slug: str = "hello") -> SampyclawPaths:  # type: ignore[n
 def test_load_installed_skills_returns_empty_when_no_dir(tmp_path) -> None:  # type: ignore[no-untyped-def]
     paths = SampyclawPaths(home=tmp_path)
     paths.ensure_home()
-    assert load_installed_skills(paths) == []
+    assert load_installed_skills(paths, include_bundled=False) == []
 
 
 def test_load_skips_dirs_without_skill_md(tmp_path) -> None:  # type: ignore[no-untyped-def]
     paths = _setup_skill(tmp_path)
     (tmp_path / "skills" / "empty").mkdir()
-    out = load_installed_skills(paths)
+    out = load_installed_skills(paths, include_bundled=False)
     assert {s.slug for s in out} == {"hello"}
 
 
@@ -57,18 +57,42 @@ def test_load_skips_malformed_skill_md(tmp_path) -> None:  # type: ignore[no-unt
     bad = tmp_path / "skills" / "bad"
     bad.mkdir()
     (bad / "SKILL.md").write_text("not yaml frontmatter")
-    out = load_installed_skills(paths)
+    out = load_installed_skills(paths, include_bundled=False)
     assert {s.slug for s in out} == {"hello"}
 
 
 def test_loaded_skill_carries_origin(tmp_path) -> None:  # type: ignore[no-untyped-def]
     paths = _setup_skill(tmp_path)
-    out = load_installed_skills(paths)
+    out = load_installed_skills(paths, include_bundled=False)
     assert len(out) == 1
     s = out[0]
     assert s.manifest.name == "hello"
     assert s.origin is not None
     assert s.origin.installed_version == "1.0.0"
+
+
+def test_load_includes_bundled_skills_by_default(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """Out-of-the-box, the loader returns all 6 curated bundled skills
+    so the model can call them without any user-side install."""
+    paths = SampyclawPaths(home=tmp_path)
+    paths.ensure_home()
+    out = load_installed_skills(paths)
+    slugs = {s.slug for s in out}
+    # The exact bundled set: weather, github, summarize, healthcheck,
+    # session_logs, skill_creator, coding_agent.
+    assert "weather" in slugs
+    assert "github" in slugs
+    assert "skill_creator" in slugs
+
+
+def test_user_skills_override_bundled_with_same_slug(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """If the user writes their own ~/.sampyclaw/skills/weather/SKILL.md,
+    that wins over the bundled weather."""
+    paths = _setup_skill(tmp_path, slug="weather")
+    out = load_installed_skills(paths)
+    weather = next(s for s in out if s.slug == "weather")
+    # User-set frontmatter has name="hello" — bundled weather has name="weather".
+    assert weather.manifest.name == "hello"
 
 
 def test_format_skills_block_shape(tmp_path) -> None:  # type: ignore[no-untyped-def]

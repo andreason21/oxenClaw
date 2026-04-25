@@ -1,9 +1,18 @@
 """Skill loader + agent-prompt formatter.
 
-Walks `~/.sampyclaw/skills/<slug>/SKILL.md`, parses each, and renders the
-openclaw-shaped `<available_skills>` XML block that agents include in
-their system prompt so the model knows which skills exist and where to
-read them from.
+Two source directories are merged:
+
+1. **Bundled** (`sampyclaw/skills/<slug>/SKILL.md`) — the curated skills
+   shipped with the package (weather, summarize, github, healthcheck,
+   session_logs, skill_creator). These load even on a fresh install with
+   no `~/.sampyclaw/` config so the model knows about them out of the
+   box.
+2. **User-installed** (`~/.sampyclaw/skills/<slug>/SKILL.md`) — anything
+   the operator wrote or pulled from ClawHub. These take precedence
+   over a bundled skill of the same slug (lets users override).
+
+Output is rendered into the openclaw-shaped `<available_skills>` block
+that agents prepend to their system prompt.
 """
 
 from __future__ import annotations
@@ -21,6 +30,9 @@ from sampyclaw.config.paths import SampyclawPaths, default_paths
 from sampyclaw.plugin_sdk.runtime_env import get_logger
 
 logger = get_logger("clawhub.loader")
+
+# `sampyclaw/skills/` lives next to this loader's parent (`sampyclaw/`).
+_BUNDLED_SKILLS_DIR = Path(__file__).resolve().parent.parent / "skills"
 
 
 @dataclass(frozen=True)
@@ -40,10 +52,8 @@ class InstalledSkill:
         return self.manifest.description
 
 
-def load_installed_skills(paths: SampyclawPaths | None = None) -> list[InstalledSkill]:
-    """Walk the skills directory and parse every installed SKILL.md."""
-    resolved = paths or default_paths()
-    root = resolved.home / "skills"
+def _skills_in_dir(root: Path) -> list[InstalledSkill]:
+    """Parse every `SKILL.md` directly under `root/<slug>/`."""
     if not root.exists():
         return []
     out: list[InstalledSkill] = []
@@ -69,6 +79,29 @@ def load_installed_skills(paths: SampyclawPaths | None = None) -> list[Installed
             )
         )
     return out
+
+
+def load_installed_skills(
+    paths: SampyclawPaths | None = None,
+    *,
+    include_bundled: bool = True,
+) -> list[InstalledSkill]:
+    """Return bundled + user-installed skills, deduped by slug.
+
+    User skills (`~/.sampyclaw/skills/`) win over a bundled skill of the
+    same name so operators can override behaviour by writing their own
+    `weather/SKILL.md` for example.
+    """
+    resolved = paths or default_paths()
+    user_root = resolved.home / "skills"
+    user_skills = _skills_in_dir(user_root)
+    if not include_bundled:
+        return user_skills
+    bundled = _skills_in_dir(_BUNDLED_SKILLS_DIR)
+    user_slugs = {s.slug for s in user_skills}
+    merged = user_skills + [b for b in bundled if b.slug not in user_slugs]
+    merged.sort(key=lambda s: s.slug)
+    return merged
 
 
 def format_skills_for_prompt(skills: list[InstalledSkill]) -> str:

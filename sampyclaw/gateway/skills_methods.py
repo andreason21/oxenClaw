@@ -49,7 +49,11 @@ class _InstallParams(BaseModel):
 
 
 def _installed_view(paths: SampyclawPaths) -> list[dict[str, Any]]:
-    skills = load_installed_skills(paths)
+    # `skills.list_installed` is about what the user explicitly installed
+    # via ClawHub — it powers the dashboard's Skills view and the
+    # uninstall flow. Bundled skills are available to the model but
+    # don't belong here (you can't uninstall them).
+    skills = load_installed_skills(paths, include_bundled=False)
     out: list[dict[str, Any]] = []
     for s in skills:
         out.append(

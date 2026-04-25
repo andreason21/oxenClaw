@@ -21,7 +21,7 @@ agents:
   assistant:
     id: assistant
     provider: local
-    model: qwen2.5:7b-instruct
+    model: gemma4:latest
     channels:
       telegram:
         allow_from: []

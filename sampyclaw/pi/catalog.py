@@ -90,6 +90,13 @@ def default_registry() -> InMemoryModelRegistry:
             ),
             # ── Local / Ollama ──
             Model(
+                id="gemma4:latest",
+                provider="ollama",
+                context_window=32_768,
+                max_output_tokens=4_096,
+                supports_tools=True,
+            ),
+            Model(
                 id="qwen2.5:7b-instruct",
                 provider="ollama",
                 context_window=32_768,

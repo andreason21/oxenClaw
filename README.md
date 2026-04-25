@@ -20,7 +20,7 @@ and run it as a long-lived service with production-grade observability.
 
 | | |
 |---|---|
-| 🦙 **Bring your own model** | Default is local Ollama (`qwen2.5:7b-instruct`). Anthropic, OpenAI-compatible, Bedrock, Google, Groq, DeepSeek, Mistral, Together, Fireworks, … 22 providers via `pi`. |
+| 🦙 **Bring your own model** | Default is local Ollama (`gemma4:latest` — tool-capable, lightweight). Anthropic, OpenAI-compatible, Bedrock, Google, Groq, DeepSeek, Mistral, Together, Fireworks, … 22 providers via `pi`. |
 | 🔌 **Open by design** | Plugin SDK + entry-point discovery. New channels and skills install with `pip install`. |
 | 🛡️ **Production-grade security** | NetPolicy + DNS pinning + SSRF guards, sandboxed tool execution (RLIMIT + bwrap), human-in-the-loop approval gating, dangerous-env stripping for subprocess MCP servers. |
 | 📊 **Operationally serious** | Prometheus `/metrics`, `/healthz` + `/readyz`, structured JSON logs with per-RPC `trace_id`, graceful SIGTERM drain, online SQLite backup/restore. |
@@ -45,12 +45,27 @@ sampyclaw config validate
 ```
 
 Requires Python **3.11+**. The default LLM backend is [Ollama](https://ollama.ai/)
-running on `127.0.0.1:11434` — install Ollama and pull a tool-capable
-model:
+running on `127.0.0.1:11434` — install Ollama and pull the recommended
+default model:
 
 ```bash
-ollama pull qwen2.5:7b-instruct
+ollama pull gemma4:latest
 ```
+
+`gemma4:latest` is the recommended default: native function calling,
+small enough to run on a laptop, and the sampyClaw provider catalog
+ships with a 32K context window entry for it. Other tested models —
+override with `--model <id>`:
+
+| Model | Notes |
+|---|---|
+| `gemma4:latest` | **Recommended default.** Tool-capable, lightweight. |
+| `qwen2.5:7b-instruct` | Strong tool calling, 32K ctx. |
+| `llama3.1:8b` | 128K ctx, broadly capable. |
+| `mistral-nemo:12b` | 128K ctx, slower but verbose. |
+
+Avoid `gemma3:4b` (in catalog with `supports_tools=False`) — earlier
+gemma's tool support is unreliable.
 
 You can run sampyClaw with no LLM (RPC + tools only) by using
 `--provider echo` for testing.
@@ -68,7 +83,7 @@ channels: {}     # populate per channel below
 agents:
   default:
     provider: local              # local | anthropic | pi | echo
-    model: qwen2.5:7b-instruct
+    model: gemma4:latest
     system_prompt: |
       You are a helpful assistant.
 ```
@@ -290,7 +305,7 @@ MIT.
 
 | | |
 |---|---|
-| 🦙 **모델 자유** | 기본은 로컬 Ollama (`qwen2.5:7b-instruct`). Anthropic, OpenAI 호환, Bedrock, Google, Groq, DeepSeek, Mistral, Together, Fireworks 등 `pi` 통해 22개 프로바이더 지원. |
+| 🦙 **모델 자유** | 기본은 로컬 Ollama (`gemma4:latest` — 도구 호출 지원, 경량). Anthropic, OpenAI 호환, Bedrock, Google, Groq, DeepSeek, Mistral, Together, Fireworks 등 `pi` 통해 22개 프로바이더 지원. |
 | 🔌 **개방형 설계** | Plugin SDK + entry-point 자동 디스커버리. 새 채널·스킬은 `pip install`로 끝. |
 | 🛡️ **프로덕션급 보안** | NetPolicy + DNS pinning + SSRF 가드, 도구 격리 실행 (RLIMIT + bwrap), 사람 승인 게이트, 서브프로세스 MCP 서버용 위험 env 스트립. |
 | 📊 **운영을 진지하게** | Prometheus `/metrics`, `/healthz` + `/readyz`, RPC 단위 `trace_id` 가 박힌 구조화 JSON 로그, SIGTERM 그레이스풀 드레인, 온라인 SQLite 백업/복구. |
@@ -311,11 +326,25 @@ sampyclaw config validate
 ```
 
 Python **3.11+** 필요. 기본 LLM 백엔드는 [Ollama](https://ollama.ai/)
-(`127.0.0.1:11434`). Ollama 설치 후 도구 호출 지원 모델 받기:
+(`127.0.0.1:11434`). Ollama 설치 후 권장 기본 모델 받기:
 
 ```bash
-ollama pull qwen2.5:7b-instruct
+ollama pull gemma4:latest
 ```
+
+`gemma4:latest`이 권장 기본: 네이티브 함수 호출 지원, 노트북에서도 무난히
+돌아가는 크기, sampyClaw 프로바이더 카탈로그에 32K 컨텍스트 윈도우로
+등록됨. 다른 검증된 모델 — `--model <id>`로 오버라이드:
+
+| 모델 | 비고 |
+|---|---|
+| `gemma4:latest` | **권장 기본.** 도구 호출 지원, 경량. |
+| `qwen2.5:7b-instruct` | 강한 도구 호출, 32K ctx. |
+| `llama3.1:8b` | 128K ctx, 범용성 좋음. |
+| `mistral-nemo:12b` | 128K ctx, 느리지만 verbose. |
+
+`gemma3:4b`는 피하기 (카탈로그에 `supports_tools=False`로 등록됨) —
+이전 gemma는 도구 지원이 불안정.
 
 LLM 없이 RPC + 도구만 테스트하려면 `--provider echo` 사용.
 
@@ -330,7 +359,7 @@ channels: {}
 agents:
   default:
     provider: local
-    model: qwen2.5:7b-instruct
+    model: gemma4:latest
     system_prompt: |
       You are a helpful assistant.
 ```

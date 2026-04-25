@@ -40,8 +40,9 @@ def test_build_local_defaults_target_tool_capable_ollama_model() -> None:
     agent = build_agent(agent_id="a", provider="local")
     assert isinstance(agent, LocalAgent)
     assert sorted(agent._tools.names()) == ["echo", "get_time"]
-    # Default must be tool-capable (gemma3 has weak/no tool support).
-    assert agent._model == "qwen2.5:7b-instruct"
+    # Default must be tool-capable (gemma3 has weak/no tool support;
+    # gemma4 restored function calling so it's the new default).
+    assert agent._model == "gemma4:latest"
     assert agent._base_url.endswith("11434/v1")
 
 

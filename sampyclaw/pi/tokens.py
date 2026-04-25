@@ -156,6 +156,7 @@ MODEL_CONTEXT_TOKENS: dict[str, int] = {
     "gemini-2.0-flash": 1_000_000,
     "gemini-2.5-pro": 2_000_000,
     # Local (Ollama defaults)
+    "gemma4:latest": 32_768,
     "qwen2.5:7b-instruct": 32_768,
     "llama3.1:8b": 128_000,
     "mistral-nemo:12b": 128_000,

@@ -82,7 +82,7 @@ def test_pi_provider_registered_in_factory() -> None:
 def test_factory_builds_pi_agent_with_default_model(tmp_path: Path) -> None:
     a = build_agent(agent_id="a", provider="pi")
     assert isinstance(a, PiAgent)
-    assert a._model.id == "qwen2.5:7b-instruct"
+    assert a._model.id == "gemma4:latest"
 
 
 # ─── End-to-end turn: streamed text ──────────────────────────────────

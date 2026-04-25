@@ -103,7 +103,7 @@ async def _collect(agent, env):  # type: ignore[no-untyped-def]
 async def test_defaults_target_tool_capable_ollama_model(tmp_path) -> None:  # type: ignore[no-untyped-def]
     agent = LocalAgent(paths=_paths(tmp_path))
     assert agent._base_url.endswith("11434/v1")
-    assert agent._model == DEFAULT_MODEL == "qwen2.5:7b-instruct"
+    assert agent._model == DEFAULT_MODEL == "gemma4:latest"
 
 
 async def test_simple_stop_reply(tmp_path) -> None:  # type: ignore[no-untyped-def]

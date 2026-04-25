@@ -71,7 +71,7 @@ class PiAgent:
         self,
         *,
         agent_id: str = "pi",
-        model_id: str = "qwen2.5:7b-instruct",
+        model_id: str = "gemma4:latest",
         registry: ModelRegistry | None = None,
         auth: AuthStorage | None = None,
         sessions: SessionManager | None = None,

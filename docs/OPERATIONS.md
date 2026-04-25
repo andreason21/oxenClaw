@@ -37,7 +37,7 @@ Set credentials and config under `~/.sampyclaw/`:
 ```bash
 SAMPYCLAW_GATEWAY_TOKEN=$(openssl rand -hex 32) \
   sampyclaw gateway start \
-    --provider pi --model qwen2.5:7b-instruct \
+    --provider pi --model gemma4:latest \
     --host 0.0.0.0 --port 7331
 ```
 

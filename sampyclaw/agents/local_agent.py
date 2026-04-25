@@ -44,9 +44,10 @@ from sampyclaw.plugin_sdk.runtime_env import get_logger
 logger = get_logger("agents.local")
 
 DEFAULT_BASE_URL = "http://127.0.0.1:11434/v1"  # Ollama default
-# Tool-capable Ollama default. gemma3 has weak/no tool support — use a model
-# that ships with reliable OpenAI tool_calls. Override per deployment.
-DEFAULT_MODEL = "qwen2.5:7b-instruct"
+# Tool-capable Ollama default. Earlier gemma3:4b was dropped due to weak
+# tool support; gemma4:latest restores native function calling. Override
+# per deployment if you prefer qwen2.5, llama3.x, etc.
+DEFAULT_MODEL = "gemma4:latest"
 DEFAULT_SYSTEM_PROMPT = (
     "You are sampyClaw, a helpful assistant reached via chat channels. "
     "Be concise. Use tools when helpful."

@@ -88,6 +88,8 @@ def _read_proc_status() -> tuple[int, int]:
 
 
 def _count_fds() -> int:
+    """Count open file descriptors. Returns -1 on platforms without /proc
+    (Windows native, WSL1) — soak runs primarily on Linux/WSL2."""
     fd_dir = Path("/proc/self/fd")
     if not fd_dir.exists():
         return -1

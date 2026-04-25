@@ -104,8 +104,15 @@ def start(
 ) -> None:
     """Start the gateway server + every discovered channel + cron scheduler."""
     from sampyclaw.observability import configure_logging
+    from sampyclaw.plugin_sdk.runtime_env import describe_platform, is_wsl
 
     configure_logging(level=logging.DEBUG if verbose else logging.INFO)
+    logger.info("sampyClaw starting on %s", describe_platform())
+    if is_wsl():
+        logger.info(
+            "WSL2 detected — see docs/INSTALL_WSL.md for networking and "
+            "Ollama configuration tips"
+        )
     if not skip_preflight:
         from sampyclaw.config.preflight import run_preflight
 

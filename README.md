@@ -32,9 +32,13 @@ and run it as a long-lived service with production-grade observability.
 
 ## Install
 
+> **On Windows?** Use the dedicated WSL2 guide:
+> [`docs/INSTALL_WSL.md`](docs/INSTALL_WSL.md). Native Win32 is not
+> supported (sandbox + signal + Linux networking dependencies).
+
 ```bash
 # Clone and install in editable mode
-git clone git@github.com:andreason21/sampyClaw.git
+git clone https://github.com/andreason21/sampyClaw.git
 cd sampyClaw
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
@@ -44,7 +48,8 @@ sampyclaw paths
 sampyclaw config validate
 ```
 
-Requires Python **3.11+**. The default LLM backend is [Ollama](https://ollama.ai/)
+**Linux / macOS / WSL2** are supported. Requires Python **3.11+**. The
+default LLM backend is [Ollama](https://ollama.ai/)
 running on `127.0.0.1:11434` — install Ollama and pull the recommended
 default model:
 
@@ -275,6 +280,7 @@ for the full module map.
 | Document | Purpose |
 |---|---|
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Reference architecture extracted from openclaw |
+| [`docs/INSTALL_WSL.md`](docs/INSTALL_WSL.md) | Windows install via WSL2 (English + Korean) |
 | [`docs/PORTING_PLAN.md`](docs/PORTING_PLAN.md) | Phased roadmap (D → B → A → M → PROD) |
 | [`docs/SUBSYSTEM_MAP.md`](docs/SUBSYSTEM_MAP.md) | What's ported / partial / out-of-scope |
 | [`docs/AUTHORING_SKILLS.md`](docs/AUTHORING_SKILLS.md) | Build your own tools and skills |
@@ -315,8 +321,12 @@ MIT.
 
 ### 설치
 
+> **Windows 사용자?** WSL2 전용 가이드 참고:
+> [`docs/INSTALL_WSL.md`](docs/INSTALL_WSL.md). Win32 네이티브는 미지원
+> (샌드박스 + 시그널 + Linux 네트워킹 의존).
+
 ```bash
-git clone git@github.com:andreason21/sampyClaw.git
+git clone https://github.com/andreason21/sampyClaw.git
 cd sampyClaw
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
@@ -325,7 +335,8 @@ sampyclaw paths
 sampyclaw config validate
 ```
 
-Python **3.11+** 필요. 기본 LLM 백엔드는 [Ollama](https://ollama.ai/)
+**Linux / macOS / WSL2** 지원. Python **3.11+** 필요. 기본 LLM 백엔드는
+[Ollama](https://ollama.ai/)
 (`127.0.0.1:11434`). Ollama 설치 후 권장 기본 모델 받기:
 
 ```bash
@@ -535,6 +546,7 @@ discord = "my_pkg.discord_plugin:DISCORD_PLUGIN"
 | 문서 | 용도 |
 |---|---|
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | openclaw에서 추출한 레퍼런스 아키텍처 |
+| [`docs/INSTALL_WSL.md`](docs/INSTALL_WSL.md) | Windows WSL2 설치 가이드 (영문 + 한글) |
 | [`docs/PORTING_PLAN.md`](docs/PORTING_PLAN.md) | 단계별 로드맵 (D → B → A → M → PROD) |
 | [`docs/SUBSYSTEM_MAP.md`](docs/SUBSYSTEM_MAP.md) | 포팅 / 부분 / 범위외 분류 |
 | [`docs/AUTHORING_SKILLS.md`](docs/AUTHORING_SKILLS.md) | 자기 도구·스킬 작성 가이드 |

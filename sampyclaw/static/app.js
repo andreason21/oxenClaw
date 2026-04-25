@@ -238,7 +238,13 @@ const Markdown = (() => {
         out.push(`<pre><code data-lang="${escape(lang)}">${escape(buf.join("\n"))}</code></pre>`);
         continue;
       }
-      if (/^[-*]\s+/.test(line)) {
+      // Unordered list: require at least 2 sibling items so a stray
+      // "- foo" line doesn't get rendered as a 1-item bullet.
+      if (
+        /^[-*]\s+/.test(line)
+        && i + 1 < lines.length
+        && /^[-*]\s+/.test(lines[i + 1])
+      ) {
         const items = [];
         while (i < lines.length && /^[-*]\s+/.test(lines[i])) {
           items.push(`<li>${inline(lines[i].replace(/^[-*]\s+/, ""))}</li>`);
@@ -247,7 +253,15 @@ const Markdown = (() => {
         out.push(`<ul>${items.join("")}</ul>`);
         continue;
       }
-      if (/^\d+\.\s+/.test(line)) {
+      // Ordered list: same — require at least 2 items in a row. This
+      // avoids the common LLM/user case where a single line "1. xxx"
+      // turns into <ol><li>xxx</li></ol> and the browser auto-prepends
+      // a "1." marker, making the message look duplicated.
+      if (
+        /^\d+\.\s+/.test(line)
+        && i + 1 < lines.length
+        && /^\d+\.\s+/.test(lines[i + 1])
+      ) {
         const items = [];
         while (i < lines.length && /^\d+\.\s+/.test(lines[i])) {
           items.push(`<li>${inline(lines[i].replace(/^\d+\.\s+/, ""))}</li>`);
@@ -256,9 +270,22 @@ const Markdown = (() => {
         out.push(`<ol>${items.join("")}</ol>`);
         continue;
       }
-      // Paragraph block: collect until blank line.
+      // Paragraph block: collect until blank line, code fence, or the
+      // start of a real (multi-item) list. Single-line "1. x" or "- y"
+      // stays in the paragraph and renders verbatim.
       const paraLines = [];
-      while (i < lines.length && lines[i].trim() !== "" && !lines[i].startsWith("```") && !/^[-*]\s+/.test(lines[i])) {
+      const isMultiList = (idx) =>
+        idx + 1 < lines.length
+        && (
+          (/^[-*]\s+/.test(lines[idx]) && /^[-*]\s+/.test(lines[idx + 1]))
+          || (/^\d+\.\s+/.test(lines[idx]) && /^\d+\.\s+/.test(lines[idx + 1]))
+        );
+      while (
+        i < lines.length
+        && lines[i].trim() !== ""
+        && !lines[i].startsWith("```")
+        && !isMultiList(i)
+      ) {
         paraLines.push(lines[i++]);
       }
       if (paraLines.length) out.push(`<p>${inline(paraLines.join("\n"))}</p>`);

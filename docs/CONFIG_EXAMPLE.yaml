@@ -1,0 +1,57 @@
+# Example sampyclaw config. Copy to ~/.sampyclaw/config.yaml.
+#
+# Credentials go in a sibling directory and are never stored in this file:
+#   ~/.sampyclaw/credentials/telegram/<account_id>.json  →  {"token": "..."}
+#
+# A single-bot shortcut: leave the `main` account and export
+# TELEGRAM_BOT_TOKEN in your shell instead of writing credentials/telegram/main.json.
+
+channels:
+  telegram:
+    dm_policy: pairing
+    accounts:
+      - account_id: main
+        display_name: "Personal Bot"
+    allow_from: []
+
+agents:
+  # Default provider is `local` — a self-hosted OpenAI-compatible server
+  # (Ollama at http://127.0.0.1:11434/v1 by default). Override base_url /
+  # api_key / model on the CLI or via `agents.create` RPC.
+  assistant:
+    id: assistant
+    provider: local
+    model: qwen2.5:7b-instruct
+    channels:
+      telegram:
+        allow_from: []
+  echo:
+    id: echo
+    provider: echo
+    channels:
+      telegram:
+        allow_from: []
+
+# ClawHub registries — list every "verified" mirror you want skills installed
+# from. The `default` registry is used when an RPC/CLI omits an explicit
+# `--registry`/`registry=` argument. Tokens come from env vars (preferred)
+# or, less safely, inline `token:` strings (which would land in version
+# control, so don't).
+#
+# Trust levels:
+#   official  — public clawhub.ai
+#   mirror    — operator-controlled internal mirror, equally trusted
+#   community — third-party hub; lower trust, surfaced in the dashboard
+#
+# Removing the public registry from this list is the way to lock the
+# install down to your private mirror only.
+clawhub:
+  default: corp-mirror
+  registries:
+    - name: corp-mirror
+      url: https://clawhub.corp.example.com
+      token_env: CORP_CLAWHUB_TOKEN
+      trust: mirror
+    - name: public
+      url: https://clawhub.ai
+      trust: official

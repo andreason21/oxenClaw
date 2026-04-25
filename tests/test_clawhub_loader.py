@@ -1,0 +1,97 @@
+"""Skill loader + agent-prompt formatter tests."""
+
+from __future__ import annotations
+
+from sampyclaw.clawhub.loader import (
+    InstalledSkill,
+    format_skills_for_prompt,
+    load_installed_skills,
+)
+from sampyclaw.clawhub.lockfile import OriginMetadata
+from sampyclaw.config.paths import SampyclawPaths
+
+
+SAMPLE_SKILL = """---
+name: hello
+description: Say hello.
+metadata:
+  openclaw:
+    emoji: 👋
+---
+
+# body
+"""
+
+
+def _setup_skill(home, slug: str = "hello") -> SampyclawPaths:  # type: ignore[no-untyped-def]
+    paths = SampyclawPaths(home=home)
+    paths.ensure_home()
+    skill_dir = home / "skills" / slug
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(SAMPLE_SKILL)
+    (skill_dir / ".clawhub").mkdir()
+    OriginMetadata(
+        registry="https://clawhub.ai",
+        slug=slug,
+        installed_version="1.0.0",
+        installed_at=1.0,
+    ).save(skill_dir / ".clawhub" / "origin.json")
+    return paths
+
+
+def test_load_installed_skills_returns_empty_when_no_dir(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    paths = SampyclawPaths(home=tmp_path)
+    paths.ensure_home()
+    assert load_installed_skills(paths) == []
+
+
+def test_load_skips_dirs_without_skill_md(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    paths = _setup_skill(tmp_path)
+    (tmp_path / "skills" / "empty").mkdir()
+    out = load_installed_skills(paths)
+    assert {s.slug for s in out} == {"hello"}
+
+
+def test_load_skips_malformed_skill_md(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    paths = _setup_skill(tmp_path)
+    bad = tmp_path / "skills" / "bad"
+    bad.mkdir()
+    (bad / "SKILL.md").write_text("not yaml frontmatter")
+    out = load_installed_skills(paths)
+    assert {s.slug for s in out} == {"hello"}
+
+
+def test_loaded_skill_carries_origin(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    paths = _setup_skill(tmp_path)
+    out = load_installed_skills(paths)
+    assert len(out) == 1
+    s = out[0]
+    assert s.manifest.name == "hello"
+    assert s.origin is not None
+    assert s.origin.installed_version == "1.0.0"
+
+
+def test_format_skills_block_shape(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    paths = _setup_skill(tmp_path)
+    skills = load_installed_skills(paths)
+    block = format_skills_for_prompt(skills)
+    assert "<available_skills>" in block
+    assert "<name>hello</name>" in block
+    assert "<description>Say hello.</description>" in block
+    assert "<location>" in block
+
+
+def test_format_skills_empty_returns_empty_string() -> None:
+    assert format_skills_for_prompt([]) == ""
+
+
+def test_xml_escape_in_description(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    paths = _setup_skill(tmp_path)
+    bad = tmp_path / "skills" / "esc"
+    bad.mkdir()
+    (bad / "SKILL.md").write_text(
+        "---\nname: esc\ndescription: a < b & c > d\n---\nbody\n"
+    )
+    skills = load_installed_skills(paths)
+    block = format_skills_for_prompt(skills)
+    assert "&lt; b &amp; c &gt;" in block

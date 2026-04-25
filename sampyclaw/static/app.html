@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>sampyClaw</title>
+  <link rel="stylesheet" href="/static/app.css" />
+</head>
+<body>
+  <div id="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-mark">🦞</span>
+        <span class="brand-text">sampyClaw</span>
+      </div>
+      <nav class="nav">
+        <a class="nav-item" data-route="chat" href="#chat">
+          <span class="nav-icon">💬</span><span>Chat</span>
+        </a>
+        <a class="nav-item" data-route="agents" href="#agents">
+          <span class="nav-icon">🤖</span><span>Agents</span>
+        </a>
+        <a class="nav-item" data-route="channels" href="#channels">
+          <span class="nav-icon">📡</span><span>Channels</span>
+        </a>
+        <a class="nav-item" data-route="cron" href="#cron">
+          <span class="nav-icon">⏱</span><span>Cron</span>
+        </a>
+        <a class="nav-item" data-route="approvals" href="#approvals">
+          <span class="nav-icon">✅</span><span>Approvals</span>
+          <span class="badge" id="nav-approvals-badge" hidden>0</span>
+        </a>
+        <a class="nav-item" data-route="skills" href="#skills">
+          <span class="nav-icon">🧰</span><span>Skills</span>
+          <span class="badge" id="nav-skills-badge" hidden>0</span>
+        </a>
+        <a class="nav-item" data-route="memory" href="#memory">
+          <span class="nav-icon">🧠</span><span>Memory</span>
+          <span class="badge" id="nav-memory-badge" hidden>0</span>
+        </a>
+        <a class="nav-item" data-route="config" href="#config">
+          <span class="nav-icon">⚙</span><span>Config</span>
+        </a>
+        <a class="nav-item" data-route="rpc" href="#rpc">
+          <span class="nav-icon">📜</span><span>RPC log</span>
+        </a>
+      </nav>
+      <div class="status-block">
+        <div class="status-row">
+          <span class="dot" id="status-dot"></span>
+          <span id="status-text">connecting…</span>
+        </div>
+        <input id="ws-url" type="text" spellcheck="false" />
+        <button id="reconnect-btn" class="btn btn-ghost btn-sm">reconnect</button>
+      </div>
+    </aside>
+
+    <main class="content">
+      <header class="topbar">
+        <h1 id="view-title">Chat</h1>
+        <div class="topbar-actions" id="topbar-actions"></div>
+      </header>
+      <section class="view" id="view"></section>
+    </main>
+
+    <div class="toasts" id="toasts"></div>
+    <div class="cmd-help" id="cmd-help" hidden>
+      <div class="cmd-help-card">
+        <h3>Keyboard shortcuts</h3>
+        <table>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>/</kbd></td><td>Toggle this help</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>Enter</kbd></td><td>Send chat message</td></tr>
+          <tr><td><kbd>Esc</kbd></td><td>Close overlays</td></tr>
+          <tr><td><kbd>g</kbd>+<kbd>c</kbd></td><td>Go to Chat</td></tr>
+          <tr><td><kbd>g</kbd>+<kbd>a</kbd></td><td>Go to Agents</td></tr>
+          <tr><td><kbd>g</kbd>+<kbd>k</kbd></td><td>Go to Channels</td></tr>
+          <tr><td><kbd>g</kbd>+<kbd>r</kbd></td><td>Go to Cron</td></tr>
+          <tr><td><kbd>g</kbd>+<kbd>p</kbd></td><td>Go to Approvals</td></tr>
+          <tr><td><kbd>g</kbd>+<kbd>s</kbd></td><td>Go to Skills</td></tr>
+          <tr><td><kbd>g</kbd>+<kbd>m</kbd></td><td>Go to Memory</td></tr>
+          <tr><td><kbd>g</kbd>+<kbd>g</kbd></td><td>Go to Config</td></tr>
+        </table>
+        <button id="cmd-help-close" class="btn btn-ghost btn-sm">close</button>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/static/app.js"></script>
+</body>
+</html>

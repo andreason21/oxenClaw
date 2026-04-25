@@ -251,6 +251,41 @@ Backends: `subprocess` (RLIMIT-only, fail-closed when policy demands more)
 and `bwrap` (mount + namespace isolation). See
 `sampyclaw/agents/isolation.py`.
 
+### Multimodal (image input)
+
+If your channel plugin populates `InboundEnvelope.media` with
+`MediaItem(kind="photo", source=...)` items, the agent receives them as
+image blocks **automatically** — no per-tool wiring required. The
+runtime handles:
+
+- **Capability gating** — `multimodal.model_supports_images(model_id)`
+  consults the pi catalog (`gemma4:latest` / `claude-sonnet-4-6` /
+  `gpt-4o` / `gemini-1.5-pro` / `llava` / `llama3.2-vision` / …) plus a
+  heuristic substring match for non-cataloged tags.
+- **Normalization** — `multimodal.normalize_media_item()` accepts
+  `data:` URIs and `http(s)://` URLs (the latter goes through the
+  SSRF-guarded `guarded_session` so DNS pinning + private-range blocking
+  apply). 10 MiB cap, MIME sniffing of JPEG/PNG/GIF/WebP magic bytes.
+- **Provider serialization** — each agent puts the image into the shape
+  its API expects: Anthropic `{type:"image", source:{type:"base64",...}}`,
+  OpenAI/Ollama `{type:"image_url", image_url:{url:"data:..."}}`,
+  Google `{inline_data:{mime_type, data}}`, pi `ImageContent`.
+- **Graceful degradation** — when the active model is text-only, the
+  runtime drops the image and prepends a `(N image(s) dropped: model X
+  does not support image input)` line to the user message so the LLM
+  knows context was lost rather than silently misunderstanding.
+
+If you're authoring a **tool** that wants to *consume* images (OCR
+helper, image-to-caption tool, …), accept the `data:` URI as a Pydantic
+field and reuse `multimodal.normalize_media_item` to validate.
+
+If you're authoring a **channel plugin** that delivers images, populate
+`MediaItem.source` with either:
+
+- a `data:image/<jpg|png|gif|webp>;base64,<payload>` URI (preferred —
+  no extra round-trip), or
+- an `http(s)://` URL the gateway can fetch with NetPolicy applied.
+
 ### Memory recall
 
 Inject the agent's memory retriever and your tool can pull relevant

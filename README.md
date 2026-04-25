@@ -20,7 +20,8 @@ and run it as a long-lived service with production-grade observability.
 
 | | |
 |---|---|
-| 🦙 **Bring your own model** | Default is local Ollama (`gemma4:latest` — tool-capable, lightweight). Anthropic, OpenAI-compatible, Bedrock, Google, Groq, DeepSeek, Mistral, Together, Fireworks, … 22 providers via `pi`. |
+| 🦙 **Bring your own model** | Default is local Ollama (`gemma4:latest` — tool-capable, lightweight, **multimodal**). Anthropic, OpenAI-compatible, Bedrock, Google, Groq, DeepSeek, Mistral, Together, Fireworks, … 22 providers via `pi`. |
+| 🖼️ **Multimodal in/out of the box** | Send a photo through Telegram and a vision-capable model (gemma4 / Claude 3+ / GPT-4o / Gemini 1.5+ / llava / etc.) sees it. Models without vision get a dropped-image notice in their text context. |
 | 🔌 **Open by design** | Plugin SDK + entry-point discovery. New channels and skills install with `pip install`. |
 | 🛡️ **Production-grade security** | NetPolicy + DNS pinning + SSRF guards, sandboxed tool execution (RLIMIT + bwrap), human-in-the-loop approval gating, dangerous-env stripping for subprocess MCP servers. |
 | 📊 **Operationally serious** | Prometheus `/metrics`, `/healthz` + `/readyz`, structured JSON logs with per-RPC `trace_id`, graceful SIGTERM drain, online SQLite backup/restore. |
@@ -315,7 +316,8 @@ MIT.
 
 | | |
 |---|---|
-| 🦙 **모델 자유** | 기본은 로컬 Ollama (`gemma4:latest` — 도구 호출 지원, 경량). Anthropic, OpenAI 호환, Bedrock, Google, Groq, DeepSeek, Mistral, Together, Fireworks 등 `pi` 통해 22개 프로바이더 지원. |
+| 🦙 **모델 자유** | 기본은 로컬 Ollama (`gemma4:latest` — 도구 호출 + **멀티모달** 지원, 경량). Anthropic, OpenAI 호환, Bedrock, Google, Groq, DeepSeek, Mistral, Together, Fireworks 등 `pi` 통해 22개 프로바이더 지원. |
+| 🖼️ **멀티모달 기본 지원** | Telegram에서 사진 보내면 vision 가능 모델(gemma4 / Claude 3+ / GPT-4o / Gemini 1.5+ / llava 등)이 그 자리에서 본다. Vision 미지원 모델은 텍스트 컨텍스트에 "이미지 N장 드롭됨" 안내가 자동으로 들어간다. |
 | 🔌 **개방형 설계** | Plugin SDK + entry-point 자동 디스커버리. 새 채널·스킬은 `pip install`로 끝. |
 | 🛡️ **프로덕션급 보안** | NetPolicy + DNS pinning + SSRF 가드, 도구 격리 실행 (RLIMIT + bwrap), 사람 승인 게이트, 서브프로세스 MCP 서버용 위험 env 스트립. |
 | 📊 **운영을 진지하게** | Prometheus `/metrics`, `/healthz` + `/readyz`, RPC 단위 `trace_id` 가 박힌 구조화 JSON 로그, SIGTERM 그레이스풀 드레인, 온라인 SQLite 백업/복구. |

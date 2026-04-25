@@ -177,8 +177,34 @@ class LocalAgent:
     async def handle(
         self, inbound: InboundEnvelope, ctx: AgentContext
     ) -> AsyncIterator[SendParams]:
+        from sampyclaw.multimodal import (
+            model_supports_images,
+            normalize_inbound_images,
+            openai_image_url_block,
+        )
+
         user_text = (inbound.text or "").strip()
-        if not user_text:
+
+        # Resolve image attachments. Only the OpenAI-shape `image_url`
+        # block is sent to Ollama (which speaks an OpenAI-compatible
+        # API). Models that don't support images get a textual note so
+        # they know context was lost.
+        images: list = []
+        dropped_notes: list[str] = []
+        if inbound.media:
+            if model_supports_images(self._model):
+                images, dropped_notes = await normalize_inbound_images(
+                    inbound.media
+                )
+            else:
+                photo_count = sum(1 for m in inbound.media if m.kind == "photo")
+                if photo_count:
+                    dropped_notes.append(
+                        f"({photo_count} image(s) dropped: model "
+                        f"{self._model!r} does not support image input)"
+                    )
+
+        if not user_text and not images and not dropped_notes:
             return
 
         await self._maybe_warmup()
@@ -198,7 +224,23 @@ class LocalAgent:
                 "role": "system",
                 "content": base_text,
             }
-        history.append({"role": "user", "content": user_text})
+
+        # Build user message: list-of-blocks when there are images, plain
+        # string when text-only (smaller payload, no semantic difference
+        # — Ollama's OpenAI shim accepts both).
+        if images:
+            content_blocks: list[dict] = [
+                openai_image_url_block(img) for img in images
+            ]
+            text_parts = [t for t in (user_text, *dropped_notes) if t]
+            if text_parts:
+                content_blocks.append(
+                    {"type": "text", "text": "\n".join(text_parts)}
+                )
+            history.append({"role": "user", "content": content_blocks})
+        else:
+            combined = "\n".join(t for t in (user_text, *dropped_notes) if t)
+            history.append({"role": "user", "content": combined})
         dropped = history.truncate_to_window(max_chars=self._max_history_chars)
         if dropped:
             logger.info(

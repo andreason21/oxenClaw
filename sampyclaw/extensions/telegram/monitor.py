@@ -53,7 +53,9 @@ class TelegramPollingSession:
                 "dropping duplicate telegram message_id=%s", message.message_id
             )
             return
-        envelope = envelope_from_message(message, account_id=self._account_id)
+        envelope = await envelope_from_message(
+            message, account_id=self._account_id, bot=self._bot
+        )
         if envelope is None:
             return
         try:

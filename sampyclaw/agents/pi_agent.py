@@ -152,12 +152,50 @@ class PiAgent:
     async def handle(
         self, inbound: InboundEnvelope, ctx: AgentContext
     ) -> AsyncIterator[SendParams]:
+        from sampyclaw.multimodal import (
+            model_supports_images,
+            normalize_inbound_images,
+            pi_image_content,
+        )
+
         text = (inbound.text or "").strip()
-        if not text:
+
+        # Resolve image attachments. If the model can't handle images, we
+        # surface that as a text fallback so the model knows context was
+        # lost rather than silently dropping.
+        images: list = []
+        dropped_notes: list[str] = []
+        if inbound.media:
+            if model_supports_images(self._model.id):
+                images, dropped_notes = await normalize_inbound_images(
+                    inbound.media
+                )
+            else:
+                photo_count = sum(1 for m in inbound.media if m.kind == "photo")
+                if photo_count:
+                    dropped_notes.append(
+                        f"({photo_count} image(s) dropped: model "
+                        f"{self._model.id!r} does not support image input)"
+                    )
+
+        if not text and not images and not dropped_notes:
             return
 
+        # Build the user message content. Pure-text turns keep the
+        # `content: str` shape (smaller payload, identical semantics);
+        # mixed turns become a list of typed blocks.
+        if images:
+            blocks: list = [pi_image_content(img) for img in images]
+            text_parts = [t for t in (text, *dropped_notes) if t]
+            if text_parts:
+                blocks.append(TextContent(text="\n".join(text_parts)))
+            user_content: Any = blocks
+        else:
+            combined = "\n".join(t for t in (text, *dropped_notes) if t)
+            user_content = combined
+
         session = await self._ensure_session(ctx.session_key)
-        session.messages.append(UserMessage(content=text))
+        session.messages.append(UserMessage(content=user_content))
 
         api = await resolve_api(self._model, self._auth)
         system = await self._system_for(text)

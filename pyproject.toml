@@ -47,6 +47,7 @@ sampyclaw = "sampyclaw.cli.__main__:app"
 
 [project.entry-points."sampyclaw.plugins"]
 telegram = "sampyclaw.extensions.telegram.plugin_entry:TELEGRAM_PLUGIN"
+slack    = "sampyclaw.extensions.slack.plugin_entry:SLACK_PLUGIN"
 
 [tool.hatch.build.targets.wheel]
 packages = ["sampyclaw"]

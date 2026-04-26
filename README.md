@@ -316,7 +316,8 @@ Highlights:
 | Browser tools (BR-1, fail-closed Playwright) | ✅ Opt-in via `SAMPYCLAW_ENABLE_BROWSER=1` |
 | Canvas tools (CV-1, dashboard-embedded HTML) | ✅ Opt-in via `SAMPYCLAW_ENABLE_CANVAS=1` |
 | MCP **server** (expose sampyClaw to other clients) | ⏳ Future phase |
-| 5 additional channels (Discord, Slack, …) | ⏳ Future phase |
+| Slack (outbound notifications) | ✅ Enterprise-Grid-friendly, alert-only — see [`docs/SLACK.md`](docs/SLACK.md) |
+| Discord + 4 more channels (full bidirectional) | ⏳ Future phase |
 | Native mobile / desktop apps | ❌ Out of scope |
 | Full React web UI | ❌ Bundled single-page dashboard only |
 
@@ -640,7 +641,8 @@ discord = "my_pkg.discord_plugin:DISCORD_PLUGIN"
 | 브라우저 도구 (BR-1, fail-closed Playwright) | ✅ `SAMPYCLAW_ENABLE_BROWSER=1` 옵트인 |
 | 캔버스 도구 (CV-1, dashboard 임베드 HTML) | ✅ `SAMPYCLAW_ENABLE_CANVAS=1` 옵트인 |
 | MCP **서버** (sampyClaw를 외부 클라이언트에 노출) | ⏳ 차후 |
-| 추가 채널 5종 (Discord, Slack, …) | ⏳ 차후 |
+| Slack (아웃바운드 알림) | ✅ Enterprise Grid 호환, 알림 전용 — [`docs/SLACK.md`](docs/SLACK.md) |
+| Discord + 추가 채널 4종 (양방향) | ⏳ 차후 |
 | 네이티브 모바일·데스크톱 앱 | ❌ 범위 외 |
 | 풀 React 웹 UI | ❌ 번들 단일 페이지 대시보드만 |
 

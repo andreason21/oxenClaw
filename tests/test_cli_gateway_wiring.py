@@ -134,6 +134,29 @@ async def test_chat_send_runs_dispatcher_through_channel_router(
     assert mocked_bot_factory[0].send_message.call_args.kwargs["text"] == "echo: hello"
 
 
+async def test_outbound_only_channel_skips_monitor_supervisor(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """`outbound_only=True` plugins must not get a ChannelRunner spawned.
+
+    Slack channel sets this so calling .monitor() (NotImplementedError)
+    isn't tripped by the supervisor on every restart.
+    """
+    from sampyclaw.cli.gateway_cmd import _supervise_monitors
+    from sampyclaw.extensions.slack.channel import SlackChannel
+
+    agents = AgentRegistry()
+    agents.register(EchoAgent())
+    cr = ChannelRouter()
+    slack_ch = SlackChannel(token="xoxb-x", account_id="alerts")
+    cr.register("slack", "alerts", slack_ch)
+    dispatcher = Dispatcher(agents=agents, config=RootConfig(), send=cr.send)
+
+    async with _supervise_monitors(cr, dispatcher) as runners:
+        # Slack is outbound-only → 0 runners spawned.
+        assert runners == [], (
+            f"expected no runners for outbound-only slack, got {runners!r}"
+        )
+
+
 async def test_chat_send_passes_media_into_inbound_envelope(
     tmp_path, mocked_bot_factory, monkeypatch
 ) -> None:  # type: ignore[no-untyped-def]

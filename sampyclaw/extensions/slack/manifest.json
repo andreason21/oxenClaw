@@ -1,0 +1,19 @@
+{
+  "id": "slack",
+  "name": "Slack (outbound-only)",
+  "channels": ["slack"],
+  "channelEnvVars": {
+    "slack": ["SLACK_BOT_TOKEN"]
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "properties": {
+      "accounts": {
+        "type": "array",
+        "items": { "type": "object" }
+      },
+      "base_url": { "type": "string" }
+    }
+  }
+}

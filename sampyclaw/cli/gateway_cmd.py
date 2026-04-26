@@ -587,10 +587,23 @@ def _build_router(
 async def _supervise_monitors(
     channel_router: ChannelRouter, dispatcher: Dispatcher
 ):
-    """Spawn one ChannelRunner task per (channel, account) binding."""
+    """Spawn one ChannelRunner task per (channel, account) binding.
+
+    Plugins that set `outbound_only = True` (e.g. Slack notification
+    channel) skip the supervisor entirely — they ship messages but
+    don't listen for inbound. Their `monitor()` is allowed to raise
+    `NotImplementedError` for clarity if anyone calls it directly.
+    """
     runners: list[ChannelRunner] = []
     tasks: list[asyncio.Task] = []  # type: ignore[type-arg]
     for channel_id, account_id, plugin in channel_router.bindings():
+        if getattr(plugin, "outbound_only", False):
+            logger.info(
+                "channel %s:%s is outbound-only — no monitor spawned",
+                channel_id,
+                account_id,
+            )
+            continue
         opts = MonitorOpts(account_id=account_id, on_inbound=dispatcher.dispatch)
         runner = ChannelRunner(plugin, opts)
         task = asyncio.create_task(

@@ -48,6 +48,7 @@ Scope re-confirmation before continuing the port. Rough LOC column = non-test `.
 | `media/`, `media-generation/`, `media-understanding/`, `image-generation/`, `video-generation/`, `music-generation/`, `realtime-voice/`, `realtime-transcription/`, `tts/` | 119 total | — | **Out (for now)** | P2 | multi-modal providers — no Phase A commitment |
 | `web/`, `web-fetch/`, `web-search/`, `proxy-capture/` | 14 total | — | **Out** | P2 | agent tools; port as agent tool plugins later |
 | `extensions/browser/` | 156 (~24K LOC) | `browser/` + `tools_pkg/browser.py` + `skills/browser/` | **Partial (BR-1)** | P2 | Headless Chromium via Playwright; egress fail-closed via NetPolicy + page.route + DNS pinning + dead proxy. CDP bridge / chrome-mcp / qa-lab dropped — see docs/BROWSER.md |
+| `extensions/slack/` (upstream) | (varies) | `extensions/slack/` (sampyClaw) | **Partial (outbound-only)** | P2 | `chat.postMessage` only — Enterprise Grid friendly, supports per-account corp proxy `base_url`, retries 429 with `Retry-After`. Marked `outbound_only=True` so the monitor supervisor skips spawning a polling task. Inbound (Events API / Socket Mode) intentionally out of scope — see docs/SLACK.md |
 | `flows/` | 11 | — | **Out** | P2 | preset conversation flows |
 | `status/` | 8 | — | **TBD** | P2 | gateway status endpoints (partially in `gateway/`) |
 | `pairing/` | 8 | — | **Out** | P2 | device pairing (mobile-only) |

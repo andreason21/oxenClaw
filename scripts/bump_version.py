@@ -34,6 +34,35 @@ TAURI_CONF = REPO / "desktop" / "src-tauri" / "tauri.conf.json"
 
 VERSION_RE = re.compile(r"^\d+\.\d+\.\d+(?:[-+][\w.]+)?$")
 
+# Tauri's MSI bundler enforces Windows Installer's strict version grammar
+# (`Major.Minor.Build.Revision`, all 16-bit unsigned ints). A semver prerelease
+# like `0.1.0-rc.8` fails that check ("optional pre-release identifier in app
+# version must be numeric-only"). We translate semver → 4-part numeric:
+#
+#   0.1.0          → 0.1.0.0
+#   0.1.0-rc.8     → 0.1.0.8        (digits at the tail of the prerelease)
+#   0.1.0-beta.3   → 0.1.0.3
+#   0.1.0-rc8      → 0.1.0.8
+#   0.1.0-rc       → 0.1.0.0        (no digits → 0)
+#
+# tauri.conf.json carries this 4-part form; pyproject.toml + Cargo.toml keep
+# the canonical semver/PEP 440 prerelease so PyPI / cargo see the right metadata.
+_TAIL_NUMERIC = re.compile(r"(\d+)\D*$")
+
+
+def to_msi_version(canonical: str) -> str:
+    # Drop semver `+build.metadata` first — MSI has no place for it.
+    canonical = canonical.split("+", 1)[0]
+    base, _, pre = canonical.partition("-")
+    if not pre:
+        return f"{base}.0"
+    m = _TAIL_NUMERIC.search(pre)
+    n = m.group(1) if m else "0"
+    # MSI fields max out at 65535. Clamp pathological inputs.
+    if int(n) > 65535:
+        n = "65535"
+    return f"{base}.{n}"
+
 
 def read_pyproject() -> str:
     text = PYPROJECT.read_text()
@@ -92,7 +121,7 @@ def write_cargo(new: str) -> None:
 
 def write_tauri_conf(new: str) -> None:
     data = json.loads(TAURI_CONF.read_text())
-    data["version"] = new
+    data["version"] = to_msi_version(new)
     # Preserve the trailing newline + 2-space indent the file uses.
     TAURI_CONF.write_text(json.dumps(data, indent=2) + "\n")
 
@@ -107,13 +136,24 @@ def all_versions() -> dict[str, str]:
 
 def check() -> int:
     versions = all_versions()
-    distinct = set(versions.values())
-    if len(distinct) == 1:
-        print(f"ok — all three files agree on version {distinct.pop()}")
+    canonical = versions["pyproject.toml"]
+    expected = {
+        "pyproject.toml": canonical,
+        "Cargo.toml": canonical,
+        "tauri.conf.json": to_msi_version(canonical),
+    }
+    if versions == expected:
+        suffix = (
+            f" (tauri MSI form: {expected['tauri.conf.json']})"
+            if expected["tauri.conf.json"] != canonical
+            else ""
+        )
+        print(f"ok — all three files agree on canonical version {canonical}{suffix}")
         return 0
     print("VERSION MISMATCH:")
-    for name, ver in versions.items():
-        print(f"  {name:24s} {ver}")
+    for name in versions:
+        marker = "" if versions[name] == expected[name] else f"   (expected {expected[name]})"
+        print(f"  {name:24s} {versions[name]}{marker}")
     return 1
 
 

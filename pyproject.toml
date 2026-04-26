@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "sampyclaw"
-version = "0.1.0-rc.8"
+version = "0.1.0-rc.9"
 description = "Python port of openclaw — personal multi-channel AI assistant gateway"
 readme = "README.md"
 license = { text = "MIT" }

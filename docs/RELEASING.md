@@ -115,6 +115,77 @@ signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 \
 
 then re-upload to the release.
 
+#### Self-signed certificate path
+
+If you don't have (or don't want to pay for) a publicly-trusted
+Authenticode certificate, you can use a self-signed one. The trade-off
+is up front:
+
+| Aspect                              | Unsigned | Self-signed | Public CA (OV/EV/Azure Trusted Signing) |
+|-------------------------------------|----------|-------------|-----------------------------------------|
+| SmartScreen blocks "Unknown app"    | Yes      | **Yes** (still — chain doesn't reach a Microsoft-trusted root) | No (EV/Trusted Signing instant; OV after reputation builds) |
+| UAC "Unknown publisher" line        | Yes      | No (shows your CN) | No |
+| Tamper detection                    | No       | Yes         | Yes |
+| Users can pre-trust your cert once  | n/a      | Yes (import the `.cer` into their Trusted Publishers store) | n/a (already trusted) |
+| Cost                                | $0       | $0          | $10/mo (Azure) → $700/yr (EV) |
+
+So self-signed is only worth doing if:
+- you control the target machines (internal/personal use), or
+- you're willing to ship a `.cer` alongside releases and ask power
+  users to import it once.
+
+**Generate the cert (run on Windows in PowerShell 5.1 or pwsh 7+):**
+
+```powershell
+pwsh .\scripts\win\gen_selfsigned_codesign.ps1
+```
+
+The script:
+1. Calls `New-SelfSignedCertificate` with `-Type CodeSigningCert`,
+   3072-bit RSA, SHA256, EKU `1.3.6.1.5.5.7.3.3` (code signing), valid
+   for 10 years.
+2. Exports `sampyclaw_codesign.cer` (public, distributable) and
+   `sampyclaw_codesign.pfx` (private, secret) to
+   `%USERPROFILE%\sampyclaw-codesign\`.
+3. Writes `sampyclaw_codesign.pfx.b64` — the base64 blob you paste
+   into `WINDOWS_CERT_PFX`.
+4. Prints the thumbprint and the next-step checklist.
+
+**Wire up the secrets:**
+
+1. GitHub → Settings → Secrets and variables → Actions → New repository secret:
+   - `WINDOWS_CERT_PFX` = the contents of `sampyclaw_codesign.pfx.b64`
+   - `WINDOWS_CERT_PASSWORD` = the PFX password you typed at the prompt
+2. Cut a new release tag. The existing `Optional code-signing` step
+   in `release.yml` (gated on `env.WINDOWS_CERT_PFX != ''`) imports
+   the PFX, signs every `.msi` and NSIS `.exe` with `signtool /fd SHA256
+   /tr http://timestamp.digicert.com /td SHA256`, and wipes the PFX
+   from the runner. No workflow changes needed.
+
+Timestamping a self-signed signature is mechanically valid (the TSA
+signs your signature blob with its own publicly-trusted cert; it
+doesn't validate your code-signing chain). The timestamp keeps the
+signature verifiable after your cert expires — useful with the 10-year
+validity even if SmartScreen never accepts the chain.
+
+**Distribute the public `.cer`:**
+
+Users who want to suppress SmartScreen for sampyClaw builds can import
+the public certificate once. Document this in your install guide:
+
+```powershell
+# Run as Administrator. Replace the path with where the user saved the .cer.
+Import-Certificate -FilePath .\sampyclaw_codesign.cer `
+                   -CertStoreLocation Cert:\LocalMachine\Root
+Import-Certificate -FilePath .\sampyclaw_codesign.cer `
+                   -CertStoreLocation Cert:\LocalMachine\TrustedPublisher
+```
+
+After import, MSI/EXE bundles signed by the corresponding PFX install
+without the SmartScreen prompt and the publisher field in UAC reads
+the cert's CN. Without this import, end users still see the SmartScreen
+"Unknown app" block — that's the architectural limit of self-signing.
+
 ## Cutting a release
 
 ```bash

@@ -2,7 +2,7 @@
 # version is kept in sync with pyproject.toml via scripts/bump_version.py.
 # The release workflow refuses to ship if the three files disagree.
 name = "oxenclaw-desktop"
-version = "0.1.0-rc.12"
+version = "0.1.0-rc.13"
 description = "oxenClaw native desktop app"
 authors = ["oxenClaw"]
 license = "MIT"
@@ -19,11 +19,14 @@ tauri-plugin-store = "2"
 tauri-plugin-autostart = "2"
 tauri-plugin-shell = "2"
 tauri-plugin-os = "2"
-# Auto-updater: signed MSI / AppImage delta delivery from the GitHub Release.
-# The release workflow signs each bundle with $TAURI_SIGNING_PRIVATE_KEY;
-# the desktop app verifies with the public key embedded in tauri.conf.json
-# before applying. See docs/RELEASING.md.
-tauri-plugin-updater = "2"
+# Auto-updater intentionally NOT registered: it requires a real Tauri
+# signing keypair (`cargo tauri signer generate`) plus
+# `TAURI_SIGNING_PRIVATE_KEY` wired into CI. Until that's set up, a
+# placeholder pubkey crashes the app at startup because the plugin's
+# init parses the pubkey eagerly. Re-add `tauri-plugin-updater = "2"`
+# here, restore the `updater` block in tauri.conf.json with the real
+# pubkey, and re-register in main.rs when signing is ready (see
+# docs/RELEASING.md).
 tauri-plugin-process = "2"
 keyring = "3"                      # Windows Credential Manager
 serde = { version = "1", features = ["derive"] }

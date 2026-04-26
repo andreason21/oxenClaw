@@ -113,8 +113,17 @@ class OpenAIEmbeddings:
             ) as resp:
                 if resp.status >= 400:
                     body = await resp.text()
+                    hint = ""
+                    if resp.status == 404:
+                        hint = (
+                            f" — endpoint or model not found. If you're using "
+                            f"Ollama, run `ollama pull {self._model}` on the "
+                            f"host serving {self._base_url}. Verify the URL "
+                            f"with `curl {self._base_url}/embeddings -d "
+                            f"'{{\"model\":\"{self._model}\",\"input\":\"hi\"}}'`."
+                        )
                     raise EmbeddingError(
-                        f"embeddings endpoint returned {resp.status}: {body[:300]}"
+                        f"embeddings endpoint returned {resp.status}: {body[:300]}{hint}"
                     )
                 data = await resp.json()
         except aiohttp.ClientError as exc:

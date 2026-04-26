@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import os
 import signal
 
 import typer
@@ -304,7 +305,17 @@ async def _run_gateway(
     channel_router = build_channel_router()
 
     # Memory must exist before the agent so we can wire it in.
-    memory_retriever = MemoryRetriever.for_root(paths, OpenAIEmbeddings())
+    # Embedding endpoint is configured separately from the chat agent
+    # base_url because operators sometimes run chat against a remote
+    # vLLM but keep embeddings local on Ollama (or vice versa).
+    embed_kwargs: dict[str, str] = {}
+    if (env_base := os.environ.get("OXENCLAW_EMBED_BASE_URL")):
+        embed_kwargs["base_url"] = env_base
+    if (env_model := os.environ.get("OXENCLAW_EMBED_MODEL")):
+        embed_kwargs["model"] = env_model
+    if (env_key := os.environ.get("OXENCLAW_EMBED_API_KEY")):
+        embed_kwargs["api_key"] = env_key
+    memory_retriever = MemoryRetriever.for_root(paths, OpenAIEmbeddings(**embed_kwargs))
 
     # Cron scheduler is created early so the cron tool can be wired
     # into the agent's tool registry. Dispatcher gets a forward

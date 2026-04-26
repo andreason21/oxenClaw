@@ -150,16 +150,92 @@ def _check_env_refs_in_files(paths: OxenclawPaths, report: PreflightReport) -> N
         )
 
 
+def _check_embedding_endpoint(report: PreflightReport) -> None:
+    """Probe the embedding endpoint with the configured model.
+
+    Reports a WARNING (not error) so the gateway still boots — memory
+    features simply won't work until the operator pulls the model or
+    points to a different endpoint. Uses stdlib urllib with a short
+    timeout so we don't drag aiohttp into the sync preflight path.
+    """
+    import json as _json
+    import os
+    import urllib.error
+    import urllib.request
+
+    from oxenclaw.memory.embeddings import (
+        DEFAULT_EMBED_BASE_URL,
+        DEFAULT_EMBED_MODEL,
+    )
+
+    base_url = os.environ.get("OXENCLAW_EMBED_BASE_URL", DEFAULT_EMBED_BASE_URL).rstrip("/")
+    model = os.environ.get("OXENCLAW_EMBED_MODEL", DEFAULT_EMBED_MODEL)
+    url = f"{base_url}/embeddings"
+    payload = _json.dumps({"model": model, "input": "preflight"}).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    api_key = os.environ.get("OXENCLAW_EMBED_API_KEY")
+    if api_key:
+        req.add_header("Authorization", f"Bearer {api_key}")
+    try:
+        with urllib.request.urlopen(req, timeout=5.0) as resp:
+            if resp.status >= 400:
+                report.add(
+                    "warning",
+                    "embeddings",
+                    f"{url} returned HTTP {resp.status} — memory features will be unavailable",
+                )
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            report.add(
+                "warning",
+                "embeddings",
+                f"{url} model '{model}' not found (HTTP 404). "
+                f"Run `ollama pull {model}` on the host, or set "
+                f"OXENCLAW_EMBED_MODEL to a model you've already pulled. "
+                f"Memory features will be unavailable until this is fixed.",
+            )
+        else:
+            report.add(
+                "warning",
+                "embeddings",
+                f"{url} returned HTTP {exc.code}: {exc.reason}",
+            )
+    except urllib.error.URLError as exc:
+        report.add(
+            "warning",
+            "embeddings",
+            f"{url} unreachable: {exc.reason}. "
+            f"Set OXENCLAW_EMBED_BASE_URL if your embedding service "
+            f"isn't on {base_url}, or start Ollama with "
+            f"OLLAMA_HOST=0.0.0.0:11434.",
+        )
+    except Exception as exc:
+        report.add("warning", "embeddings", f"{url} probe failed: {exc}")
+
+
 def run_preflight(
     paths: OxenclawPaths | None = None,
+    *,
+    probe_embeddings: bool = True,
 ) -> PreflightReport:
-    """Run every startup-time check and return an aggregated report."""
+    """Run every startup-time check and return an aggregated report.
+
+    Set ``probe_embeddings=False`` for offline / unit-test contexts where
+    the embedding endpoint isn't expected to be reachable.
+    """
     resolved = paths or default_paths()
     report = PreflightReport()
     _check_config_yaml(resolved, report)
     _check_mcp_json(resolved, report)
     _check_credentials_dir(resolved, report)
     _check_env_refs_in_files(resolved, report)
+    if probe_embeddings:
+        _check_embedding_endpoint(report)
     return report
 
 

@@ -91,17 +91,36 @@ Start it as a foreground service (or run in background):
 ollama serve &
 ```
 
-Pull the recommended default model:
+Pull the recommended default models — **both the chat model AND the
+embedding model are required**. Memory features use the embedding
+endpoint and oxenClaw's preflight check will warn at gateway start
+if the embedding model isn't available:
 
 ```bash
-ollama pull gemma4:latest
+ollama pull gemma4:latest        # chat
+ollama pull nomic-embed-text     # embeddings (REQUIRED for memory features)
 ```
 
-Confirm it's reachable on `127.0.0.1:11434`:
+Confirm both are reachable on `127.0.0.1:11434`:
 
 ```bash
 curl -s http://127.0.0.1:11434/api/tags | head
+curl -s http://127.0.0.1:11434/v1/embeddings \
+     -H 'Content-Type: application/json' \
+     -d '{"model":"nomic-embed-text","input":"hi"}' | head
+# expect a JSON object with a "data":[{"embedding":[…]}] array
 ```
+
+If you want to use a different embedding model (or point embeddings
+at a remote service while keeping chat local — or vice versa), set:
+
+```bash
+export OXENCLAW_EMBED_BASE_URL=http://192.168.x.y:11434/v1
+export OXENCLAW_EMBED_MODEL=nomic-embed-text
+export OXENCLAW_EMBED_API_KEY=…    # only if your endpoint requires one
+```
+These three env vars override the embedding defaults independently of
+the chat agent's `--base-url` / `--model` flags.
 
 ### Option B: Ollama on the Windows host
 
@@ -363,9 +382,21 @@ python3.12 --version    # → Python 3.12.x
 ```bash
 curl -fsSL https://ollama.com/install.sh | sh
 ollama serve &
+# 채팅 모델 + 임베딩 모델 둘 다 필요 (메모리 기능이 임베딩 사용)
 ollama pull gemma4:latest
+ollama pull nomic-embed-text
 curl -s http://127.0.0.1:11434/api/tags | head
+# 임베딩 endpoint 검증
+curl -s http://127.0.0.1:11434/v1/embeddings \
+     -H 'Content-Type: application/json' \
+     -d '{"model":"nomic-embed-text","input":"hi"}' | head
 ```
+
+> 임베딩 모델을 다른 호스트에서 받거나 다른 모델을 쓰고 싶으면
+> `OXENCLAW_EMBED_BASE_URL` / `OXENCLAW_EMBED_MODEL` /
+> `OXENCLAW_EMBED_API_KEY` 환경변수로 채팅 agent와 별개로 override 가능.
+> 게이트웨이 시작 시 preflight가 자동으로 임베딩 endpoint를 ping하고
+> 404 / 도달 불가면 경고 출력합니다.
 
 #### B안: Windows 호스트에 설치
 

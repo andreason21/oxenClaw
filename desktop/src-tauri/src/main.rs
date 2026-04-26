@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Emitter, Manager, RunEvent, WindowEvent,
+    AppHandle, Emitter, RunEvent, WindowEvent,
 };
 use tauri_plugin_updater::UpdaterExt;
 

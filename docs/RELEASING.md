@@ -151,9 +151,21 @@ Actions tab once you've fixed the issue. PyPI uploads use
 
 A tag like `v0.2.0-rc.1` is detected by the workflow (the regex
 `vMAJOR.MINOR.PATCH(-...)?` accepts it) and the GitHub Release is
-marked `prerelease: true`. PyPI accepts the same string as a PEP 440
-pre-release identifier — `pip install sampyclaw==0.2.0rc1` (the dot
-is dropped by PyPI normalisation).
+marked `prerelease: true`. The workflow **skips PyPI publishing and
+winget submission** for pre-releases — both are reserved for stable
+tags only, since:
+
+- PyPI: trusted publishing OIDC claims must match the configured
+  publisher exactly; without setup the rc upload fails with
+  `invalid-publisher`. Configure trusted publishing once before your
+  first stable release, then prereleases can be re-enabled by removing
+  the `if: !contains(github.ref_name, '-')` gate on the `pypi-publish`
+  job.
+- winget-pkgs: the registry rejects pre-release versions outright.
+
+GitHub Release attachments (wheel, sdist, .msi/.exe, .deb, .AppImage,
+checksums, signatures, latest.json) **are** produced for prereleases
+so the desktop app can still test auto-update flow against rc tags.
 
 ## Yanking a bad release
 

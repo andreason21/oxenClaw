@@ -280,6 +280,10 @@ jobs:
   pypi-publish:
     runs-on: ubuntu-latest
     needs: [python-build]
+    # Pre-releases (v0.X.Y-rc.N) skip PyPI — until trusted publishing
+    # is configured for the project on PyPI's side, the OIDC claim
+    # match fails. Stable tags publish; rc/beta/alpha don't.
+    if: ${{ !contains(github.ref_name, '-') }}
     environment:
       name: pypi
       url: https://pypi.org/p/sampyclaw

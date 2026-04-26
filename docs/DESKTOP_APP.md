@@ -83,6 +83,14 @@ disabled forwarding. Either set `localhostForwarding=true` (legacy)
 or `networkingMode=mirrored` (Win11 recommended). See [the WSL
 networking docs](https://learn.microsoft.com/windows/wsl/networking).
 
+> **Bind policy reminder**: the gateway binds to `127.0.0.1` only by
+> default. That's still correct for the WSL → Windows desktop app
+> path — both mirrored and NAT-with-`localhostForwarding` modes
+> bridge Windows `localhost:7331` to WSL's loopback at the OS level,
+> so you do **not** need `--allow-non-loopback` for this setup. See
+> [`OPERATIONS.md` § WSL2 + Windows desktop app](OPERATIONS.md#wsl2--windows-desktop-app)
+> for the full per-mode matrix and edge cases.
+
 For long-running deployments, register a `systemd` user unit inside
 WSL (the `docs/OPERATIONS.md` file has a copy-paste template).
 

@@ -74,6 +74,62 @@ When binding to `0.0.0.0` for a reverse-proxy / k8s Service setup,
 filtering protects the WS upgrade against CSRF from foreign browser
 tabs.
 
+#### WSL2 + Windows desktop app
+
+Loopback enforcement still does the right thing when the agent runs
+inside WSL2 and a Windows-side client (browser, Tauri desktop app)
+connects to it. **You do NOT need `--allow-non-loopback` for the
+WSL → Windows scenario.** The OS-level loopback bridge handles the
+cross-namespace hop:
+
+| WSL2 mode | WSL `127.0.0.1:7331` | Windows-side reach | LAN-side reach |
+|---|---|---|---|
+| **Mirrored** (Win11 22H2+, recommended — `~/.wslconfig: networkingMode=mirrored`) | loopback only | ✅ same loopback namespace as Windows | ❌ Windows firewall + loopback |
+| **NAT + `localhostForwarding=true`** (default) | loopback only | ✅ `wslhost.exe` proxies Windows `localhost:7331` ↔ WSL `127.0.0.1:7331` | ❌ proxy listens on Windows loopback only |
+| NAT + `localhostForwarding=false` | loopback only | ❌ Windows must use the WSL eth0 IP, which is non-loopback | ❌ |
+| Bridged (Hyper-V manual) | WSL has a real LAN IP | requires binding to the WSL IP (non-loopback → opt-in) | ✅ |
+
+So the recommended setup is:
+
+```ini
+# %USERPROFILE%\.wslconfig
+[wsl2]
+networkingMode=mirrored      # Win11 22H2+. Cleanest path — same loopback namespace.
+# Or, on older Windows:
+# localhostForwarding=true   # default, but make it explicit.
+```
+
+```bash
+# Inside WSL — no opt-in needed, just the standard loopback default:
+sampyclaw gateway start
+```
+
+```text
+# On Windows — Tauri desktop app or browser:
+http://localhost:7331/
+```
+
+The Windows desktop app's first-run wizard (`docs/DESKTOP_APP.md`)
+defaults the gateway URL to `http://localhost:7331` for exactly this
+reason. The principal model stays "this Windows user + their WSL
+user only" — other LAN machines, other Windows users, other WSL
+distros cannot reach the gateway.
+
+Edge cases:
+
+- **`localhostForwarding=false`**: the operator has explicitly
+  disabled the Windows ↔ WSL loopback bridge. Either re-enable it
+  or accept that you'll need to bind to the WSL eth0 IP (which is
+  non-loopback → requires `--allow-non-loopback`). This is the
+  expected behaviour, not a bug — the user opted out of the bridge.
+- **WSL bridged mode**: WSL has a real LAN IP, so binding to it is
+  by definition non-loopback. Use `--allow-non-loopback` and place
+  a TLS-terminating proxy in front, same as a bare-metal LAN
+  deployment.
+- **WSL1**: shares the Windows kernel + network stack, so loopback
+  is literally the same as Windows loopback. Behaves like mirrored
+  mode for our purposes.
+
 ### systemd unit (recommended)
 
 ```ini

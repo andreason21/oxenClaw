@@ -21,7 +21,8 @@ and run it as a long-lived service with production-grade observability.
 | | |
 |---|---|
 | 🦙 **Bring your own model** | Local Ollama by default (any tool-capable model). Anthropic, OpenAI-compatible, Bedrock, Google, Groq, DeepSeek, Mistral, Together, Fireworks, … 22 providers via `pi`. |
-| 🖼️ **Multimodal in/out of the box** | Send a photo through Telegram and a vision-capable model (gemma4 / Claude 3+ / GPT-4o / Gemini 1.5+ / llava / etc.) sees it. Models without vision get a dropped-image notice in their text context. |
+| 🖼️ **Multimodal in/out of the box** | Send a photo through Telegram **or attach one in the dashboard chat** (📎 button) and a vision-capable model (gemma4 / Claude 3+ / GPT-4o / Gemini 1.5+ / llava / etc.) sees it. Models without vision get a dropped-image notice in their text context. |
+| 🖥️ **Bundled dashboard SPA** | Light/dark theme toggle, Ctrl+K command palette, sessions browser (list/preview/reset/fork/archive), responsive mobile drawer, in-app login gate. No build step, served on the same port as the JSON-RPC websocket. |
 | 🔌 **Open by design** | Plugin SDK + entry-point discovery. New channels and skills install with `pip install`. |
 | 🛡️ **Production-grade security** | NetPolicy + DNS pinning + SSRF guards, sandboxed tool execution (RLIMIT + bwrap), human-in-the-loop approval gating, dangerous-env stripping for subprocess MCP servers. |
 | 📊 **Operationally serious** | Prometheus `/metrics`, `/healthz` + `/readyz`, structured JSON logs with per-RPC `trace_id`, graceful SIGTERM drain, online SQLite backup/restore. |
@@ -319,11 +320,15 @@ Highlights:
 | Native mobile / desktop apps | ❌ Out of scope |
 | Full React web UI | ❌ Bundled single-page dashboard only |
 
-**Test suite: 1035 pass / 10 skip** unit + **9 pass** live `gemma4:latest`
-integration. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the
-full module map, [`docs/BROWSER.md`](docs/BROWSER.md) for the browser
-tool surface, and [`docs/CANVAS.md`](docs/CANVAS.md) for the canvas
-panel.
+**Test suite: 1026 pass / 33 skip** unit (10 environment-gated + 23
+dashboard E2E that auto-skip when Chromium system libs are missing —
+see [`tests/dashboard/README.md`](tests/dashboard/README.md)) + **9
+pass** live `gemma4:latest` integration. See
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full module
+map, [`docs/BROWSER.md`](docs/BROWSER.md) for the browser tool surface,
+[`docs/CANVAS.md`](docs/CANVAS.md) for the canvas panel, and
+[`docs/MCP_YAHOO_FINANCE.md`](docs/MCP_YAHOO_FINANCE.md) for a worked
+MCP-client integration.
 
 ---
 
@@ -366,7 +371,8 @@ MIT.
 | | |
 |---|---|
 | 🦙 **모델 자유** | 기본은 로컬 Ollama (도구 호출 가능한 모델 아무거나). Anthropic, OpenAI 호환, Bedrock, Google, Groq, DeepSeek, Mistral, Together, Fireworks 등 `pi` 통해 22개 프로바이더 지원. |
-| 🖼️ **멀티모달 기본 지원** | Telegram에서 사진 보내면 vision 가능 모델(gemma4 / Claude 3+ / GPT-4o / Gemini 1.5+ / llava 등)이 그 자리에서 본다. Vision 미지원 모델은 텍스트 컨텍스트에 "이미지 N장 드롭됨" 안내가 자동으로 들어간다. |
+| 🖼️ **멀티모달 기본 지원** | Telegram에서 사진을 보내거나 **대시보드 chat에서 📎 버튼으로 첨부**하면 vision 가능 모델(gemma4 / Claude 3+ / GPT-4o / Gemini 1.5+ / llava 등)이 그 자리에서 본다. Vision 미지원 모델은 텍스트 컨텍스트에 "이미지 N장 드롭됨" 안내가 자동으로 들어간다. |
+| 🖥️ **번들 대시보드 SPA** | 라이트/다크 테마 토글, Ctrl+K command palette, 세션 브라우저(리스트/미리보기/리셋/포크/아카이브), 모바일 반응형 drawer, in-app 로그인 게이트. 빌드 단계 없음, JSON-RPC 웹소켓과 동일 포트에서 서빙. |
 | 🔌 **개방형 설계** | Plugin SDK + entry-point 자동 디스커버리. 새 채널·스킬은 `pip install`로 끝. |
 | 🛡️ **프로덕션급 보안** | NetPolicy + DNS pinning + SSRF 가드, 도구 격리 실행 (RLIMIT + bwrap), 사람 승인 게이트, 서브프로세스 MCP 서버용 위험 env 스트립. |
 | 📊 **운영을 진지하게** | Prometheus `/metrics`, `/healthz` + `/readyz`, RPC 단위 `trace_id` 가 박힌 구조화 JSON 로그, SIGTERM 그레이스풀 드레인, 온라인 SQLite 백업/복구. |
@@ -638,7 +644,10 @@ discord = "my_pkg.discord_plugin:DISCORD_PLUGIN"
 | 네이티브 모바일·데스크톱 앱 | ❌ 범위 외 |
 | 풀 React 웹 UI | ❌ 번들 단일 페이지 대시보드만 |
 
-**테스트: 1035 pass / 10 skip** (단위) + **9 pass** (live `gemma4:latest` 통합).
+**테스트: 1026 pass / 33 skip** (단위 — 환경 의존 10 + 대시보드 E2E 23개는
+Chromium 시스템 라이브러리 없을 때 자동 skip, 자세한 건
+[`tests/dashboard/README.md`](tests/dashboard/README.md) 참고) + **9 pass**
+(live `gemma4:latest` 통합).
 
 ### 문서
 

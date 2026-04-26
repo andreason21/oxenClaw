@@ -181,7 +181,7 @@ Run the test suite (takes ~10 seconds):
 
 ```bash
 pytest -q
-# 1035 passed, 10 skipped
+# 1026 passed, 33 skipped   (10 env-gated + 23 dashboard E2E auto-skipped without Chromium deps)
 ```
 
 ---
@@ -414,7 +414,7 @@ sampyclaw paths
 sampyclaw config validate
 
 pytest -q
-# 1035 passed, 10 skipped
+# 1026 passed, 33 skipped   (10 env-gated + 23 dashboard E2E auto-skipped without Chromium deps)
 ```
 
 ### 7. 설정 + 실행

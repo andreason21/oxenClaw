@@ -337,6 +337,12 @@ TelegramChannelConfigSchema = {
 
 **CV-1 — Dashboard canvas (shipped 2026-04-26):** `sampyclaw/canvas/` package + `gateway/canvas_methods.py` + `tools_pkg/canvas.py` + dashboard SPA additions. Dashboard-only output via sandboxed `<iframe srcdoc>` — no native node, no Tailscale, no live-reload watcher, no external URL fetch. Empirically gated on `gemma4:latest` 25/25 before commit. See [`CANVAS.md`](./CANVAS.md).
 
+**Dashboard SPA — `sampyclaw/static/` (vanilla JS, no build step):** the openclaw `ui/` Vue/TS app is out of scope, but sampyClaw ships its own minimal control plane that serves on the same port as the JSON-RPC websocket. 10 routes (chat, agents, channels, sessions, cron, approvals, skills, memory, config, rpc), light/dark theme toggle with system-preference detection, Ctrl+K command palette (14 actions), in-app login gate, sessions browser wired to `sessions.*` RPCs, dashboard chat image upload (📎 → 10 MiB cap → `data:image/...` URI). Responsive: < 900 px collapses the sidebar to a slide-in drawer. 23-test Playwright E2E suite under `tests/dashboard/` exercises every interactive surface and asserts no JS errors fired during the test.
+
+**Anthropic agent (removed 2026-04-26):** the inline `AnthropicAgent` was deleted in favour of `PiAgent`'s richer Anthropic path (cache_control, thinking, cache observability, compaction, persistence). `--provider anthropic` is now a thin CLI alias of `pi` pinned to `claude-sonnet-4-6` by default; pass `--model` to override.
+
+**vLLM provider (added 2026-04-26):** `--provider vllm` is a thin alias of `local` with strict-OpenAI payload (no Ollama-specific `num_predict`) and warmup off; defaults to `http://127.0.0.1:8000/v1`. See README "Internal vLLM server" section.
+
 **Guiding principles:**
 - Preserve manifest-first plugin loading.
 - Keep SDK contract in its own package.

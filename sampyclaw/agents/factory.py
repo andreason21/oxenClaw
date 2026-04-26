@@ -18,6 +18,30 @@ from sampyclaw.agents.pi_agent import PiAgent
 from sampyclaw.agents.tools import Tool, ToolRegistry
 
 
+def _maybe_canvas_tools(agent_id: str) -> list[Tool]:
+    """Append canvas tools when SAMPYCLAW_ENABLE_CANVAS is set.
+
+    Reuses the process-wide CanvasStore + CanvasEventBus singletons so
+    every agent shares the same dashboard target.
+    """
+    if os.environ.get("SAMPYCLAW_ENABLE_CANVAS", "").lower() not in ("1", "true", "yes"):
+        return []
+    try:
+        from sampyclaw.canvas import (
+            get_default_canvas_bus,
+            get_default_canvas_store,
+        )
+        from sampyclaw.tools_pkg.canvas import default_canvas_tools
+
+        return list(default_canvas_tools(
+            agent_id=agent_id,
+            store=get_default_canvas_store(),
+            bus=get_default_canvas_bus(),
+        ))
+    except Exception:
+        return []
+
+
 def _maybe_browser_tools() -> list[Tool]:
     """Append browser tools when SAMPYCLAW_ENABLE_BROWSER is set + playwright present.
 
@@ -29,11 +53,11 @@ def _maybe_browser_tools() -> list[Tool]:
     try:
         from sampyclaw.browser.policy import BrowserPolicy
         from sampyclaw.tools_pkg.browser import default_browser_tools
-    except Exception:  # noqa: BLE001
+    except Exception:
         return []
     try:
         return list(default_browser_tools(policy=BrowserPolicy.from_env()))
-    except Exception:  # noqa: BLE001
+    except Exception:
         return []
 
 
@@ -66,6 +90,9 @@ def build_agent(
         if resolved_tools is None:
             resolved_tools = ToolRegistry()
             resolved_tools.register_all(default_tools())
+            canvas_tools = _maybe_canvas_tools(agent_id)
+            if canvas_tools:
+                resolved_tools.register_all(canvas_tools)
             browser_tools = _maybe_browser_tools()
             if browser_tools:
                 resolved_tools.register_all(browser_tools)
@@ -84,6 +111,9 @@ def build_agent(
         if resolved_tools is None:
             resolved_tools = ToolRegistry()
             resolved_tools.register_all(default_tools())
+            canvas_tools = _maybe_canvas_tools(agent_id)
+            if canvas_tools:
+                resolved_tools.register_all(canvas_tools)
             browser_tools = _maybe_browser_tools()
             if browser_tools:
                 resolved_tools.register_all(browser_tools)
@@ -114,7 +144,7 @@ async def load_mcp_tools(
     paths=None,  # type: ignore[no-untyped-def]
     *,
     reserved_names: list[str] | tuple[str, ...] | None = None,
-) -> tuple[list[Tool], "object | None"]:
+) -> tuple[list[Tool], object | None]:
     """Convenience: load `mcp.json`, materialize tools, return `(tools, pool)`.
 
     `pool` is `None` when no servers are configured. When non-None, callers
@@ -136,7 +166,7 @@ def load_mcp_tools_sync(
     paths=None,  # type: ignore[no-untyped-def]
     *,
     reserved_names: list[str] | tuple[str, ...] | None = None,
-) -> tuple[list[Tool], "object | None"]:
+) -> tuple[list[Tool], object | None]:
     """Sync wrapper around `load_mcp_tools` for non-async callers (CLI).
 
     Must NOT be called from inside a running event loop — use the async

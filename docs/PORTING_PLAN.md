@@ -97,6 +97,12 @@ Only start after B exit criteria met.
 **A.5** — Cron scheduling, approval prompts.
 **A.6** — Plugin discovery from third-party packages (entry points via `importlib.metadata`).
 
+### CV-1 — Dashboard canvas
+
+Status: **Shipped 2026-04-26**. ~600 LOC across `sampyclaw/canvas/{errors,store,events}.py` + `sampyclaw/gateway/canvas_methods.py` + `sampyclaw/tools_pkg/canvas.py` + ~150 LOC of dashboard SPA additions + `sampyclaw/skills/canvas/SKILL.md`. 39 new unit tests + 1 live `gemma4:latest` integration test. Architecture: see [`CANVAS.md`](./CANVAS.md).
+
+What this replaces from openclaw `src/canvas-host/` (~16K LOC of Tailscale-aware HTTP host + bridge + a2ui bundle): the LLM-callable canvas surface, collapsed onto the existing dashboard. Native-node / Tailscale / live-reload / a2ui are out of scope by design. **Empirical gate: gemma4:latest scored 25/25 on canvas tool calls before commit.**
+
 ### BR-1 — Browser tools (Playwright, fail-closed)
 
 Status: **Shipped 2026-04-26**. ~900 LOC across `sampyclaw/browser/{policy,errors,pinning,egress,session}.py` + `sampyclaw/tools_pkg/browser.py` + `sampyclaw/skills/browser/SKILL.md`. 29 new tests. Architecture: see [`BROWSER.md`](./BROWSER.md).

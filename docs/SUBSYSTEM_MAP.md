@@ -41,7 +41,7 @@ Scope re-confirmation before continuing the port. Rough LOC column = non-test `.
 | `compat/` | 1 | — | **Out** | Out | legacy Node compat shims |
 | `bindings/` | 1 | — | **Out** | Out | native bindings |
 | `node-host/` | 10 | — | **Out** | Out | in-Node plugin host — replaced by Python importlib |
-| `canvas-host/` | 3 | — | **Out** | P2 | canvas runtime |
+| `canvas-host/` | 3 | `canvas/` + `gateway/canvas_methods.py` + `tools_pkg/canvas.py` + `skills/canvas/` | **Partial (CV-1, dashboard-only)** | P2 | Dashboard-embedded canvas; no Tailscale bridge / a2ui / native node. Empirically gated on gemma4:latest 25/25. See docs/CANVAS.md |
 | `context-engine/` | 6 | — | **TBD** | P2 | prompt context assembly |
 | `link-understanding/` | 6 | — | **Out** | P2 | URL preview/analysis |
 | `markdown/` | 7 | — | **Out** | P2 | MD rendering helpers |

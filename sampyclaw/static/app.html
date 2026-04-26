@@ -65,6 +65,21 @@
 
     <div class="toasts" id="toasts"></div>
 
+    <aside id="canvas-panel" class="canvas-panel" hidden aria-label="Canvas output">
+      <header class="canvas-panel__header">
+        <span class="canvas-panel__title" id="canvas-panel-title">Canvas</span>
+        <span class="canvas-panel__meta" id="canvas-panel-meta"></span>
+        <button id="canvas-panel-hide" class="btn btn-ghost btn-sm" type="button" title="Hide canvas">×</button>
+      </header>
+      <iframe
+        id="canvas-frame"
+        class="canvas-panel__frame"
+        sandbox="allow-scripts allow-pointer-lock allow-forms"
+        srcdoc="<!doctype html><title>canvas</title>"
+        title="agent canvas output"
+      ></iframe>
+    </aside>
+
     <div id="login-gate" class="login-gate" hidden>
       <div class="login-gate__card">
         <div class="login-gate__header">

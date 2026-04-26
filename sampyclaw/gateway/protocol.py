@@ -63,7 +63,23 @@ class AgentEvent(BaseModel):
     body: dict[str, Any]
 
 
-EventBody = Annotated[Union[ChatEvent, AgentEvent], Field(discriminator="kind")]
+class CanvasEventFrame(BaseModel):
+    """Server -> dashboard canvas push.
+
+    `body` mirrors `sampyclaw.canvas.events.CanvasEvent.to_dict()`.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    kind: Literal["canvas"]
+    agent_id: str
+    body: dict[str, Any]
+
+
+EventBody = Annotated[
+    Union[ChatEvent, AgentEvent, CanvasEventFrame],
+    Field(discriminator="kind"),
+]
 
 
 class EventFrame(BaseModel):

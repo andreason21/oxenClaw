@@ -25,6 +25,10 @@ from sampyclaw.agents import (
 )
 from sampyclaw.agents.factory import build_agent as _build_agent
 from sampyclaw.approvals import ApprovalManager
+from sampyclaw.canvas import (
+    get_default_canvas_bus,
+    get_default_canvas_store,
+)
 from sampyclaw.channels import ChannelRouter, ChannelRunner
 from sampyclaw.clawhub import ClawHubClient, MultiRegistryClient, SkillInstaller
 from sampyclaw.clawhub.registries import ClawHubRegistries
@@ -38,6 +42,7 @@ from sampyclaw.gateway import (
 )
 from sampyclaw.gateway.agents_methods import register_agents_methods
 from sampyclaw.gateway.approval_methods import register_approval_methods
+from sampyclaw.gateway.canvas_methods import register_canvas_methods
 from sampyclaw.gateway.channels_methods import register_channels_methods
 from sampyclaw.gateway.chat_methods import register_chat_methods
 from sampyclaw.gateway.config_methods import register_config_methods
@@ -197,7 +202,7 @@ def build_agent(
     api_key: str | None = None,
     system_prompt: str | None = None,
     memory: MemoryRetriever | None = None,
-    tools: "ToolRegistry | None" = None,  # noqa: F821 — forward ref
+    tools: ToolRegistry | None = None,  # noqa: F821 — forward ref
 ) -> Agent:
     """Typer-friendly wrapper around the shared agent factory."""
     try:
@@ -337,6 +342,11 @@ async def _run_gateway(
 
     install_signal_handlers(server)
 
+    canvas_pump = asyncio.create_task(
+        _pump_canvas_events(get_default_canvas_bus(), server),
+        name="canvas-event-pump",
+    )
+
     async with _supervise_monitors(channel_router, dispatcher):
         cron_scheduler.start()
         try:
@@ -350,10 +360,31 @@ async def _run_gateway(
             logger.info("gateway shutting down — cleaning up subsystems")
             cron_scheduler.stop()
             approvals.cancel_all(reason="shutdown")
+            canvas_pump.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await canvas_pump
             await channel_router.aclose()
             await clawhub_client.aclose()
             await memory_retriever.aclose()
             logger.info("gateway shutdown complete")
+
+
+async def _pump_canvas_events(bus, server: GatewayServer) -> None:  # type: ignore[no-untyped-def]
+    """Forward CanvasEvent fanout into GatewayServer.broadcast as EventFrames."""
+    from sampyclaw.gateway.protocol import CanvasEventFrame, EventFrame
+
+    async for evt in bus.stream():
+        try:
+            frame = EventFrame(
+                body=CanvasEventFrame(
+                    kind="canvas",
+                    agent_id=evt.agent_id,
+                    body=evt.to_dict(),
+                ),
+            )
+            await server.broadcast(frame)
+        except Exception:
+            logger.exception("canvas event pump failed for kind=%s", evt.kind)
 
 
 def build_default_readiness(
@@ -523,6 +554,11 @@ def _build_router(
     register_cron_methods(router, cron_scheduler)
     register_approval_methods(router, approvals)
     register_isolation_methods(router)
+    register_canvas_methods(
+        router,
+        store=get_default_canvas_store(),
+        bus=get_default_canvas_bus(),
+    )
     if memory_retriever is not None:
         register_memory_methods(router, memory_retriever)
     if clawhub_client is not None:

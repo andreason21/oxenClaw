@@ -1284,6 +1284,7 @@ function boot() {
 
   bindShortcuts();
   bindLoginGate();
+  bindCanvasPanel();
 
   Rpc.connect($("ws-url").value);
   // Token has been captured into the WS URL + (server-set) cookie; clean
@@ -1296,6 +1297,111 @@ function boot() {
   setInterval(refreshNavBadges, 4000);
   Rpc.onEvent(() => refreshNavBadges());
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// Canvas panel
+//
+// Subscribes to server-pushed `canvas` event frames and routes the four
+// kinds (`present`, `navigate`, `hide`, `eval`) to the right-side canvas
+// drawer. The iframe is `sandbox="allow-scripts ..."` and rendered via
+// srcdoc, so the agent's HTML cannot reach parent state, cookies, or
+// storage. `eval` opens a one-shot MessageChannel so the agent's JS can
+// reply with a structured-clone-safe value, which we forward back to the
+// gateway via canvas.eval_result.
+// ─────────────────────────────────────────────────────────────────────────
+function bindCanvasPanel() {
+  const panel = $("canvas-panel");
+  const frame = $("canvas-frame");
+  const titleEl = $("canvas-panel-title");
+  const metaEl = $("canvas-panel-meta");
+  const hideBtn = $("canvas-panel-hide");
+  if (!panel || !frame) return;
+
+  const evalChannels = new Map();   // request_id -> { port, timer }
+
+  function show({ html, title, version }) {
+    titleEl.textContent = title || "Canvas";
+    metaEl.textContent = version != null ? `v${version}` : "";
+    frame.srcdoc = html || "";
+    panel.hidden = false;
+  }
+  function hide() {
+    panel.hidden = true;
+    frame.srcdoc = "<!doctype html><title>canvas</title>";
+    metaEl.textContent = "";
+  }
+  function navigate({ url }) {
+    if (!url) return;
+    if (url === "about:blank") {
+      frame.srcdoc = "<!doctype html><title>canvas</title>";
+      return;
+    }
+    if (url.startsWith("data:")) {
+      // data: URLs render in the sandboxed iframe without leaving the
+      // dashboard origin. Anything else was refused server-side.
+      frame.src = url;
+      panel.hidden = false;
+    }
+  }
+  function runEval({ request_id, payload }) {
+    const expr = payload && payload.expression;
+    if (!request_id || !expr) return;
+    // Wrap the expression so the iframe-side eval returns a value that we
+    // can JSON-clone back. Five-second hard timeout matching the server
+    // default; we also reply on timeout so the gateway future doesn't hang.
+    const channel = new MessageChannel();
+    const timer = setTimeout(() => {
+      try { Rpc.call("canvas.eval_result", { request_id, ok: false, error: "client timeout" }); } catch {}
+      evalChannels.delete(request_id);
+    }, 5500);
+    channel.port1.onmessage = (ev) => {
+      clearTimeout(timer);
+      evalChannels.delete(request_id);
+      const data = ev.data || {};
+      Rpc.call("canvas.eval_result", {
+        request_id,
+        ok: !!data.ok,
+        value: data.ok ? data.value : null,
+        error: data.ok ? null : (data.error || "eval failed"),
+      }).catch(() => {});
+    };
+    evalChannels.set(request_id, { port: channel.port1, timer });
+    // The iframe needs a bootstrap that listens for the port and runs the
+    // expression. We re-srcdoc the existing HTML with a tiny appended
+    // <script> only if the iframe doesn't already expose one — easiest
+    // path is to inject via postMessage to a known message handler the
+    // skill-author wrote, OR fall back to wrapping the expression server-
+    // side. For v1 we adopt the latter: skills opt into eval by including
+    // `<script>window.addEventListener('message',e=>{...})</script>` in
+    // their HTML. If they didn't, the eval will time out cleanly.
+    frame.contentWindow?.postMessage(
+      { type: "sampyclaw.canvas.eval", expression: expr },
+      "*",
+      [channel.port2],
+    );
+  }
+
+  hideBtn.onclick = () => {
+    hide();
+    // Best-effort server-side hide; agent_id unknown from the panel,
+    // so this is intentionally a UI-only hide. The agent can reissue
+    // canvas.present to bring the panel back.
+  };
+
+  Rpc.onEvent((evt) => {
+    if (!evt || evt.kind !== "canvas") return;
+    const body = evt.body || {};
+    const payload = body.payload || {};
+    switch (body.kind) {
+      case "present":  return show(payload);
+      case "navigate": return navigate(payload);
+      case "hide":     return hide();
+      case "eval":     return runEval({ request_id: body.request_id, payload });
+      default: return;
+    }
+  });
+}
+
 
 // ─────────────────────────────────────────────────────────────────────────
 // Login gate

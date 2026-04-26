@@ -146,6 +146,13 @@ export SAMPYCLAW_GATEWAY_TOKEN=$(openssl rand -hex 32)
 sampyclaw gateway start --provider local
 ```
 
+The gateway binds to `127.0.0.1` only — it **refuses to expose
+itself beyond loopback** unless you pass `--allow-non-loopback`
+explicitly. Default-safe stance: the agent is reachable only by the
+local OS user on this machine. See
+[`docs/OPERATIONS.md`](docs/OPERATIONS.md#bind-policy-loopback-by-default)
+for opt-in setups (reverse proxy, k8s, internal corp net).
+
 The bundled dashboard is at `http://127.0.0.1:7331/` and Prometheus
 metrics at `/metrics`. **Open the dashboard URL in any browser** — when
 auth is configured, the page detects the missing token and renders an
@@ -584,6 +591,13 @@ channels:
 export SAMPYCLAW_GATEWAY_TOKEN=$(openssl rand -hex 32)
 sampyclaw gateway start --provider local
 ```
+
+게이트웨이는 `127.0.0.1`만 바인딩한다 — `--allow-non-loopback`을
+명시적으로 주지 않으면 **루프백 외부 노출은 거부**된다. 기본 보안 스탠스:
+에이전트는 이 머신의 로컬 OS 사용자만 접근 가능. 리버스 프록시, k8s,
+사내망 등 opt-in 셋업은
+[`docs/OPERATIONS.md`](docs/OPERATIONS.md#bind-policy-loopback-by-default)
+참고.
 
 번들 대시보드: `http://127.0.0.1:7331/`. Prometheus: `/metrics`.
 **브라우저에서 대시보드 URL을 그냥 열기** — 인증이 설정된 상태면 SPA가

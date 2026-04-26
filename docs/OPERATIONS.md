@@ -38,11 +38,41 @@ Set credentials and config under `~/.sampyclaw/`:
 SAMPYCLAW_GATEWAY_TOKEN=$(openssl rand -hex 32) \
   sampyclaw gateway start \
     --provider pi --model gemma4:latest \
-    --host 0.0.0.0 --port 7331
+    --port 7331
 ```
 
 The startup performs **preflight validation** automatically. To skip
 (e.g. emergency boot with a known-bad config), pass `--skip-preflight`.
+
+### Bind policy: loopback by default
+
+`sampyclaw gateway start` binds to `127.0.0.1` by default and **refuses
+to bind to any non-loopback address** unless you explicitly opt in. The
+intent: the agent runs as the local OS user and is reachable only by
+that user on this machine. Anything wider should be a deliberate,
+loud choice.
+
+```bash
+# Refused (no opt-in):
+sampyclaw gateway start --host 0.0.0.0
+# Error: refusing to bind gateway to wildcard (all interfaces) host '0.0.0.0'.
+#        sampyClaw defaults to loopback so the agent runs only for the
+#        local OS user on this machine. To bind beyond loopback (reverse
+#        proxy, k8s Service, internal corp net), pass --allow-non-loopback
+#        or set SAMPYCLAW_ALLOW_NON_LOOPBACK=1 …
+
+# Allowed (explicit opt-in):
+sampyclaw gateway start --host 0.0.0.0 --allow-non-loopback \
+    --auth-token "$TOKEN" \
+    --allowed-origins "https://dashboard.example.com"
+# Logs a loud WARNING noting that the principal model has widened.
+```
+
+When binding to `0.0.0.0` for a reverse-proxy / k8s Service setup,
+**always** combine the opt-in with `--auth-token` and
+`--allowed-origins` — token-based auth still applies, but Origin
+filtering protects the WS upgrade against CSRF from foreign browser
+tabs.
 
 ### systemd unit (recommended)
 
@@ -80,8 +110,9 @@ the metrics during the drain window).
 
 ### Docker / k8s
 
-Bind to `0.0.0.0:7331` and put a TLS-terminating reverse proxy in front
-(nginx, Caddy, traefik). Probe endpoints:
+Bind to `0.0.0.0:7331` *with* `--allow-non-loopback` (or
+`SAMPYCLAW_ALLOW_NON_LOOPBACK=1` in the env), and put a TLS-terminating
+reverse proxy in front (nginx, Caddy, traefik). Probe endpoints:
 
 - `livenessProbe`: `GET /healthz` → 200 = process alive
 - `readinessProbe`: `GET /readyz` → 200 = ready, 503 = degraded/down
@@ -303,8 +334,11 @@ Recommended cadence: run a 4h soak in CI before each release.
 
 ## Security operations
 
-- Bind to `127.0.0.1` and rely on a TLS-terminating reverse proxy unless
-  you have a reason to expose `0.0.0.0`.
+- Loopback is the default and is strictly enforced. To bind beyond
+  it (LAN IP, `0.0.0.0`, `::`) you must pass `--allow-non-loopback`
+  or set `SAMPYCLAW_ALLOW_NON_LOOPBACK=1` — the startup refuses
+  otherwise. Always pair non-loopback exposure with a TLS-terminating
+  reverse proxy AND an `--allowed-origins` list.
 - Always set `SAMPYCLAW_GATEWAY_TOKEN` in production. The startup will
   warn loudly if it's missing.
 - Rotate tokens by setting a new value and restarting; clients will need

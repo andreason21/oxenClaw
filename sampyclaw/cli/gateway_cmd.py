@@ -40,6 +40,10 @@ from sampyclaw.gateway import (
     GatewayServer,
     Router,
 )
+from sampyclaw.gateway.bind_policy import (
+    RemoteBindRefused,
+    validate_bind_host,
+)
 from sampyclaw.gateway.agents_methods import register_agents_methods
 from sampyclaw.gateway.approval_methods import register_approval_methods
 from sampyclaw.gateway.canvas_methods import register_canvas_methods
@@ -66,7 +70,24 @@ logger = get_logger("cli.gateway")
 
 @app.command("start")
 def start(
-    host: str = typer.Option("127.0.0.1", help="Bind host."),
+    host: str = typer.Option(
+        "127.0.0.1",
+        help=(
+            "Bind host. Loopback only by default — sampyClaw refuses to "
+            "expose the gateway beyond the local machine unless you also "
+            "pass --allow-non-loopback (or set SAMPYCLAW_ALLOW_NON_LOOPBACK=1)."
+        ),
+    ),
+    allow_non_loopback: bool = typer.Option(
+        False,
+        "--allow-non-loopback",
+        help=(
+            "Permit binding to non-loopback hosts (LAN IP, 0.0.0.0, ::). "
+            "Off by default — token-based auth still applies but the "
+            "agent's principal model widens beyond 'this OS user'. "
+            "Logs a loud WARNING when used."
+        ),
+    ),
     port: int = typer.Option(7331, help="Bind port."),
     agent_id: str = typer.Option("assistant", help="Agent id."),
     provider: str = typer.Option(
@@ -129,6 +150,14 @@ def start(
     ),
 ) -> None:
     """Start the gateway server + every discovered channel + cron scheduler."""
+    # Refuse non-loopback binds before we touch any subsystem so the
+    # operator sees a fast, loud failure if they typo `--host 0.0.0.0`
+    # without meaning to.
+    try:
+        validate_bind_host(host, allow_non_loopback=allow_non_loopback)
+    except RemoteBindRefused as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
     from sampyclaw.config.auth_token import (
         format_startup_banner,
         resolve_or_generate_token,

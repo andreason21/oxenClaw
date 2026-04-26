@@ -34,19 +34,26 @@ TAURI_CONF = REPO / "desktop" / "src-tauri" / "tauri.conf.json"
 
 VERSION_RE = re.compile(r"^\d+\.\d+\.\d+(?:[-+][\w.]+)?$")
 
-# Tauri's MSI bundler enforces Windows Installer's strict version grammar
-# (`Major.Minor.Build.Revision`, all 16-bit unsigned ints). A semver prerelease
-# like `0.1.0-rc.8` fails that check ("optional pre-release identifier in app
-# version must be numeric-only"). We translate semver → 4-part numeric:
+# Two different validators look at tauri.conf.json's version field:
 #
-#   0.1.0          → 0.1.0.0
-#   0.1.0-rc.8     → 0.1.0.8        (digits at the tail of the prerelease)
-#   0.1.0-beta.3   → 0.1.0.3
-#   0.1.0-rc8      → 0.1.0.8
-#   0.1.0-rc       → 0.1.0.0        (no digits → 0)
+#   1. Tauri's config schema rejects anything that isn't a semver string
+#      ("version must be a semver string"). 4-part `0.1.0.9` fails here.
+#   2. Tauri's MSI bundler additionally rejects semver prereleases that
+#      contain non-digit segments ("optional pre-release identifier in app
+#      version must be numeric-only"), because Windows Installer's
+#      Major.Minor.Build.Revision grammar only accepts 16-bit ints.
 #
-# tauri.conf.json carries this 4-part form; pyproject.toml + Cargo.toml keep
-# the canonical semver/PEP 440 prerelease so PyPI / cargo see the right metadata.
+# The intersection is "semver where the prerelease, if any, is pure digits":
+#
+#   0.1.0          → 0.1.0
+#   0.1.0-rc.8     → 0.1.0-8        (digits at the tail of the prerelease)
+#   0.1.0-beta.3   → 0.1.0-3
+#   0.1.0-rc8      → 0.1.0-8
+#   0.1.0-rc       → 0.1.0-0        (no digits → 0)
+#
+# tauri.conf.json carries this digit-prerelease form; pyproject.toml +
+# Cargo.toml keep the canonical semver/PEP 440 prerelease so PyPI / cargo
+# see the right metadata.
 _TAIL_NUMERIC = re.compile(r"(\d+)\D*$")
 
 
@@ -55,13 +62,13 @@ def to_msi_version(canonical: str) -> str:
     canonical = canonical.split("+", 1)[0]
     base, _, pre = canonical.partition("-")
     if not pre:
-        return f"{base}.0"
+        return base
     m = _TAIL_NUMERIC.search(pre)
     n = m.group(1) if m else "0"
     # MSI fields max out at 65535. Clamp pathological inputs.
     if int(n) > 65535:
         n = "65535"
-    return f"{base}.{n}"
+    return f"{base}-{n}"
 
 
 def read_pyproject() -> str:

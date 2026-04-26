@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sampyclaw.extensions.telegram.format import (
+from oxenclaw.extensions.telegram.format import (
     MDV2_SPECIAL,
     code_block,
     escape_html,

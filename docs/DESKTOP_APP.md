@@ -62,17 +62,17 @@ or download a new bundle.
 Inside WSL:
 
 ```bash
-mkdir -p ~/sampyclaw && cd ~/sampyclaw
+mkdir -p ~/oxenclaw && cd ~/oxenclaw
 python3 -m venv venv && source venv/bin/activate
-pip install -e /path/to/sampyclaw    # or `pip install sampyclaw` once published
+pip install -e /path/to/oxenclaw    # or `pip install oxenclaw` once published
 ```
 
 Generate a token and start the gateway with the Tauri-friendly Origin
 allowlist:
 
 ```bash
-sampyclaw gateway token              # prints the bearer token
-sampyclaw gateway start \
+oxenclaw gateway token              # prints the bearer token
+oxenclaw gateway start \
     --port 7331 \
     --allowed-origins "tauri://localhost,http://localhost:7331"
 ```
@@ -111,11 +111,11 @@ Pick the matching artifact from the latest release page:
 
 | Platform | File | Install |
 |---|---|---|
-| Windows 11 | `sampyclaw_X.Y.Z_x64_en-US.msi` | double-click; or `winget install sampyClaw.sampyClaw` after the first winget-pkgs PR merges |
-| Windows 11 | `sampyClaw_X.Y.Z_x64-setup.exe` (NSIS) | double-click; per-user install, no admin |
-| Ubuntu 22.04 | `sampyclaw_X.Y.Z_amd64_ubuntu22.04.deb` | `sudo apt install ./sampyclaw_*.deb` |
-| Ubuntu 24.04 | `sampyclaw_X.Y.Z_amd64_ubuntu24.04.deb` | `sudo apt install ./sampyclaw_*.deb` |
-| Any Linux | `sampyclaw_X.Y.Z_amd64_*.AppImage` | `chmod +x *.AppImage && ./sampyclaw_*.AppImage` |
+| Windows 11 | `oxenclaw_X.Y.Z_x64_en-US.msi` | double-click; or `winget install oxenClaw.oxenClaw` after the first winget-pkgs PR merges |
+| Windows 11 | `oxenClaw_X.Y.Z_x64-setup.exe` (NSIS) | double-click; per-user install, no admin |
+| Ubuntu 22.04 | `oxenclaw_X.Y.Z_amd64_ubuntu22.04.deb` | `sudo apt install ./oxenclaw_*.deb` |
+| Ubuntu 24.04 | `oxenclaw_X.Y.Z_amd64_ubuntu24.04.deb` | `sudo apt install ./oxenclaw_*.deb` |
+| Any Linux | `oxenclaw_X.Y.Z_amd64_*.AppImage` | `chmod +x *.AppImage && ./oxenclaw_*.AppImage` |
 
 The `.AppImage` runs on both 22.04 and 24.04 (and other glibc 2.31+
 distros) because it bundles its own webkit2gtk. The two `.deb`s are
@@ -138,8 +138,8 @@ without it the .msi step is silently skipped:
 choco install -y wixtoolset --version=3.11.2
 $env:Path += ";${env:ProgramFiles(x86)}\WiX Toolset v3.11\bin"
 cargo tauri build --bundles msi nsis
-# desktop\src-tauri\target\release\bundle\msi\sampyclaw_<version>_x64_en-US.msi
-# desktop\src-tauri\target\release\bundle\nsis\sampyClaw_<version>_x64-setup.exe
+# desktop\src-tauri\target\release\bundle\msi\oxenclaw_<version>_x64_en-US.msi
+# desktop\src-tauri\target\release\bundle\nsis\oxenClaw_<version>_x64-setup.exe
 ```
 
 Release on Ubuntu (after installing `libwebkit2gtk-4.1-dev`,
@@ -148,8 +148,8 @@ Release on Ubuntu (after installing `libwebkit2gtk-4.1-dev`,
 
 ```bash
 cargo tauri build --bundles deb appimage
-# desktop/src-tauri/target/release/bundle/deb/sampyclaw_<version>_amd64.deb
-# desktop/src-tauri/target/release/bundle/appimage/sampyclaw_<version>_amd64.AppImage
+# desktop/src-tauri/target/release/bundle/deb/oxenclaw_<version>_amd64.deb
+# desktop/src-tauri/target/release/bundle/appimage/oxenclaw_<version>_amd64.AppImage
 ```
 
 CI runs both paths on every PR via `desktop-build.yml`; release
@@ -158,14 +158,14 @@ locally:
 
 ```powershell
 signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 \
-              /a sampyclaw_*_x64_en-US.msi
+              /a oxenclaw_*_x64_en-US.msi
 signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 \
-              /a sampyClaw_*_x64-setup.exe
+              /a oxenClaw_*_x64-setup.exe
 ```
 
 ## Step 3 — First run
 
-Open the app (Start menu on Windows, `sampyclaw-desktop` from
+Open the app (Start menu on Windows, `oxenclaw-desktop` from
 `apt`-installed `.deb`, or run the `.AppImage` directly). The app
 appears in the system tray (`🦞`). On first launch a setup screen
 asks for:
@@ -173,14 +173,14 @@ asks for:
 - **Gateway URL** — `http://localhost:7331` for a local agent. For a
   remote gateway, use that host's URL; wrap with HTTPS/mTLS at your
   reverse proxy if you cross any non-loopback network.
-- **Bearer token** — paste the value `sampyclaw gateway token` printed
+- **Bearer token** — paste the value `oxenclaw gateway token` printed
   in Step 1. Stored in the OS keychain (Credential Manager on
   Windows, libsecret on Linux); **not** in any file the WebView can
   read.
 - (optional) **Auto-start on login** — Task Scheduler on Windows,
   `~/.config/autostart/` on Linux.
 - (optional, Windows only) **WSL auto-launch** — runs
-  `wsl ~ -e sampyclaw gateway start ...` if the gateway isn't
+  `wsl ~ -e oxenclaw gateway start ...` if the gateway isn't
   already responding.
 
 After Connect the dashboard SPA loads in the native window. Closing
@@ -199,7 +199,7 @@ daemon, etc.):
 | `reply_complete` | "Reply from \<agent_id\>" | Click → focus dashboard | Suppressed when the dashboard window is focused |
 | `cron_fired` | "Cron job fired" | Click → focus dashboard | Suppressed when focused |
 
-The `Notify` module in `sampyclaw/static/app.js` routes through
+The `Notify` module in `oxenclaw/static/app.js` routes through
 `window.__TAURI__.core.invoke("show_notification", ...)` when the
 Tauri runtime is detected, falling back to the browser
 Notifications API otherwise. So the same SPA delivers toasts in
@@ -213,7 +213,7 @@ nicer-looking, no-permission-popup version.
   can speak to the gateway given the token. Recommended values:
   `tauri://localhost` (this app) plus `http://localhost:7331` (browser
   fallback access). Add corp domains as needed.
-- Token rotation: `sampyclaw gateway token --rotate` invalidates the
+- Token rotation: `oxenclaw gateway token --rotate` invalidates the
   prior token; the desktop app surfaces the next reconnect failure as
   a setup-screen prompt asking for the new value.
 - The Tauri WebView is configured with
@@ -224,22 +224,22 @@ nicer-looking, no-permission-popup version.
   is deny-by-default. Adding new IPC commands also requires editing
   that file.
 - The bundled WebView2 is updated by Edge's auto-updater, so the
-  underlying browser engine gets security patches without a sampyClaw
+  underlying browser engine gets security patches without a oxenClaw
   release.
 
 ## Troubleshooting
 
 | Symptom | Likely cause |
 |---|---|
-| App opens, immediately shows setup screen on every launch (Windows) | Token not stored — Credential Manager API may have failed. Check Credential Manager → "ai.sampyclaw.desktop". |
+| App opens, immediately shows setup screen on every launch (Windows) | Token not stored — Credential Manager API may have failed. Check Credential Manager → "ai.oxenclaw.desktop". |
 | App opens, immediately shows setup screen on every launch (Linux) | No keyring service running — install `gnome-keyring` (`sudo apt install gnome-keyring`) or unlock KWallet, log out and back in. |
 | `.deb` install fails: "depends on libwebkit2gtk-4.1-0; however …" | Wrong distro file — install `*_ubuntu22.04.deb` on 22.04, `*_ubuntu24.04.deb` on 24.04. Or use the AppImage which has no apt deps. |
-| AppImage doesn't launch on first try | Missing FUSE: `sudo apt install fuse libfuse2`. Or extract: `./sampyclaw_*.AppImage --appimage-extract` and run the extracted binary. |
+| AppImage doesn't launch on first try | Missing FUSE: `sudo apt install fuse libfuse2`. Or extract: `./oxenclaw_*.AppImage --appimage-extract` and run the extracted binary. |
 | Tray icon missing on GNOME | Install AppIndicator support: `sudo apt install gnome-shell-extension-appindicator` and enable it in Extensions. |
 | "origin not allowed" 403 on WS upgrade | Add `tauri://localhost` to `--allowed-origins`. |
 | Dashboard loads but events don't push | WS connect succeeded but was rejected after handshake — check gateway logs for `Origin` warnings. |
 | Notifications show but no sound (Windows) | Focus Assist is on. Adjust under Settings → Notifications. |
-| WSL auto-launch fails | `wsl.exe` not in PATH (rare) or default distro disabled — toggle off WSL auto-launch and start the gateway manually with `wsl ~ -e sampyclaw gateway start`. |
+| WSL auto-launch fails | `wsl.exe` not in PATH (rare) or default distro disabled — toggle off WSL auto-launch and start the gateway manually with `wsl ~ -e oxenclaw gateway start`. |
 | Auto-updater silent on Linux despite new release | Auto-update only ships via the AppImage path. `.deb` users `apt install ./<new>.deb`. |
 
 ## Future work
@@ -251,6 +251,6 @@ nicer-looking, no-permission-popup version.
 - Code-signing pipeline integration (CI ↔ Hashicorp Vault PKI or
   Windows hardware token).
 - Self-hosted apt repo / Launchpad PPA so Ubuntu users can `apt
-  install sampyclaw` instead of downloading the `.deb`.
+  install oxenclaw` instead of downloading the `.deb`.
 - macOS `.dmg` from the same Tauri source — out-of-scope until
   there's demand.

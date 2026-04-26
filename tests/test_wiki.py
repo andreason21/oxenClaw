@@ -9,8 +9,8 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from sampyclaw.cli.wiki_cmd import app as wiki_cli
-from sampyclaw.wiki import (
+from oxenclaw.cli.wiki_cmd import app as wiki_cli
+from oxenclaw.wiki import (
     LintSeverity,
     WikiClaim,
     WikiEvidence,
@@ -27,8 +27,8 @@ from sampyclaw.wiki import (
     search_wiki_pages,
     slugify_wiki_segment,
 )
-from sampyclaw.wiki.ingest import upsert_simple, upsert_wiki_page
-from sampyclaw.wiki.lint import count_by_severity
+from oxenclaw.wiki.ingest import upsert_simple, upsert_wiki_page
+from oxenclaw.wiki.lint import count_by_severity
 
 # ─── slugify ─────────────────────────────────────────────────────────
 
@@ -336,7 +336,7 @@ def test_lint_flags_dangling_source_id(tmp_path: Path) -> None:
 
 
 def test_cli_full_lifecycle(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setenv("SAMPYCLAW_HOME", str(tmp_path))
+    monkeypatch.setenv("OXENCLAW_HOME", str(tmp_path))
     runner = CliRunner()
 
     res = runner.invoke(wiki_cli, ["init"])

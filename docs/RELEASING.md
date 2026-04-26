@@ -1,4 +1,4 @@
-# Releasing sampyClaw
+# Releasing oxenClaw
 
 End-to-end runbook: from green main to a published version on PyPI
 and a Windows `.msi` attached to a GitHub Release.
@@ -7,13 +7,13 @@ and a Windows `.msi` attached to a GitHub Release.
 
 | Artifact | Where | How |
 |---|---|---|
-| `sampyclaw-X.Y.Z-py3-none-any.whl` | PyPI + GitHub Release | trusted publishing (OIDC) + `softprops/action-gh-release` |
-| `sampyclaw-X.Y.Z.tar.gz` (sdist) | PyPI + GitHub Release | same |
-| `sampyclaw_X.Y.Z_x64_en-US.msi` | GitHub Release | `cargo tauri build --bundles msi nsis` on `windows-latest` after `choco install wixtoolset --version=3.11.2`, optional signtool |
-| `sampyClaw_X.Y.Z_x64-setup.exe` (NSIS) | GitHub Release | same build step, NSIS bundle |
-| `sampyclaw_X.Y.Z_amd64_ubuntu22.04.deb` | GitHub Release | `cargo tauri build --bundles deb` on `ubuntu-22.04` |
-| `sampyclaw_X.Y.Z_amd64_ubuntu24.04.deb` | GitHub Release | same on `ubuntu-24.04` |
-| `sampyclaw_X.Y.Z_amd64_*.AppImage` | GitHub Release | `cargo tauri build --bundles appimage` |
+| `oxenclaw-X.Y.Z-py3-none-any.whl` | PyPI + GitHub Release | trusted publishing (OIDC) + `softprops/action-gh-release` |
+| `oxenclaw-X.Y.Z.tar.gz` (sdist) | PyPI + GitHub Release | same |
+| `oxenclaw_X.Y.Z_x64_en-US.msi` | GitHub Release | `cargo tauri build --bundles msi nsis` on `windows-latest` after `choco install wixtoolset --version=3.11.2`, optional signtool |
+| `oxenClaw_X.Y.Z_x64-setup.exe` (NSIS) | GitHub Release | same build step, NSIS bundle |
+| `oxenclaw_X.Y.Z_amd64_ubuntu22.04.deb` | GitHub Release | `cargo tauri build --bundles deb` on `ubuntu-22.04` |
+| `oxenclaw_X.Y.Z_amd64_ubuntu24.04.deb` | GitHub Release | same on `ubuntu-24.04` |
+| `oxenclaw_X.Y.Z_amd64_*.AppImage` | GitHub Release | `cargo tauri build --bundles appimage` |
 | `*.msi.sig` / `*.exe.sig` / `*.AppImage.sig` | GitHub Release | Tauri updater Ed25519 signature, when `TAURI_SIGNING_PRIVATE_KEY` is set |
 | `latest.json` (auto-updater manifest) | GitHub Release | derived in CI from the .msi (Windows) + 24.04 AppImage (Linux) — both signed |
 | winget manifest | microsoft/winget-pkgs PR | `vedantmgoyal9/winget-releaser` (when `WINGET_TOKEN` secret set) |
@@ -33,10 +33,10 @@ PyPI's OIDC trusted-publishing flow lets the workflow upload without
 storing an API token in GitHub secrets. Configure it once on the
 PyPI project page:
 
-- **Project**: `sampyclaw` (reserve the name on PyPI first if the
+- **Project**: `oxenclaw` (reserve the name on PyPI first if the
   repo is being released for the first time).
 - **Owner**: `andreason21`
-- **Repository name**: `sampyClaw`
+- **Repository name**: `oxenClaw`
 - **Workflow name**: `release.yml`
 - **Environment name**: `pypi`
 
@@ -70,7 +70,7 @@ updates — they'd need to download the new MSI manually).
 
 ### winget-pkgs submission (optional)
 
-For users to run `winget install sampyClaw.sampyClaw`, the workflow
+For users to run `winget install oxenClaw.oxenClaw`, the workflow
 opens a PR against [`microsoft/winget-pkgs`](https://github.com/microsoft/winget-pkgs)
 on every stable release. Microsoft moderators auto-merge most PRs in
 under an hour.
@@ -110,7 +110,7 @@ release page, run
 
 ```powershell
 signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 \
-              /a sampyclaw_*_x64_en-US.msi
+              /a oxenclaw_*_x64_en-US.msi
 ```
 
 then re-upload to the release.
@@ -144,17 +144,17 @@ The script:
 1. Calls `New-SelfSignedCertificate` with `-Type CodeSigningCert`,
    3072-bit RSA, SHA256, EKU `1.3.6.1.5.5.7.3.3` (code signing), valid
    for 10 years.
-2. Exports `sampyclaw_codesign.cer` (public, distributable) and
-   `sampyclaw_codesign.pfx` (private, secret) to
-   `%USERPROFILE%\sampyclaw-codesign\`.
-3. Writes `sampyclaw_codesign.pfx.b64` — the base64 blob you paste
+2. Exports `oxenclaw_codesign.cer` (public, distributable) and
+   `oxenclaw_codesign.pfx` (private, secret) to
+   `%USERPROFILE%\oxenclaw-codesign\`.
+3. Writes `oxenclaw_codesign.pfx.b64` — the base64 blob you paste
    into `WINDOWS_CERT_PFX`.
 4. Prints the thumbprint and the next-step checklist.
 
 **Wire up the secrets:**
 
 1. GitHub → Settings → Secrets and variables → Actions → New repository secret:
-   - `WINDOWS_CERT_PFX` = the contents of `sampyclaw_codesign.pfx.b64`
+   - `WINDOWS_CERT_PFX` = the contents of `oxenclaw_codesign.pfx.b64`
    - `WINDOWS_CERT_PASSWORD` = the PFX password you typed at the prompt
 2. Cut a new release tag. The existing `Optional code-signing` step
    in `release.yml` (gated on `env.WINDOWS_CERT_PFX != ''`) imports
@@ -170,14 +170,14 @@ validity even if SmartScreen never accepts the chain.
 
 **Distribute the public `.cer`:**
 
-Users who want to suppress SmartScreen for sampyClaw builds can import
+Users who want to suppress SmartScreen for oxenClaw builds can import
 the public certificate once. Document this in your install guide:
 
 ```powershell
 # Run as Administrator. Replace the path with where the user saved the .cer.
-Import-Certificate -FilePath .\sampyclaw_codesign.cer `
+Import-Certificate -FilePath .\oxenclaw_codesign.cer `
                    -CertStoreLocation Cert:\LocalMachine\Root
-Import-Certificate -FilePath .\sampyclaw_codesign.cer `
+Import-Certificate -FilePath .\oxenclaw_codesign.cer `
                    -CertStoreLocation Cert:\LocalMachine\TrustedPublisher
 ```
 
@@ -209,7 +209,7 @@ That last `git push --tags` is what kicks off `release.yml`. Within
 
 - a green CI run with 6 jobs (version-check / test / python-build /
   windows-build / pypi-publish / github-release)
-- the package on PyPI: `pip install sampyclaw==0.2.0`
+- the package on PyPI: `pip install oxenclaw==0.2.0`
 - a GitHub Release with all artifacts attached + auto-generated
   changelog from commits since the previous tag
 

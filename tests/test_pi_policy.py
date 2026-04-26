@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from sampyclaw.pi import (
+from oxenclaw.pi import (
     AgentSession,
     CreateAgentSessionOptions,
     InMemorySessionManager,
     ThinkingLevel,
 )
-from sampyclaw.pi.policy import (
+from oxenclaw.pi.policy import (
     InputProvenance,
     SendMode,
     SendPolicy,
@@ -69,9 +69,9 @@ def test_pairing_blocks_until_completed() -> None:
 
 
 def test_addressed_only_requires_mention_or_reply() -> None:
-    p = SendPolicy(mode=SendMode.ADDRESSED_ONLY, addressed_handles=("@sampyclaw",))
+    p = SendPolicy(mode=SendMode.ADDRESSED_ONLY, addressed_handles=("@oxenclaw",))
     assert (
-        p.should_reply(chat_type=SessionChatType.GROUP, sender_id="u", text="@sampyclaw hi") is True
+        p.should_reply(chat_type=SessionChatType.GROUP, sender_id="u", text="@oxenclaw hi") is True
     )
     assert (
         p.should_reply(chat_type=SessionChatType.GROUP, sender_id="u", text="random chatter")

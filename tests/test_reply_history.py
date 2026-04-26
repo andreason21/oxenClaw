@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sampyclaw.channels.reply_history import (
+from oxenclaw.channels.reply_history import (
     CURRENT_MESSAGE_MARKER,
     DEFAULT_GROUP_HISTORY_LIMIT,
     HISTORY_CONTEXT_MARKER,

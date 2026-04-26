@@ -12,10 +12,10 @@ from pathlib import Path
 
 import pytest
 
-from sampyclaw.clawhub.frontmatter import parse_skill_file
-from sampyclaw.config.paths import SampyclawPaths
+from oxenclaw.clawhub.frontmatter import parse_skill_file
+from oxenclaw.config.paths import OxenclawPaths
 
-# Skills under sampyclaw/skills/ — all should parse.
+# Skills under oxenclaw/skills/ — all should parse.
 _BUNDLED = [
     "summarize",
     "weather",
@@ -28,7 +28,7 @@ _BUNDLED = [
 
 
 def _skills_root() -> Path:
-    return Path(__file__).resolve().parent.parent / "sampyclaw" / "skills"
+    return Path(__file__).resolve().parent.parent / "oxenclaw" / "skills"
 
 
 @pytest.mark.parametrize("slug", _BUNDLED)
@@ -45,15 +45,15 @@ def test_bundled_skill_md_parses(slug: str) -> None:
 # ─── summarize ──────────────────────────────────────────────────────
 
 
-import sampyclaw.pi.providers  # noqa: F401
-from sampyclaw.pi import (
+import oxenclaw.pi.providers  # noqa: F401
+from oxenclaw.pi import (
     InMemoryAuthStorage,
     Model,
     StopEvent,
     TextDeltaEvent,
     register_provider_stream,
 )
-from sampyclaw.tools_pkg.summarize import summarize_tool
+from oxenclaw.tools_pkg.summarize import summarize_tool
 
 
 async def test_summarize_tool_calls_sub_llm() -> None:
@@ -103,7 +103,7 @@ async def test_summarize_tool_focus_appears_in_prompt() -> None:
 # ─── weather ────────────────────────────────────────────────────────
 
 
-from sampyclaw.tools_pkg.weather import weather_tool
+from oxenclaw.tools_pkg.weather import weather_tool
 
 
 def test_weather_tool_validation_requires_input() -> None:
@@ -119,7 +119,7 @@ def test_weather_tool_validation_requires_input() -> None:
 # ─── github ─────────────────────────────────────────────────────────
 
 
-from sampyclaw.tools_pkg.github import github_tool
+from oxenclaw.tools_pkg.github import github_tool
 
 
 async def test_github_tool_blocks_non_allowlisted_verb(monkeypatch) -> None:
@@ -153,7 +153,7 @@ async def test_github_tool_missing_gh(monkeypatch) -> None:
 # ─── session_logs ───────────────────────────────────────────────────
 
 
-from sampyclaw.pi import (
+from oxenclaw.pi import (
     AssistantMessage,
     CreateAgentSessionOptions,
     InMemorySessionManager,
@@ -161,7 +161,7 @@ from sampyclaw.pi import (
     TextContent,
     UserMessage,
 )
-from sampyclaw.tools_pkg.session_logs import session_logs_tool
+from oxenclaw.tools_pkg.session_logs import session_logs_tool
 
 
 async def test_session_logs_list_view_grep() -> None:
@@ -196,7 +196,7 @@ async def test_session_logs_list_view_grep() -> None:
 # ─── healthcheck ────────────────────────────────────────────────────
 
 
-from sampyclaw.tools_pkg.healthcheck import healthcheck_tool
+from oxenclaw.tools_pkg.healthcheck import healthcheck_tool
 
 
 async def test_healthcheck_with_no_subsystems_still_runs() -> None:
@@ -208,7 +208,7 @@ async def test_healthcheck_with_no_subsystems_still_runs() -> None:
 
 
 async def test_healthcheck_reports_session_count(tmp_path: Path) -> None:
-    from sampyclaw.pi.persistence import SQLiteSessionManager
+    from oxenclaw.pi.persistence import SQLiteSessionManager
 
     sm = SQLiteSessionManager(tmp_path / "s.db")
     await sm.create(CreateAgentSessionOptions(agent_id="x"))
@@ -221,12 +221,12 @@ async def test_healthcheck_reports_session_count(tmp_path: Path) -> None:
 # ─── skill_creator ──────────────────────────────────────────────────
 
 
-from sampyclaw.clawhub.loader import load_installed_skills
-from sampyclaw.tools_pkg.skill_creator import skill_creator_tool, slugify
+from oxenclaw.clawhub.loader import load_installed_skills
+from oxenclaw.tools_pkg.skill_creator import skill_creator_tool, slugify
 
 
-def _paths(tmp_path: Path) -> SampyclawPaths:
-    p = SampyclawPaths(home=tmp_path)
+def _paths(tmp_path: Path) -> OxenclawPaths:
+    p = OxenclawPaths(home=tmp_path)
     p.ensure_home()
     return p
 

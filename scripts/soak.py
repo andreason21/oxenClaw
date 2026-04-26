@@ -1,4 +1,4 @@
-"""Soak test for sampyClaw — long-running stability validation.
+"""Soak test for oxenClaw — long-running stability validation.
 
 Drives the gateway via WS RPCs in a loop while sampling resource usage
 (memory / file descriptors / thread count). Exits non-zero if growth
@@ -30,8 +30,8 @@ import websockets
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from sampyclaw.config.paths import SampyclawPaths  # noqa: E402
-from sampyclaw.gateway import (  # noqa: E402
+from oxenclaw.config.paths import OxenclawPaths  # noqa: E402
+from oxenclaw.gateway import (  # noqa: E402
     ChatSendParams,
     ChatSendResult,
     GatewayServer,

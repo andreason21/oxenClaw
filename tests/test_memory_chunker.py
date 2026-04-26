@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sampyclaw.memory.chunker import chunk_markdown
+from oxenclaw.memory.chunker import chunk_markdown
 
 
 def test_empty_input_returns_empty_list() -> None:

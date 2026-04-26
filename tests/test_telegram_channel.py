@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from sampyclaw.extensions.telegram.channel import TelegramChannel
-from sampyclaw.plugin_sdk.channel_contract import (
+from oxenclaw.extensions.telegram.channel import TelegramChannel
+from oxenclaw.plugin_sdk.channel_contract import (
     ChannelPlugin,
     ChannelTarget,
     InboundEnvelope,
@@ -16,14 +16,14 @@ from sampyclaw.plugin_sdk.channel_contract import (
     ProbeOpts,
     SendParams,
 )
-from sampyclaw.plugin_sdk.error_runtime import UserVisibleError
+from oxenclaw.plugin_sdk.error_runtime import UserVisibleError
 
 
 def _patch_bot(monkeypatch, channel: TelegramChannel) -> MagicMock:  # type: ignore[no-untyped-def]
     bot = MagicMock()
     bot.session = MagicMock()
     bot.session.close = AsyncMock()
-    monkeypatch.setattr("sampyclaw.extensions.telegram.channel.create_bot", lambda token: bot)
+    monkeypatch.setattr("oxenclaw.extensions.telegram.channel.create_bot", lambda token: bot)
     return bot
 
 

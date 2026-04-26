@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from sampyclaw.clawhub.loader import (
+from oxenclaw.clawhub.loader import (
     format_skills_for_prompt,
     load_installed_skills,
 )
-from sampyclaw.clawhub.lockfile import OriginMetadata
-from sampyclaw.config.paths import SampyclawPaths
+from oxenclaw.clawhub.lockfile import OriginMetadata
+from oxenclaw.config.paths import OxenclawPaths
 
 SAMPLE_SKILL = """---
 name: hello
@@ -21,8 +21,8 @@ metadata:
 """
 
 
-def _setup_skill(home, slug: str = "hello") -> SampyclawPaths:  # type: ignore[no-untyped-def]
-    paths = SampyclawPaths(home=home)
+def _setup_skill(home, slug: str = "hello") -> OxenclawPaths:  # type: ignore[no-untyped-def]
+    paths = OxenclawPaths(home=home)
     paths.ensure_home()
     skill_dir = home / "skills" / slug
     skill_dir.mkdir(parents=True)
@@ -38,7 +38,7 @@ def _setup_skill(home, slug: str = "hello") -> SampyclawPaths:  # type: ignore[n
 
 
 def test_load_installed_skills_returns_empty_when_no_dir(tmp_path) -> None:  # type: ignore[no-untyped-def]
-    paths = SampyclawPaths(home=tmp_path)
+    paths = OxenclawPaths(home=tmp_path)
     paths.ensure_home()
     assert load_installed_skills(paths, include_bundled=False) == []
 
@@ -72,7 +72,7 @@ def test_loaded_skill_carries_origin(tmp_path) -> None:  # type: ignore[no-untyp
 def test_load_includes_bundled_skills_by_default(tmp_path) -> None:  # type: ignore[no-untyped-def]
     """Out-of-the-box, the loader returns all 6 curated bundled skills
     so the model can call them without any user-side install."""
-    paths = SampyclawPaths(home=tmp_path)
+    paths = OxenclawPaths(home=tmp_path)
     paths.ensure_home()
     out = load_installed_skills(paths)
     slugs = {s.slug for s in out}
@@ -84,7 +84,7 @@ def test_load_includes_bundled_skills_by_default(tmp_path) -> None:  # type: ign
 
 
 def test_user_skills_override_bundled_with_same_slug(tmp_path) -> None:  # type: ignore[no-untyped-def]
-    """If the user writes their own ~/.sampyclaw/skills/weather/SKILL.md,
+    """If the user writes their own ~/.oxenclaw/skills/weather/SKILL.md,
     that wins over the bundled weather."""
     paths = _setup_skill(tmp_path, slug="weather")
     out = load_installed_skills(paths)

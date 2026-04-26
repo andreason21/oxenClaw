@@ -6,8 +6,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from sampyclaw.plugins.manifest import Manifest
-from sampyclaw.plugins.registry import PluginEntry, PluginRegistry
+from oxenclaw.plugins.manifest import Manifest
+from oxenclaw.plugins.registry import PluginEntry, PluginRegistry
 
 
 def _entry(plugin_id: str = "x") -> PluginEntry:

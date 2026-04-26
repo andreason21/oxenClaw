@@ -7,7 +7,7 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from sampyclaw.plugins.manifest import Manifest
+from oxenclaw.plugins.manifest import Manifest
 
 
 def test_manifest_from_dict() -> None:
@@ -44,7 +44,7 @@ def test_manifest_requires_id() -> None:
 
 
 def test_bundled_telegram_manifest_parses() -> None:
-    from sampyclaw.extensions.telegram.plugin_entry import TELEGRAM_PLUGIN
+    from oxenclaw.extensions.telegram.plugin_entry import TELEGRAM_PLUGIN
 
     assert TELEGRAM_PLUGIN.manifest.id == "telegram"
     assert "telegram" in TELEGRAM_PLUGIN.manifest.channels

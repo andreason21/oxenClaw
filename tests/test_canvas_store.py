@@ -1,10 +1,10 @@
-"""Unit tests for sampyclaw.canvas.store.CanvasStore."""
+"""Unit tests for oxenclaw.canvas.store.CanvasStore."""
 
 from __future__ import annotations
 
 import pytest
 
-from sampyclaw.canvas.store import CanvasStore
+from oxenclaw.canvas.store import CanvasStore
 
 
 def test_present_creates_state() -> None:

@@ -1,6 +1,6 @@
-# sampyClaw Operations Guide
+# oxenClaw Operations Guide
 
-How to install, run, observe, back up, and recover a sampyClaw deployment.
+How to install, run, observe, back up, and recover a oxenClaw deployment.
 This guide assumes you have already gone through `README.md` for the
 project background and `docs/SECURITY.md` for the threat model.
 
@@ -10,14 +10,14 @@ project background and `docs/SECURITY.md` for the threat model.
 
 ```bash
 pip install -e ".[dev]"
-sampyclaw paths              # confirm $HOME/.sampyclaw layout
-sampyclaw config validate    # validate config.yaml + mcp.json + creds + env refs
+oxenclaw paths              # confirm $HOME/.oxenclaw layout
+oxenclaw config validate    # validate config.yaml + mcp.json + creds + env refs
 ```
 
-Set credentials and config under `~/.sampyclaw/`:
+Set credentials and config under `~/.oxenclaw/`:
 
 ```
-~/.sampyclaw/
+~/.oxenclaw/
 ├── config.yaml                       # channel & agent config
 ├── credentials/<channel>/<acct>.json # per-channel secrets
 ├── mcp.json                          # (optional) MCP servers to import
@@ -26,7 +26,7 @@ Set credentials and config under `~/.sampyclaw/`:
 └── cron/jobs.json                    # auto-managed
 ```
 
-`SAMPYCLAW_HOME=/some/path` overrides the root.
+`OXENCLAW_HOME=/some/path` overrides the root.
 
 ---
 
@@ -35,8 +35,8 @@ Set credentials and config under `~/.sampyclaw/`:
 ### Foreground
 
 ```bash
-SAMPYCLAW_GATEWAY_TOKEN=$(openssl rand -hex 32) \
-  sampyclaw gateway start \
+OXENCLAW_GATEWAY_TOKEN=$(openssl rand -hex 32) \
+  oxenclaw gateway start \
     --provider pi --model gemma4:latest \
     --port 7331
 ```
@@ -46,7 +46,7 @@ The startup performs **preflight validation** automatically. To skip
 
 ### Bind policy: loopback by default
 
-`sampyclaw gateway start` binds to `127.0.0.1` by default and **refuses
+`oxenclaw gateway start` binds to `127.0.0.1` by default and **refuses
 to bind to any non-loopback address** unless you explicitly opt in. The
 intent: the agent runs as the local OS user and is reachable only by
 that user on this machine. Anything wider should be a deliberate,
@@ -54,15 +54,15 @@ loud choice.
 
 ```bash
 # Refused (no opt-in):
-sampyclaw gateway start --host 0.0.0.0
+oxenclaw gateway start --host 0.0.0.0
 # Error: refusing to bind gateway to wildcard (all interfaces) host '0.0.0.0'.
-#        sampyClaw defaults to loopback so the agent runs only for the
+#        oxenClaw defaults to loopback so the agent runs only for the
 #        local OS user on this machine. To bind beyond loopback (reverse
 #        proxy, k8s Service, internal corp net), pass --allow-non-loopback
-#        or set SAMPYCLAW_ALLOW_NON_LOOPBACK=1 …
+#        or set OXENCLAW_ALLOW_NON_LOOPBACK=1 …
 
 # Allowed (explicit opt-in):
-sampyclaw gateway start --host 0.0.0.0 --allow-non-loopback \
+oxenclaw gateway start --host 0.0.0.0 --allow-non-loopback \
     --auth-token "$TOKEN" \
     --allowed-origins "https://dashboard.example.com"
 # Logs a loud WARNING noting that the principal model has widened.
@@ -101,7 +101,7 @@ networkingMode=mirrored      # Win11 22H2+. Cleanest path — same loopback name
 
 ```bash
 # Inside WSL — no opt-in needed, just the standard loopback default:
-sampyclaw gateway start
+oxenclaw gateway start
 ```
 
 ```text
@@ -133,16 +133,16 @@ Edge cases:
 ### systemd unit (recommended)
 
 ```ini
-# /etc/systemd/system/sampyclaw.service
+# /etc/systemd/system/oxenclaw.service
 [Unit]
-Description=sampyClaw gateway
+Description=oxenClaw gateway
 After=network.target
 
 [Service]
 Type=simple
-User=sampyclaw
-EnvironmentFile=/etc/sampyclaw/env
-ExecStart=/usr/local/bin/sampyclaw gateway start --host 127.0.0.1 --port 7331
+User=oxenclaw
+EnvironmentFile=/etc/oxenclaw/env
+ExecStart=/usr/local/bin/oxenclaw gateway start --host 127.0.0.1 --port 7331
 Restart=on-failure
 RestartSec=5
 TimeoutStopSec=15
@@ -151,15 +151,15 @@ TimeoutStopSec=15
 WantedBy=multi-user.target
 ```
 
-Then `/etc/sampyclaw/env`:
+Then `/etc/oxenclaw/env`:
 
 ```
-SAMPYCLAW_GATEWAY_TOKEN=...
-SAMPYCLAW_HOME=/var/lib/sampyclaw
-SAMPYCLAW_LOG_FORMAT=json
+OXENCLAW_GATEWAY_TOKEN=...
+OXENCLAW_HOME=/var/lib/oxenclaw
+OXENCLAW_LOG_FORMAT=json
 ```
 
-`systemctl reload sampyclaw` is **not** supported — config changes
+`systemctl reload oxenclaw` is **not** supported — config changes
 require restart. Graceful shutdown is automatic on SIGTERM (drains
 in-flight RPCs, closes channels, flushes WAL — see `gateway.shutdown` in
 the metrics during the drain window).
@@ -167,7 +167,7 @@ the metrics during the drain window).
 ### Docker / k8s
 
 Bind to `0.0.0.0:7331` *with* `--allow-non-loopback` (or
-`SAMPYCLAW_ALLOW_NON_LOOPBACK=1` in the env), and put a TLS-terminating
+`OXENCLAW_ALLOW_NON_LOOPBACK=1` in the env), and put a TLS-terminating
 reverse proxy in front (nginx, Caddy, traefik). Probe endpoints:
 
 - `livenessProbe`: `GET /healthz` → 200 = process alive
@@ -189,35 +189,35 @@ Key metrics:
 
 | Metric | Type | Labels | Use for |
 |---|---|---|---|
-| `sampyclaw_ws_connections_active` | gauge | — | dashboard / capacity |
-| `sampyclaw_ws_rpc_total` | counter | method | request rate per RPC |
-| `sampyclaw_ws_rpc_errors_total` | counter | method | error rate alerting |
-| `sampyclaw_ws_rpc_duration_seconds` | histogram | method | p99 latency |
-| `sampyclaw_channel_inbound_total` | counter | channel | per-channel inbound rate |
-| `sampyclaw_channel_outbound_errors_total` | counter | channel | send failure alerting |
-| `sampyclaw_agent_turn_duration_seconds` | histogram | agent_id | turn latency |
-| `sampyclaw_tool_call_errors_total` | counter | tool | tool failure alerting |
-| `sampyclaw_mcp_servers_connected` | gauge | — | MCP fleet health |
-| `sampyclaw_cron_jobs_active` | gauge | — | scheduler depth |
-| `sampyclaw_approvals_pending` | gauge | — | human-in-the-loop backlog |
+| `oxenclaw_ws_connections_active` | gauge | — | dashboard / capacity |
+| `oxenclaw_ws_rpc_total` | counter | method | request rate per RPC |
+| `oxenclaw_ws_rpc_errors_total` | counter | method | error rate alerting |
+| `oxenclaw_ws_rpc_duration_seconds` | histogram | method | p99 latency |
+| `oxenclaw_channel_inbound_total` | counter | channel | per-channel inbound rate |
+| `oxenclaw_channel_outbound_errors_total` | counter | channel | send failure alerting |
+| `oxenclaw_agent_turn_duration_seconds` | histogram | agent_id | turn latency |
+| `oxenclaw_tool_call_errors_total` | counter | tool | tool failure alerting |
+| `oxenclaw_mcp_servers_connected` | gauge | — | MCP fleet health |
+| `oxenclaw_cron_jobs_active` | gauge | — | scheduler depth |
+| `oxenclaw_approvals_pending` | gauge | — | human-in-the-loop backlog |
 
 Sample alerts:
 
 ```yaml
-- alert: SampyClawHighErrorRate
+- alert: OxenClawHighErrorRate
   expr: |
-    rate(sampyclaw_ws_rpc_errors_total[5m])
-      / rate(sampyclaw_ws_rpc_total[5m]) > 0.05
+    rate(oxenclaw_ws_rpc_errors_total[5m])
+      / rate(oxenclaw_ws_rpc_total[5m]) > 0.05
   for: 10m
 
-- alert: SampyClawTurnLatencyP99High
+- alert: OxenClawTurnLatencyP99High
   expr: |
     histogram_quantile(0.99,
-      rate(sampyclaw_agent_turn_duration_seconds_bucket[5m])
+      rate(oxenclaw_agent_turn_duration_seconds_bucket[5m])
     ) > 30
 
-- alert: SampyClawApprovalBacklog
-  expr: sampyclaw_approvals_pending > 10
+- alert: OxenClawApprovalBacklog
+  expr: oxenclaw_approvals_pending > 10
   for: 30m
 ```
 
@@ -239,13 +239,13 @@ curl -s http://127.0.0.1:7331/readyz | jq
 
 ### Logs
 
-Two formats controlled by `SAMPYCLAW_LOG_FORMAT`:
+Two formats controlled by `OXENCLAW_LOG_FORMAT`:
 
 - **`human`** (default) — readable text, suffixed with `[trace_id=…]`
   when a correlation context is active.
 - **`json`** — one JSON object per line. Schema:
   ```json
-  {"ts":"...","level":"INFO","logger":"sampyclaw.gateway.server",
+  {"ts":"...","level":"INFO","logger":"oxenclaw.gateway.server",
    "message":"...","pid":123,"trace_id":"abc123","rpc":"chat.send"}
   ```
 
@@ -263,10 +263,10 @@ and grep on `trace_id` to follow a single RPC end-to-end.
 ### Create
 
 ```bash
-sampyclaw backup create /var/backups/sampyclaw/
+oxenclaw backup create /var/backups/oxenclaw/
 ```
 
-Captures the entire `~/.sampyclaw/` tree:
+Captures the entire `~/.oxenclaw/` tree:
 - All sqlite DBs are snapshotted via SQLite's online `.backup` API, so
   the snapshot is consistent even with the gateway running. WAL/SHM
   siblings are skipped (re-derived from the snapshot DB on restore).
@@ -275,7 +275,7 @@ Captures the entire `~/.sampyclaw/` tree:
 - A `MANIFEST.json` with a SHA256 per file is added.
 
 The output is a single `.tar.gz` named
-`sampyclaw-backup-<YYYYMMDD-HHMMSS>.tar.gz`.
+`oxenclaw-backup-<YYYYMMDD-HHMMSS>.tar.gz`.
 
 Retention: cron a weekly create + a monthly one. The archive is
 self-contained and cheap to copy off-host.
@@ -283,7 +283,7 @@ self-contained and cheap to copy off-host.
 ### Verify
 
 ```bash
-sampyclaw backup verify /var/backups/sampyclaw/sampyclaw-backup-20260425-031500.tar.gz
+oxenclaw backup verify /var/backups/oxenclaw/oxenclaw-backup-20260425-031500.tar.gz
 ```
 
 Replays SHA256 against every file in the manifest; non-zero exit means
@@ -293,14 +293,14 @@ the archive is corrupt — do not rely on it for restore.
 
 ```bash
 # Dry-run (recommended first):
-sampyclaw backup restore --dry-run /var/backups/.../sampyclaw-backup-*.tar.gz
+oxenclaw backup restore --dry-run /var/backups/.../oxenclaw-backup-*.tar.gz
 
 # Real restore — refuses to overwrite a non-empty home dir by default:
-SAMPYCLAW_HOME=/var/lib/sampyclaw-restored \
-  sampyclaw backup restore /var/backups/.../sampyclaw-backup-*.tar.gz
+OXENCLAW_HOME=/var/lib/oxenclaw-restored \
+  oxenclaw backup restore /var/backups/.../oxenclaw-backup-*.tar.gz
 
 # Or merge into existing (preserves files NOT in the backup):
-sampyclaw backup restore --overwrite /var/backups/.../sampyclaw-backup-*.tar.gz
+oxenclaw backup restore --overwrite /var/backups/.../oxenclaw-backup-*.tar.gz
 ```
 
 After a restore, restart the gateway. Cron jobs are reloaded on
@@ -310,10 +310,10 @@ startup; pending approvals are surfaced in logs as "carried over".
 
 ## Upgrades
 
-1. `sampyclaw backup create` (always, before any upgrade)
-2. `pip install -U sampyclaw[dev]` (or your deployment mechanism)
-3. `sampyclaw config validate` — schema may have evolved
-4. `systemctl restart sampyclaw`
+1. `oxenclaw backup create` (always, before any upgrade)
+2. `pip install -U oxenclaw[dev]` (or your deployment mechanism)
+3. `oxenclaw config validate` — schema may have evolved
+4. `systemctl restart oxenclaw`
 5. Watch `/readyz` until 200, watch metrics for error spikes.
 
 If a regression appears, restore the backup and pin the previous
@@ -333,7 +333,7 @@ version.
 
 ### "WS clients can't connect"
 
-- Verify `SAMPYCLAW_GATEWAY_TOKEN` matches what the client sends.
+- Verify `OXENCLAW_GATEWAY_TOKEN` matches what the client sends.
 - Check `/healthz` is 200 (process alive).
 - Look for `rejecting WS upgrade` warnings in logs.
 
@@ -342,14 +342,14 @@ version.
 An MCP server failed to start. `pool.failures` in logs has the reason.
 Common causes:
 - Binary missing (`npx not found`)
-- Token env var unset (`sampyclaw config validate` would catch this)
+- Token env var unset (`oxenclaw config validate` would catch this)
 - Network policy blocking the server (e.g. NetPolicy denies the URL)
 
 ### "Approvals piling up"
 
 Either operator is asleep, or the approver token is wrong (calls fail
 silently with `UNAUTHORIZED`). Check
-`sampyclaw_approvals_resolved_total{status="..."}` — non-zero `error`
+`oxenclaw_approvals_resolved_total{status="..."}` — non-zero `error`
 status is the symptom. `ApprovalManager` persists pending requests so a
 restart will not drop them.
 
@@ -359,7 +359,7 @@ Check `pi/store_ops.MaintenanceConfig` is wired (it isn't by default
 yet; opt-in). Manual prune:
 
 ```python
-from sampyclaw.pi.store_ops import prune_by_age
+from oxenclaw.pi.store_ops import prune_by_age
 prune_by_age(conn, days=30, keep_min=100)
 ```
 
@@ -375,7 +375,7 @@ The repo ships a soak harness:
 python scripts/soak.py \
   --duration 14400 \
   --rps 5 \
-  --csv /var/log/sampyclaw/soak-$(date +%Y%m%d).csv \
+  --csv /var/log/oxenclaw/soak-$(date +%Y%m%d).csv \
   --max-rss-growth-kb 102400 \
   --max-fd-growth 30
 ```
@@ -392,14 +392,14 @@ Recommended cadence: run a 4h soak in CI before each release.
 
 - Loopback is the default and is strictly enforced. To bind beyond
   it (LAN IP, `0.0.0.0`, `::`) you must pass `--allow-non-loopback`
-  or set `SAMPYCLAW_ALLOW_NON_LOOPBACK=1` — the startup refuses
+  or set `OXENCLAW_ALLOW_NON_LOOPBACK=1` — the startup refuses
   otherwise. Always pair non-loopback exposure with a TLS-terminating
   reverse proxy AND an `--allowed-origins` list.
-- Always set `SAMPYCLAW_GATEWAY_TOKEN` in production. The startup will
+- Always set `OXENCLAW_GATEWAY_TOKEN` in production. The startup will
   warn loudly if it's missing.
 - Rotate tokens by setting a new value and restarting; clients will need
   the new value.
-- For approval-gated tool calls, set `SAMPYCLAW_APPROVER_TOKEN` to a
+- For approval-gated tool calls, set `OXENCLAW_APPROVER_TOKEN` to a
   separate value from the gateway token so that resolving an approval
   requires explicit possession of the approver credential.
 - See `docs/SECURITY.md` for the full threat model and the layered
@@ -412,19 +412,19 @@ Recommended cadence: run a 4h soak in CI before each release.
 
 | Action | Command |
 |---|---|
-| Start | `sampyclaw gateway start` |
-| Stop | `systemctl stop sampyclaw` (SIGTERM is graceful) |
-| Validate config | `sampyclaw config validate` |
-| Backup | `sampyclaw backup create <dir>` |
-| Verify backup | `sampyclaw backup verify <archive>` |
-| Restore | `sampyclaw backup restore <archive>` |
+| Start | `oxenclaw gateway start` |
+| Stop | `systemctl stop oxenclaw` (SIGTERM is graceful) |
+| Validate config | `oxenclaw config validate` |
+| Backup | `oxenclaw backup create <dir>` |
+| Verify backup | `oxenclaw backup verify <archive>` |
+| Restore | `oxenclaw backup restore <archive>` |
 | Soak test | `python scripts/soak.py --duration N` |
-| Print paths | `sampyclaw paths` |
-| Print backup home | `sampyclaw backup home` |
-| List backups | `sampyclaw backup list <dir>` |
-| List skills | `sampyclaw skills list` |
-| List sessions | `sampyclaw session list` |
-| Wiki ops | `sampyclaw wiki list/show/lint/...` |
+| Print paths | `oxenclaw paths` |
+| Print backup home | `oxenclaw backup home` |
+| List backups | `oxenclaw backup list <dir>` |
+| List skills | `oxenclaw skills list` |
+| List sessions | `oxenclaw session list` |
+| Wiki ops | `oxenclaw wiki list/show/lint/...` |
 
 | Endpoint | Auth | Use |
 |---|---|---|
@@ -432,29 +432,29 @@ Recommended cadence: run a 4h soak in CI before each release.
 | `/readyz` | open | k8s readiness |
 | `/metrics` | open | Prometheus scrape |
 | `/` `/dashboard` `/app.html` `/static/*` | open (assets) | Bundled web dashboard SPA (now with right-side **canvas panel** for CV-1 output). Loads anonymously; JS renders an in-app login gate when no token is found and uses it for the WS connect. |
-| WS upgrade | **token** | Real auth boundary. Token via `Authorization: Bearer`, `?token=` on the WS URL, or the `sampyclaw_token` cookie. Canvas push events ride the same WS. |
+| WS upgrade | **token** | Real auth boundary. Token via `Authorization: Bearer`, `?token=` on the WS URL, or the `oxenclaw_token` cookie. Canvas push events ride the same WS. |
 
 ### Optional toolsets
 
 | Env var | Effect | Doc |
 |---|---|---|
-| `SAMPYCLAW_ENABLE_BROWSER=1` | Register the BR-1 browser tools (`browser_navigate`, `_snapshot`, `_screenshot`, `_click`, `_fill`) on every new agent. Requires `pip install 'sampyclaw[browser]' && playwright install chromium`. Combine with `SAMPYCLAW_NET_ALLOW_HOSTS=...` to widen the closed-by-default policy. | [`BROWSER.md`](./BROWSER.md) |
-| `SAMPYCLAW_ENABLE_CANVAS=1` | Register the CV-1 canvas tools (`canvas_present`, `canvas_hide`) on every new agent. The dashboard panel + RPCs are always wired; this env-var only governs *agent-side* tool injection. | [`CANVAS.md`](./CANVAS.md) |
-| `SAMPYCLAW_NET_ALLOW_HOSTS` | Comma-separated host allowlist for the shared `NetPolicy` (used by web tool, browser tool, MCP HTTP transports). | [`SECURITY.md`](./SECURITY.md) |
-| `SAMPYCLAW_AUDIT_OUTBOUND=1` | Log every outbound HTTP from `aiohttp` *and* the browser route handler into `~/.sampyclaw/outbound-audit.db`. | [`SECURITY.md`](./SECURITY.md) |
+| `OXENCLAW_ENABLE_BROWSER=1` | Register the BR-1 browser tools (`browser_navigate`, `_snapshot`, `_screenshot`, `_click`, `_fill`) on every new agent. Requires `pip install 'oxenclaw[browser]' && playwright install chromium`. Combine with `OXENCLAW_NET_ALLOW_HOSTS=...` to widen the closed-by-default policy. | [`BROWSER.md`](./BROWSER.md) |
+| `OXENCLAW_ENABLE_CANVAS=1` | Register the CV-1 canvas tools (`canvas_present`, `canvas_hide`) on every new agent. The dashboard panel + RPCs are always wired; this env-var only governs *agent-side* tool injection. | [`CANVAS.md`](./CANVAS.md) |
+| `OXENCLAW_NET_ALLOW_HOSTS` | Comma-separated host allowlist for the shared `NetPolicy` (used by web tool, browser tool, MCP HTTP transports). | [`SECURITY.md`](./SECURITY.md) |
+| `OXENCLAW_AUDIT_OUTBOUND=1` | Log every outbound HTTP from `aiohttp` *and* the browser route handler into `~/.oxenclaw/outbound-audit.db`. | [`SECURITY.md`](./SECURITY.md) |
 
 ### First-run token bootstrap
 
-When `sampyclaw gateway start` boots without `--auth-token` and without
-`SAMPYCLAW_GATEWAY_TOKEN`, the gateway auto-generates a 48-character hex
-token, persists it to `~/.sampyclaw/gateway-token` (mode `0600`), and
+When `oxenclaw gateway start` boots without `--auth-token` and without
+`OXENCLAW_GATEWAY_TOKEN`, the gateway auto-generates a 48-character hex
+token, persists it to `~/.oxenclaw/gateway-token` (mode `0600`), and
 prints a banner with the value plus a one-shot URL:
 
 ```
 ────────────────────────────────────────────────────────────
-  sampyClaw gateway ready
+  oxenClaw gateway ready
 ────────────────────────────────────────────────────────────
-  • a fresh gateway token was generated and saved to /home/me/.sampyclaw/gateway-token
+  • a fresh gateway token was generated and saved to /home/me/.oxenclaw/gateway-token
   • token: e97856a899ee6c990bc2c59941d5dc9f995560ce444ce10e
   • open: http://127.0.0.1:7331/?token=e97856a899ee6c990bc2c59941d5dc9f995560ce444ce10e
 ────────────────────────────────────────────────────────────
@@ -462,17 +462,17 @@ prints a banner with the value plus a one-shot URL:
 
 Subsequent starts read the same token from the file and reuse it.
 Resolution precedence (highest first): `--auth-token <value>` →
-`SAMPYCLAW_GATEWAY_TOKEN` env → persisted file → freshly generated.
+`OXENCLAW_GATEWAY_TOKEN` env → persisted file → freshly generated.
 
 Manage the token with:
 
 ```bash
-sampyclaw gateway token             # show current token + path
-sampyclaw gateway token --rotate    # generate a new one (invalidates previous)
-sampyclaw gateway token --no-show   # print only the path
+oxenclaw gateway token             # show current token + path
+oxenclaw gateway token --rotate    # generate a new one (invalidates previous)
+oxenclaw gateway token --no-show   # print only the path
 ```
 
-For production: prefer setting `SAMPYCLAW_GATEWAY_TOKEN` from a real
+For production: prefer setting `OXENCLAW_GATEWAY_TOKEN` from a real
 secret manager and not relying on the persisted file. The file is
 convenient for single-host installs and dev loops.
 
@@ -483,9 +483,9 @@ convenient for single-host installs and dev loops.
 2. The dashboard JS calls `WebSocket(ws://host:7331/?token=...)` using
    whatever token it can find in:
    - the `?token=` query string (one-shot URL login),
-   - the `sampyclaw_token` cookie (set by the gateway after a
+   - the `oxenclaw_token` cookie (set by the gateway after a
      successful query-token load, or by the in-app form),
-   - `localStorage["sampyclaw_token"]` (also set by the in-app form).
+   - `localStorage["oxenclaw_token"]` (also set by the in-app form).
 3. If the WS upgrade is rejected (the gateway 401's anything missing
    the token), the JS shows a full-screen login gate with a token
    input. The user pastes the token, optionally checks "Remember on

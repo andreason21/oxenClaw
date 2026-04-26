@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sampyclaw.agents.history import ConversationHistory
+from oxenclaw.agents.history import ConversationHistory
 
 
 def test_empty_history_when_file_missing(tmp_path) -> None:  # type: ignore[no-untyped-def]

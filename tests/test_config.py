@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import pytest
 
-from sampyclaw.config import (
+from oxenclaw.config import (
     ConfigError,
     CredentialStore,
-    SampyclawPaths,
+    OxenclawPaths,
     load_config,
     load_config_from_text,
 )
-from sampyclaw.config.env_subst import MissingEnvVar, substitute
+from oxenclaw.config.env_subst import MissingEnvVar, substitute
 
 
 def test_env_subst_braced_and_bare() -> None:
@@ -62,14 +62,14 @@ def test_load_config_from_text_rejects_bad_root() -> None:
 
 
 def test_load_config_missing_file_is_empty(tmp_path) -> None:  # type: ignore[no-untyped-def]
-    paths = SampyclawPaths(home=tmp_path)
+    paths = OxenclawPaths(home=tmp_path)
     cfg = load_config(paths)
     assert cfg.channels == {}
     assert cfg.agents == {}
 
 
 def test_credential_store_roundtrip(tmp_path) -> None:  # type: ignore[no-untyped-def]
-    paths = SampyclawPaths(home=tmp_path)
+    paths = OxenclawPaths(home=tmp_path)
     paths.ensure_home()
     store = CredentialStore(paths)
 
@@ -90,7 +90,7 @@ def test_credential_store_roundtrip(tmp_path) -> None:  # type: ignore[no-untype
 def test_credential_file_permissions(tmp_path) -> None:  # type: ignore[no-untyped-def]
     import stat
 
-    paths = SampyclawPaths(home=tmp_path)
+    paths = OxenclawPaths(home=tmp_path)
     paths.ensure_home()
     store = CredentialStore(paths)
     store.write("telegram", "main", {"token": "secret"})

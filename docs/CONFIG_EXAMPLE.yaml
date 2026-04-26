@@ -1,7 +1,7 @@
-# Example sampyclaw config. Copy to ~/.sampyclaw/config.yaml.
+# Example oxenclaw config. Copy to ~/.oxenclaw/config.yaml.
 #
 # Credentials go in a sibling directory and are never stored in this file:
-#   ~/.sampyclaw/credentials/telegram/<account_id>.json  →  {"token": "..."}
+#   ~/.oxenclaw/credentials/telegram/<account_id>.json  →  {"token": "..."}
 #
 # A single-bot shortcut: leave the `main` account and export
 # TELEGRAM_BOT_TOKEN in your shell instead of writing credentials/telegram/main.json.
@@ -61,17 +61,17 @@ clawhub:
 # here for visibility.
 #
 # Browser tools (BR-1, headless Playwright):
-#   SAMPYCLAW_ENABLE_BROWSER=1
-#   SAMPYCLAW_NET_ALLOW_HOSTS=example.com,*.docs.io
-#   pip install 'sampyclaw[browser]' && playwright install chromium
+#   OXENCLAW_ENABLE_BROWSER=1
+#   OXENCLAW_NET_ALLOW_HOSTS=example.com,*.docs.io
+#   pip install 'oxenclaw[browser]' && playwright install chromium
 #   See docs/BROWSER.md
 #
 # Canvas tools (CV-1, dashboard-embedded HTML rendering):
-#   SAMPYCLAW_ENABLE_CANVAS=1
+#   OXENCLAW_ENABLE_CANVAS=1
 #   (No extras required; the dashboard panel + RPCs are always wired.)
 #   See docs/CANVAS.md
 #
 # Outbound HTTP audit (across web tool, browser tool, MCP HTTP):
-#   SAMPYCLAW_AUDIT_OUTBOUND=1   # writes ~/.sampyclaw/outbound-audit.db
-#   SAMPYCLAW_AUDIT_OUTBOUND_BODY=1
-#   SAMPYCLAW_AUDIT_OUTBOUND_SAMPLE=0.5
+#   OXENCLAW_AUDIT_OUTBOUND=1   # writes ~/.oxenclaw/outbound-audit.db
+#   OXENCLAW_AUDIT_OUTBOUND_BODY=1
+#   OXENCLAW_AUDIT_OUTBOUND_SAMPLE=0.5

@@ -1,4 +1,4 @@
-"""Tests for `sampyclaw.multimodal`."""
+"""Tests for `oxenclaw.multimodal`."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import base64
 
 import pytest
 
-from sampyclaw.multimodal import (
+from oxenclaw.multimodal import (
     InboundImage,
     MediaNormalizationError,
     anthropic_image_block,
@@ -17,7 +17,7 @@ from sampyclaw.multimodal import (
     openai_image_url_block,
     pi_image_content,
 )
-from sampyclaw.plugin_sdk.channel_contract import MediaItem
+from oxenclaw.plugin_sdk.channel_contract import MediaItem
 
 # ─── capability gate ─────────────────────────────────────────────────
 

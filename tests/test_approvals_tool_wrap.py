@@ -6,9 +6,9 @@ import asyncio
 
 from pydantic import BaseModel
 
-from sampyclaw.agents.tools import FunctionTool
-from sampyclaw.approvals import gated_tool
-from sampyclaw.approvals.manager import ApprovalManager
+from oxenclaw.agents.tools import FunctionTool
+from oxenclaw.approvals import gated_tool
+from oxenclaw.approvals.manager import ApprovalManager
 
 
 class _Args(BaseModel):

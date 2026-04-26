@@ -17,16 +17,16 @@ import uuid
 
 import pytest
 
-from sampyclaw.agents import AgentContext, LocalAgent, ToolRegistry, default_tools
-from sampyclaw.canvas import (
+from oxenclaw.agents import AgentContext, LocalAgent, ToolRegistry, default_tools
+from oxenclaw.canvas import (
     CanvasEvent,
     CanvasEventBus,
     CanvasStore,
     reset_default_canvas,
 )
-from sampyclaw.config.paths import SampyclawPaths
-from sampyclaw.plugin_sdk.channel_contract import ChannelTarget, InboundEnvelope
-from sampyclaw.tools_pkg.canvas import default_canvas_tools
+from oxenclaw.config.paths import OxenclawPaths
+from oxenclaw.plugin_sdk.channel_contract import ChannelTarget, InboundEnvelope
+from oxenclaw.tools_pkg.canvas import default_canvas_tools
 
 
 def _envelope(text: str) -> InboundEnvelope:
@@ -44,7 +44,7 @@ def _build_agent(
     *,
     base_url: str,
     model: str,
-    paths: SampyclawPaths,
+    paths: OxenclawPaths,
     store: CanvasStore,
     bus: CanvasEventBus,
 ) -> LocalAgent:
@@ -58,7 +58,7 @@ def _build_agent(
         tools=tools,
         paths=paths,
         system_prompt=(
-            "You are sampyClaw with a dashboard canvas. When the user asks to "
+            "You are oxenClaw with a dashboard canvas. When the user asks to "
             "show, display, render, draw, visualize, or chart something, call "
             "the canvas_present tool. The HTML must be a complete document."
         ),
@@ -81,7 +81,7 @@ async def test_gemma4_present_card_writes_to_store(
 ) -> None:
     """The model should emit canvas_present when asked to show a card."""
     reset_default_canvas()
-    paths = SampyclawPaths(home=tmp_path)
+    paths = OxenclawPaths(home=tmp_path)
     paths.ensure_home()
     store = CanvasStore()
     bus = CanvasEventBus()
@@ -107,7 +107,7 @@ async def test_gemma4_present_card_writes_to_store(
         await asyncio.wait_for(
             _drain(
                 agent,
-                _envelope("Show me a centered welcome card that says 'Hello sampyClaw'."),
+                _envelope("Show me a centered welcome card that says 'Hello oxenClaw'."),
                 ctx,
             ),
             timeout=120.0,

@@ -1,6 +1,6 @@
-# sampyClaw Desktop (Tauri)
+# oxenClaw Desktop (Tauri)
 
-Native Windows 11 desktop app that connects to a sampyClaw gateway —
+Native Windows 11 desktop app that connects to a oxenClaw gateway —
 typically running inside WSL2. Wraps the bundled dashboard SPA in a
 WebView2 native window with the security and UX gains a browser tab
 can't deliver:
@@ -18,7 +18,7 @@ can't deliver:
   attacks against `ws://localhost:7331` are refused at handshake time.
 - **Auto-start on Windows login** (configurable; off by default).
 - **Optional WSL auto-launch** — the app spawns
-  `wsl ~ -e sampyclaw gateway start` on first boot when the gateway
+  `wsl ~ -e oxenclaw gateway start` on first boot when the gateway
   isn't already reachable.
 
 Without the desktop app the dashboard works fine in a browser at
@@ -45,7 +45,7 @@ desktop/
     └── index.html            # 1-line redirect to gateway URL or login
 ```
 
-The dashboard SPA itself ships from the gateway (`sampyclaw/static/`).
+The dashboard SPA itself ships from the gateway (`oxenclaw/static/`).
 The Tauri app does not bundle a copy — it loads the live SPA over the
 WS-authenticated HTTP route the user configures (default
 `http://localhost:7331`).
@@ -78,8 +78,8 @@ Linux is not supported — run on Windows or in CI.
 cd desktop
 cargo tauri build --bundles msi nsis
 # output:
-#   desktop/src-tauri/target/release/bundle/msi/sampyclaw_*_x64_en-US.msi
-#   desktop/src-tauri/target/release/bundle/nsis/sampyClaw_*_x64-setup.exe
+#   desktop/src-tauri/target/release/bundle/msi/oxenclaw_*_x64_en-US.msi
+#   desktop/src-tauri/target/release/bundle/nsis/oxenClaw_*_x64-setup.exe
 ```
 
 > **Why both?** MSI is the primary distribution format (system-wide
@@ -93,9 +93,9 @@ For corporate distribution, sign both:
 
 ```powershell
 signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 \
-              /a sampyclaw_*_x64_en-US.msi
+              /a oxenclaw_*_x64_en-US.msi
 signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 \
-              /a sampyClaw_*_x64-setup.exe
+              /a oxenClaw_*_x64-setup.exe
 ```
 
 CI: `.github/workflows/desktop-build.yml` builds the unsigned `.msi`
@@ -109,9 +109,9 @@ On first launch the app shows a setup screen asking for:
 - **Gateway URL** (default `http://localhost:7331`)
 - **Bearer token** (paste once; stored in Credential Manager)
 - **WSL auto-launch** (off by default; turn on if the WSL distro and
-  `sampyclaw gateway start` should be spawned by the desktop app)
+  `oxenclaw gateway start` should be spawned by the desktop app)
 
-These land in `%APPDATA%\sampyclaw-desktop\config.json` for non-secret
+These land in `%APPDATA%\oxenclaw-desktop\config.json` for non-secret
 values; the token only ever hits Credential Manager.
 
 ## Security posture
@@ -124,7 +124,7 @@ values; the token only ever hits Credential Manager.
 - The WebView only loads URLs matching the configured gateway URL +
   `tauri://localhost`. Any other navigation attempt is blocked by
   Tauri's URL allowlist.
-- Token rotation: rotate inside the gateway (`sampyclaw gateway token
+- Token rotation: rotate inside the gateway (`oxenclaw gateway token
   --rotate`); the desktop app picks up the new value on its next
   reconnect, prompting the user to paste it.
 

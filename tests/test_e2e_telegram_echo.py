@@ -1,7 +1,7 @@
 """E2E: Telegram inbound → TelegramPollingSession → Dispatcher → EchoAgent → TelegramChannel.send → mocked bot.send_message.
 
 Proves the whole plumbing is wired up end-to-end without hitting the network.
-The aiogram Bot is the only mocked seam; every sampyclaw layer is real.
+The aiogram Bot is the only mocked seam; every oxenclaw layer is real.
 """
 
 from __future__ import annotations
@@ -9,10 +9,10 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
-from sampyclaw.agents import AgentRegistry, Dispatcher, EchoAgent
-from sampyclaw.extensions.telegram.channel import TelegramChannel
-from sampyclaw.extensions.telegram.monitor import TelegramPollingSession
-from sampyclaw.plugin_sdk.config_schema import (
+from oxenclaw.agents import AgentRegistry, Dispatcher, EchoAgent
+from oxenclaw.extensions.telegram.channel import TelegramChannel
+from oxenclaw.extensions.telegram.monitor import TelegramPollingSession
+from oxenclaw.plugin_sdk.config_schema import (
     AgentChannelRouting,
     AgentConfig,
     RootConfig,
@@ -47,7 +47,7 @@ def _build_mock_bot():  # type: ignore[no-untyped-def]
 
 async def test_inbound_text_produces_echo_send(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     bot = _build_mock_bot()
-    monkeypatch.setattr("sampyclaw.extensions.telegram.channel.create_bot", lambda token: bot)
+    monkeypatch.setattr("oxenclaw.extensions.telegram.channel.create_bot", lambda token: bot)
 
     channel = TelegramChannel(token="fake", account_id="main")
     agents = AgentRegistry()
@@ -74,7 +74,7 @@ async def test_inbound_text_produces_echo_send(monkeypatch) -> None:  # type: ig
 
 async def test_inbound_from_unauthorized_sender_is_dropped(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     bot = _build_mock_bot()
-    monkeypatch.setattr("sampyclaw.extensions.telegram.channel.create_bot", lambda token: bot)
+    monkeypatch.setattr("oxenclaw.extensions.telegram.channel.create_bot", lambda token: bot)
 
     channel = TelegramChannel(token="fake", account_id="main")
     agents = AgentRegistry()
@@ -97,7 +97,7 @@ async def test_inbound_from_unauthorized_sender_is_dropped(monkeypatch) -> None:
 
 async def test_multiple_inbound_each_produces_echo(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     bot = _build_mock_bot()
-    monkeypatch.setattr("sampyclaw.extensions.telegram.channel.create_bot", lambda token: bot)
+    monkeypatch.setattr("oxenclaw.extensions.telegram.channel.create_bot", lambda token: bot)
 
     channel = TelegramChannel(token="fake", account_id="main")
     agents = AgentRegistry()

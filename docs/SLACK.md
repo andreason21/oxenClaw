@@ -1,6 +1,6 @@
 # Slack outbound channel (alert/notification only)
 
-`sampyclaw/extensions/slack/` ships an Enterprise-Grid-friendly,
+`oxenclaw/extensions/slack/` ships an Enterprise-Grid-friendly,
 **outbound-only** Slack channel. It posts messages via Slack Web API
 `chat.postMessage` and never listens for inbound. The gateway's
 monitor supervisor recognises `outbound_only = True` on the channel
@@ -28,8 +28,8 @@ plugin and skips spawning a polling task for it.
 | Interactive blocks (buttons/menus) | Slack's interactive payloads are bidirectional — they belong with inbound. |
 | Slack Connect cross-org channels | Works automatically once the bot is installed in both workspaces; nothing extra to do. |
 
-If you need any of the above, write an external `slack-inbound-sampyclaw`
-plugin — the SDK supports it (see `sampyclaw/extensions/telegram/` for
+If you need any of the above, write an external `slack-inbound-oxenclaw`
+plugin — the SDK supports it (see `oxenclaw/extensions/telegram/` for
 the bidirectional pattern).
 
 ## Setup
@@ -48,11 +48,11 @@ Create a Slack app under your Enterprise Grid org:
 ### 2. Store the credential
 
 ```bash
-mkdir -p ~/.sampyclaw/credentials/slack
-cat > ~/.sampyclaw/credentials/slack/alerts.json <<'EOF'
+mkdir -p ~/.oxenclaw/credentials/slack
+cat > ~/.oxenclaw/credentials/slack/alerts.json <<'EOF'
 { "token": "xoxb-..." }
 EOF
-chmod 600 ~/.sampyclaw/credentials/slack/alerts.json
+chmod 600 ~/.oxenclaw/credentials/slack/alerts.json
 ```
 
 The single-bot shortcut also works: set `SLACK_BOT_TOKEN` in the env and
@@ -77,15 +77,15 @@ workspace — each gets its own `xoxb-...` credential file.
 
 `security/net/policy.py:NetPolicy` is **closed-by-default** on hostname
 allowlists when one is set. If your deployment uses
-`SAMPYCLAW_NET_ALLOWED_HOSTNAMES`, add `slack.com` (or your corp proxy
+`OXENCLAW_NET_ALLOWED_HOSTNAMES`, add `slack.com` (or your corp proxy
 hostname) to it:
 
 ```bash
-export SAMPYCLAW_NET_ALLOWED_HOSTNAMES="slack.com,*.slack.com,slack-proxy.corp.example"
+export OXENCLAW_NET_ALLOWED_HOSTNAMES="slack.com,*.slack.com,slack-proxy.corp.example"
 ```
 
 `HTTPS_PROXY` env vars are honoured automatically by aiohttp — no extra
-sampyClaw config is needed for HTTP CONNECT proxies.
+oxenClaw config is needed for HTTP CONNECT proxies.
 
 ## Sending alerts
 
@@ -103,7 +103,7 @@ chat_id="C0123ABCD", text=...)` and the rest is automatic.
 ### From cron
 
 ```bash
-sampyclaw cron add \
+oxenclaw cron add \
     --schedule "0 9 * * 1-5" \
     --agent default \
     --channel slack --account_id alerts --chat_id C0123ABCD \
@@ -135,7 +135,7 @@ for one-off pings while you're already in the dashboard.
 
 ## Looking up `chat_id`
 
-Slack channel names are pretty (`#alerts`) but sampyClaw expects the
+Slack channel names are pretty (`#alerts`) but oxenClaw expects the
 internal channel ID (`C0123ABCD`) so a renamed channel doesn't silently
 break the alert flow. Find it in Slack:
 
@@ -151,7 +151,7 @@ break the alert flow. Find it in Slack:
 | `slack: not_in_channel` | Bot user isn't a member of `chat_id`. `/invite @bot-name` in the channel, or grant `chat:write.public` and post to public channels without joining. |
 | `slack: channel_not_found` | Wrong channel ID, or workspace mismatch (token belongs to workspace A, channel ID is from workspace B). |
 | `slack: ratelimited` | Slack tier-1 (`chat.postMessage` ≈ 1/sec sustained). The client honours `Retry-After`; if you're hitting it constantly, batch your alerts. |
-| `web_fetch error: hostname 'slack.com' not allowed by policy` | Add `slack.com` (or your proxy host) to `SAMPYCLAW_NET_ALLOWED_HOSTNAMES`. |
+| `web_fetch error: hostname 'slack.com' not allowed by policy` | Add `slack.com` (or your proxy host) to `OXENCLAW_NET_ALLOWED_HOSTNAMES`. |
 | Connection refused / DNS fails on internal network | Set `base_url: https://slack-proxy.corp.example/api` and add the proxy host to the allowlist. Or set `HTTPS_PROXY` so aiohttp routes through your CONNECT proxy. |
 
 ## Future inbound (sketch — not implemented)
@@ -167,5 +167,5 @@ Adding inbound would mean:
    schema; messages just arrive with a different `team_id` in the raw
    payload.
 
-That's a 2–3 day chunk; ship it as `slack-inbound-sampyclaw` so
+That's a 2–3 day chunk; ship it as `slack-inbound-oxenclaw` so
 operators can pin or omit it.

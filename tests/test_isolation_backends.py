@@ -12,7 +12,7 @@ import sys
 
 import pytest
 
-from sampyclaw.security.isolation import (
+from oxenclaw.security.isolation import (
     BubblewrapBackend,
     ContainerBackend,
     InprocessBackend,
@@ -211,7 +211,7 @@ async def test_container_availability_matches_which() -> None:
 
 
 def test_strength_ordering_is_correct() -> None:
-    from sampyclaw.security.isolation.registry import _STRENGTH
+    from oxenclaw.security.isolation.registry import _STRENGTH
 
     assert _STRENGTH["container"] > _STRENGTH["bwrap"]
     assert _STRENGTH["bwrap"] > _STRENGTH["subprocess"]

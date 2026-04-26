@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from sampyclaw.gateway.bind_policy import (
+from oxenclaw.gateway.bind_policy import (
     ENV_OPT_IN,
     RemoteBindRefused,
     is_loopback_host,
@@ -104,7 +104,7 @@ def test_hostname_refused_without_opt_in_even_if_resolves_to_loopback(monkeypatc
 def test_explicit_flag_allows_non_loopback(monkeypatch, caplog) -> None:  # type: ignore[no-untyped-def]
     import logging
 
-    caplog.set_level(logging.WARNING, logger="sampyclaw.gateway.bind_policy")
+    caplog.set_level(logging.WARNING, logger="oxenclaw.gateway.bind_policy")
     monkeypatch.delenv(ENV_OPT_IN, raising=False)
     validate_bind_host("0.0.0.0", allow_non_loopback=True)
     assert any("beyond loopback" in r.message for r in caplog.records)
@@ -113,7 +113,7 @@ def test_explicit_flag_allows_non_loopback(monkeypatch, caplog) -> None:  # type
 def test_env_opt_in_allows_non_loopback(monkeypatch, caplog) -> None:  # type: ignore[no-untyped-def]
     import logging
 
-    caplog.set_level(logging.WARNING, logger="sampyclaw.gateway.bind_policy")
+    caplog.set_level(logging.WARNING, logger="oxenclaw.gateway.bind_policy")
     monkeypatch.setenv(ENV_OPT_IN, "1")
     validate_bind_host("192.168.1.10")
     assert any("beyond loopback" in r.message for r in caplog.records)

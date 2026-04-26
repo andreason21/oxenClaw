@@ -128,7 +128,7 @@ async def test_theme_toggle_cycles_three_modes(page) -> None:
 async def test_theme_pref_persists_across_reload(page, gateway) -> None:
     """Setting light + reloading must keep the choice (boot script reads
     localStorage before paint so there's no flash of the wrong theme)."""
-    await page.evaluate("localStorage.setItem('sampyclaw_theme', 'light')")
+    await page.evaluate("localStorage.setItem('oxenclaw_theme', 'light')")
     await page.reload(wait_until="networkidle")
     pref = await page.evaluate(
         "document.documentElement.getAttribute('data-theme-pref')",

@@ -12,7 +12,7 @@ from urllib.request import Request, urlopen
 import pytest
 from websockets.asyncio.client import connect
 
-from sampyclaw.gateway import (
+from oxenclaw.gateway import (
     ChatSendParams,
     ChatSendResult,
     GatewayServer,
@@ -141,7 +141,7 @@ async def test_readyz_without_checker_returns_ok(router: Router) -> None:
 async def test_readyz_returns_503_when_critical_probe_fails(
     router: Router,
 ) -> None:
-    from sampyclaw.observability import ReadinessChecker, ReadinessStatus
+    from oxenclaw.observability import ReadinessChecker, ReadinessStatus
 
     checker = ReadinessChecker()
 
@@ -178,15 +178,15 @@ async def test_metrics_endpoint_returns_prometheus_text(router: Router) -> None:
         assert "text/plain" in ctype
         text = body.decode("utf-8")
         # The registry exposes our standard counters even at zero.
-        assert "TYPE sampyclaw_ws_rpc_total counter" in text
-        assert "TYPE sampyclaw_ws_connections_active gauge" in text
+        assert "TYPE oxenclaw_ws_rpc_total counter" in text
+        assert "TYPE oxenclaw_ws_connections_active gauge" in text
 
     await _run_with_server(router, _check)
 
 
 async def test_metrics_increments_after_ws_rpc(router: Router) -> None:
     """A real WS RPC should bump `ws_rpc_total{method="chat.send"}`."""
-    from sampyclaw.observability import METRICS
+    from oxenclaw.observability import METRICS
 
     METRICS.ws_rpc_total._values.clear()  # reset counter for this test
 
@@ -213,7 +213,7 @@ async def test_metrics_increments_after_ws_rpc(router: Router) -> None:
         status, _, body = await asyncio.to_thread(_http_get, f"http://127.0.0.1:{port}/metrics")
         assert status == 200
         text = body.decode("utf-8")
-        assert 'sampyclaw_ws_rpc_total{method="chat.send"} 1.0' in text
+        assert 'oxenclaw_ws_rpc_total{method="chat.send"} 1.0' in text
 
     await _run_with_server(router, _check)
 
@@ -277,7 +277,7 @@ async def test_custom_static_routes(router: Router) -> None:
 
 
 def test_static_assets_loadable_from_package() -> None:
-    from sampyclaw.static import app_css, app_html, app_js, dashboard_html
+    from oxenclaw.static import app_css, app_html, app_js, dashboard_html
 
     html = app_html()
     assert "<!DOCTYPE html>" in html[:64]
@@ -345,7 +345,7 @@ async def test_dashboard_accepts_query_token_and_sets_cookie(
         # Token gets persisted into a cookie.
         cookie = headers.get("Set-Cookie") or headers.get("set-cookie")
         assert cookie is not None
-        assert "sampyclaw_token=secret123" in cookie
+        assert "oxenclaw_token=secret123" in cookie
         assert "SameSite=Strict" in cookie
     finally:
         task.cancel()
@@ -576,25 +576,25 @@ async def test_allowed_origins_normalise_trailing_slash(router: Router) -> None:
 
 
 def test_allowed_origins_resolved_from_env(monkeypatch) -> None:  # type: ignore[no-untyped-def]
-    """`SAMPYCLAW_ALLOWED_ORIGINS` env feeds the allowlist when the kwarg
+    """`OXENCLAW_ALLOWED_ORIGINS` env feeds the allowlist when the kwarg
     isn't passed."""
-    monkeypatch.setenv("SAMPYCLAW_ALLOWED_ORIGINS", "tauri://localhost, http://localhost:7331")
-    from sampyclaw.gateway.server import _resolve_allowed_origins
+    monkeypatch.setenv("OXENCLAW_ALLOWED_ORIGINS", "tauri://localhost, http://localhost:7331")
+    from oxenclaw.gateway.server import _resolve_allowed_origins
 
     out = _resolve_allowed_origins(None)
     assert out == frozenset({"tauri://localhost", "http://localhost:7331"})
 
 
 def test_allowed_origins_explicit_kwarg_overrides_env(monkeypatch) -> None:  # type: ignore[no-untyped-def]
-    monkeypatch.setenv("SAMPYCLAW_ALLOWED_ORIGINS", "ignored://from-env")
-    from sampyclaw.gateway.server import _resolve_allowed_origins
+    monkeypatch.setenv("OXENCLAW_ALLOWED_ORIGINS", "ignored://from-env")
+    from oxenclaw.gateway.server import _resolve_allowed_origins
 
     out = _resolve_allowed_origins(["only://this"])
     assert out == frozenset({"only://this"})
 
 
 def test_allowed_origins_empty_means_no_check() -> None:
-    from sampyclaw.gateway.server import _resolve_allowed_origins
+    from oxenclaw.gateway.server import _resolve_allowed_origins
 
     assert _resolve_allowed_origins(None) is None
     assert _resolve_allowed_origins([]) is None

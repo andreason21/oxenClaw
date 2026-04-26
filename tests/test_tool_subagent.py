@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-import sampyclaw.pi.providers  # noqa: F401  registers wrappers
-from sampyclaw.pi import (
+import oxenclaw.pi.providers  # noqa: F401  registers wrappers
+from oxenclaw.pi import (
     InMemoryAuthStorage,
     Model,
     StopEvent,
     TextDeltaEvent,
     register_provider_stream,
 )
-from sampyclaw.tools_pkg.subagent import SubagentConfig, subagents_tool
+from oxenclaw.tools_pkg.subagent import SubagentConfig, subagents_tool
 
 
 def _model(provider: str) -> Model:
@@ -79,7 +79,7 @@ async def test_subagent_passes_shared_tools_to_child() -> None:
 
     register_provider_stream("subagent_p4", fake)
 
-    from sampyclaw.tools_pkg.web import web_search_tool
+    from oxenclaw.tools_pkg.web import web_search_tool
 
     shared = [web_search_tool()]
     cfg = SubagentConfig(

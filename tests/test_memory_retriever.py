@@ -4,15 +4,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from sampyclaw.config.paths import SampyclawPaths
-from sampyclaw.memory.embedding_cache import EmbeddingCache
-from sampyclaw.memory.retriever import MemoryRetriever, format_memories_for_prompt
-from sampyclaw.memory.store import MemoryStore
+from oxenclaw.config.paths import OxenclawPaths
+from oxenclaw.memory.embedding_cache import EmbeddingCache
+from oxenclaw.memory.retriever import MemoryRetriever, format_memories_for_prompt
+from oxenclaw.memory.store import MemoryStore
 from tests._memory_stubs import StubEmbeddings
 
 
 def _retriever(tmp_path: Path) -> MemoryRetriever:
-    paths = SampyclawPaths(home=tmp_path)
+    paths = OxenclawPaths(home=tmp_path)
     paths.ensure_home()
     return MemoryRetriever.for_root(paths, StubEmbeddings())
 

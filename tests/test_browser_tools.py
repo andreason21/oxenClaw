@@ -1,4 +1,4 @@
-"""Smoke tests for sampyclaw.tools_pkg.browser tool factories.
+"""Smoke tests for oxenclaw.tools_pkg.browser tool factories.
 
 Live browser interaction is not exercised here — the heavy E2E tests
 require `playwright install chromium` and a network. We instead verify
@@ -10,11 +10,11 @@ from __future__ import annotations
 
 import pytest
 
-from sampyclaw.agents.tools import ToolRegistry
-from sampyclaw.browser.errors import BrowserPolicyError
-from sampyclaw.browser.policy import BrowserPolicy
-from sampyclaw.security.net.policy import NetPolicy
-from sampyclaw.tools_pkg.browser import (
+from oxenclaw.agents.tools import ToolRegistry
+from oxenclaw.browser.errors import BrowserPolicyError
+from oxenclaw.browser.policy import BrowserPolicy
+from oxenclaw.security.net.policy import NetPolicy
+from oxenclaw.tools_pkg.browser import (
     browser_download_tool,
     browser_evaluate_tool,
     browser_navigate_tool,
@@ -69,16 +69,16 @@ def test_download_tool_constructs_when_allowed() -> None:
 
 
 def test_factory_returns_no_browser_tools_without_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("SAMPYCLAW_ENABLE_BROWSER", raising=False)
-    from sampyclaw.agents.factory import _maybe_browser_tools
+    monkeypatch.delenv("OXENCLAW_ENABLE_BROWSER", raising=False)
+    from oxenclaw.agents.factory import _maybe_browser_tools
 
     assert _maybe_browser_tools() == []
 
 
 def test_factory_returns_browser_tools_with_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("SAMPYCLAW_ENABLE_BROWSER", "1")
-    monkeypatch.setenv("SAMPYCLAW_NET_ALLOW_HOSTS", "example.com")
-    from sampyclaw.agents.factory import _maybe_browser_tools
+    monkeypatch.setenv("OXENCLAW_ENABLE_BROWSER", "1")
+    monkeypatch.setenv("OXENCLAW_NET_ALLOW_HOSTS", "example.com")
+    from oxenclaw.agents.factory import _maybe_browser_tools
 
     tools = _maybe_browser_tools()
     assert len(tools) == 5

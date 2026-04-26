@@ -1,6 +1,6 @@
 # Authoring Skills & Tools
 
-How to extend sampyClaw with your own task-specific automation. **This is
+How to extend oxenClaw with your own task-specific automation. **This is
 the recommended path for users who want to teach the agent new tricks.**
 If you instead want to import a tool that already exists as an MCP server,
 read the "Importing existing MCP servers" section near the bottom — that
@@ -9,7 +9,7 @@ path is supported (M1, shipped 2026-04-25).
 ## TL;DR — write two files
 
 ```
-~/.sampyclaw/skills/<your-slug>/
+~/.oxenclaw/skills/<your-slug>/
 ├── SKILL.md              # tells the model the tool exists + when to use it
 └── <your_slug>.py        # the actual Python tool
 ```
@@ -21,13 +21,13 @@ startup). That's the whole loop.
 
 ## Concept map
 
-sampyClaw separates **what the model knows about** (a *skill*) from
+oxenClaw separates **what the model knows about** (a *skill*) from
 **what the model can call** (a *tool*). Most useful capabilities pair
 the two:
 
 | Concept | What it is | Where it lives | How the agent sees it |
 |---|---|---|---|
-| **Skill** | A markdown file with frontmatter — name, description, body explaining usage | `~/.sampyclaw/skills/<slug>/SKILL.md` | Auto-discovered, rendered into the system prompt as an `<available_skills>` block |
+| **Skill** | A markdown file with frontmatter — name, description, body explaining usage | `~/.oxenclaw/skills/<slug>/SKILL.md` | Auto-discovered, rendered into the system prompt as an `<available_skills>` block |
 | **Tool** | A Python callable with a Pydantic input schema | Anywhere importable (typically the skill dir) | Registered explicitly on `ToolRegistry`; rendered as Anthropic/OpenAI `tools` param |
 
 You can ship a skill with no tool (pure prose guidance for the model),
@@ -39,7 +39,7 @@ common case.
 ## Step 1 — Scaffold
 
 The fastest way is the bundled `skill_creator` tool (from inside an
-agent session, or via `sampyclaw message send` against a running gateway):
+agent session, or via `oxenclaw message send` against a running gateway):
 
 ```text
 agent: please create a new skill called "ticket lookup" that takes a
@@ -50,8 +50,8 @@ agent: please create a new skill called "ticket lookup" that takes a
 The agent calls `skill_creator` which writes:
 
 ```
-~/.sampyclaw/skills/ticket-lookup/SKILL.md
-~/.sampyclaw/skills/ticket-lookup/ticket_lookup.py    # stub tool
+~/.oxenclaw/skills/ticket-lookup/SKILL.md
+~/.oxenclaw/skills/ticket-lookup/ticket_lookup.py    # stub tool
 ```
 
 Or scaffold by hand — the file shapes are documented below.
@@ -86,18 +86,18 @@ The body is read by the model when activating the skill. **Concrete
 examples beat abstract descriptions** — they steer tool selection more
 reliably than adjectives.
 
-Frontmatter parsing: `sampyclaw/clawhub/frontmatter.py`
+Frontmatter parsing: `oxenclaw/clawhub/frontmatter.py`
 (`SkillManifest` + `parse_skill_text`).
 
 ### Tool shape
 
 ```python
-# ~/.sampyclaw/skills/ticket-lookup/ticket_lookup.py
+# ~/.oxenclaw/skills/ticket-lookup/ticket_lookup.py
 from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from sampyclaw.agents.tools import FunctionTool, Tool
+from oxenclaw.agents.tools import FunctionTool, Tool
 
 
 class _Args(BaseModel):
@@ -117,7 +117,7 @@ def ticket_lookup_tool() -> Tool:
     )
 ```
 
-Anything that satisfies `sampyclaw.agents.tools.Tool` (Protocol with
+Anything that satisfies `oxenclaw.agents.tools.Tool` (Protocol with
 `name`, `description`, `input_schema`, `async execute`) works —
 `FunctionTool` is the convenient base.
 
@@ -126,20 +126,20 @@ Anything that satisfies `sampyclaw.agents.tools.Tool` (Protocol with
 ## Step 2 — Register the tool with the agent
 
 **Skills are auto-discovered. Tools are not.** The loader walks
-`~/.sampyclaw/skills/` for `SKILL.md` files, but Python modules in those
+`~/.oxenclaw/skills/` for `SKILL.md` files, but Python modules in those
 directories are not auto-imported (this is a deliberate security choice
 — see [`SECURITY.md`](./SECURITY.md)).
 
 You wire a tool in by passing a `ToolRegistry` to `build_agent`:
 
 ```python
-from sampyclaw.agents.factory import build_agent
-from sampyclaw.agents.tools import ToolRegistry
-from sampyclaw.agents.builtin_tools import default_tools
+from oxenclaw.agents.factory import build_agent
+from oxenclaw.agents.tools import ToolRegistry
+from oxenclaw.agents.builtin_tools import default_tools
 
 # import your tool
 import sys
-sys.path.insert(0, "/home/me/.sampyclaw/skills/ticket-lookup")
+sys.path.insert(0, "/home/me/.oxenclaw/skills/ticket-lookup")
 from ticket_lookup import ticket_lookup_tool
 
 tools = ToolRegistry()
@@ -153,8 +153,8 @@ agent = build_agent(
 )
 ```
 
-If you're embedding sampyClaw in your own Python code, this is the
-canonical wiring. If you're running `sampyclaw gateway start` and want
+If you're embedding oxenClaw in your own Python code, this is the
+canonical wiring. If you're running `oxenclaw gateway start` and want
 your tools loaded automatically, the cleanest path is to ship them as
 a **plugin package** with an entry point — see "Distributing as a
 plugin" below.
@@ -165,13 +165,13 @@ plugin" below.
 
 ```bash
 # the gateway shows what got loaded
-sampyclaw skills list
+oxenclaw skills list
 
 # direct sanity-check of a skill's frontmatter
-sampyclaw skills show ticket-lookup
+oxenclaw skills show ticket-lookup
 
 # end-to-end: send a message that should trigger the tool
-sampyclaw message send --agent default "summarise ENG-1234"
+oxenclaw message send --agent default "summarise ENG-1234"
 ```
 
 If the tool didn't fire: check the agent's transcript for which tools
@@ -182,14 +182,14 @@ SKILL.md (it'll be in the system-prompt's `<available_skills>` block).
 
 ## Layered features (opt-in, all free)
 
-When you wrap your tool with sampyClaw infrastructure, you inherit
+When you wrap your tool with oxenClaw infrastructure, you inherit
 production-grade behavior at zero authoring cost.
 
 ### Approval gating
 
 ```python
-from sampyclaw.approvals.tool_wrap import gated_tool
-from sampyclaw.approvals.manager import ApprovalManager
+from oxenclaw.approvals.tool_wrap import gated_tool
+from oxenclaw.approvals.manager import ApprovalManager
 
 manager = ApprovalManager(state_path=..., approver_token="...")
 tools.register(gated_tool(ticket_lookup_tool(), manager=manager))
@@ -199,15 +199,15 @@ Now every call requires a human approval (resolved via the
 `exec-approvals.*` gateway RPC, dashboard UI, or `ApprovalManager.resolve()`).
 The tool returns `"tool call denied: ..."` / `"tool call timed out"` /
 `"tool call cancelled"` distinct strings so the model can decide whether
-to retry. See `sampyclaw/approvals/tool_wrap.py`.
+to retry. See `oxenclaw/approvals/tool_wrap.py`.
 
 ### Outbound network guards (SSRF / DNS pinning / audit)
 
 If your tool makes HTTP calls, use `guarded_session` instead of `aiohttp.ClientSession`:
 
 ```python
-from sampyclaw.security.net.guarded_fetch import guarded_session
-from sampyclaw.security.net.policy import policy_from_env
+from oxenclaw.security.net.guarded_fetch import guarded_session
+from oxenclaw.security.net.policy import policy_from_env
 
 async with guarded_session(policy_from_env()) as session:
     async with session.get("https://api.linear.app/graphql") as resp:
@@ -220,9 +220,9 @@ You inherit:
 - Loose-IPv4 literal refusal (`0x7f.0.0.1`, `127.1`, etc.)
 - Per-redirect re-validation
 - DNS pinning (resolved IP cached + checked against policy)
-- Optional audit (env-gated, off by default — `SAMPYCLAW_AUDIT_OUTBOUND=1`)
+- Optional audit (env-gated, off by default — `OXENCLAW_AUDIT_OUTBOUND=1`)
 
-See `sampyclaw/security/net/`.
+See `oxenclaw/security/net/`.
 
 ### Sandbox / isolation
 
@@ -230,7 +230,7 @@ If your tool runs untrusted code (or you just want belt-and-suspenders
 isolation), use `IsolatedFunctionTool` instead of `FunctionTool`:
 
 ```python
-from sampyclaw.agents.isolation import IsolatedFunctionTool, IsolationPolicy
+from oxenclaw.agents.isolation import IsolatedFunctionTool, IsolationPolicy
 
 return IsolatedFunctionTool(
     name="ticket_lookup",
@@ -249,7 +249,7 @@ return IsolatedFunctionTool(
 
 Backends: `subprocess` (RLIMIT-only, fail-closed when policy demands more)
 and `bwrap` (mount + namespace isolation). See
-`sampyclaw/agents/isolation.py`.
+`oxenclaw/agents/isolation.py`.
 
 ### Multimodal (image input)
 
@@ -292,9 +292,9 @@ If your skill needs to drive a real browser — read a public page, take a
 screenshot, click through a form — register the BR-1 tool bundle:
 
 ```python
-from sampyclaw.browser.policy import BrowserPolicy
-from sampyclaw.tools_pkg.browser import default_browser_tools
-from sampyclaw.security.net.policy import NetPolicy
+from oxenclaw.browser.policy import BrowserPolicy
+from oxenclaw.tools_pkg.browser import default_browser_tools
+from oxenclaw.security.net.policy import NetPolicy
 
 policy = BrowserPolicy(
     net=NetPolicy(allowed_hostnames=("example.com", "*.docs.io")),
@@ -316,8 +316,8 @@ If your skill needs to *show* something to the user — chart, card,
 mini-game, dashboard widget — use the CV-1 canvas tools:
 
 ```python
-from sampyclaw.canvas import get_default_canvas_bus, get_default_canvas_store
-from sampyclaw.tools_pkg.canvas import default_canvas_tools
+from oxenclaw.canvas import get_default_canvas_bus, get_default_canvas_store
+from oxenclaw.tools_pkg.canvas import default_canvas_tools
 
 agent_tools.register_all(default_canvas_tools(
     agent_id="my-agent",
@@ -339,7 +339,7 @@ Inject the agent's memory retriever and your tool can pull relevant
 prior context:
 
 ```python
-from sampyclaw.memory.retriever import MemoryRetriever
+from oxenclaw.memory.retriever import MemoryRetriever
 
 def ticket_lookup_tool(memory: MemoryRetriever) -> Tool:
     async def _h(args: _Args) -> str:
@@ -350,22 +350,22 @@ def ticket_lookup_tool(memory: MemoryRetriever) -> Tool:
 ### Cron / scheduled execution
 
 If your skill is "run X every morning", register it as a cron job
-(`sampyclaw cron add`) — the same tool implementation is reused.
+(`oxenclaw cron add`) — the same tool implementation is reused.
 
 ---
 
 ## Distributing as a plugin
 
 For shareable / per-team tools, package as a normal Python distribution
-with an entry point. See `sampyclaw/plugin_sdk/` and the existing
+with an entry point. See `oxenclaw/plugin_sdk/` and the existing
 `extensions/telegram/` plugin as the canonical reference.
 
 ```toml
 # pyproject.toml
-[project.entry-points."sampyclaw.channels"]
+[project.entry-points."oxenclaw.channels"]
 my_channel = "my_pkg.channel:plugin"
 
-[project.entry-points."sampyclaw.skills"]   # planned hook for tool discovery
+[project.entry-points."oxenclaw.skills"]   # planned hook for tool discovery
 my_skill = "my_pkg.skill:contribute_tools"
 ```
 
@@ -379,7 +379,7 @@ code in the CLI.
 
 | Situation | Pick |
 |---|---|
-| sampyClaw-only, you write Python | **skill+tool** |
+| oxenClaw-only, you write Python | **skill+tool** |
 | You want the same tool to work in Claude Desktop / Cursor / Codex too | MCP server (server-side phase planned, see SUBSYSTEM_MAP.md) |
 | You write Go/Rust/TS, not Python | MCP server |
 | Someone already shipped an MCP server you want to use | **MCP client** — see "Importing existing MCP servers" below |
@@ -387,7 +387,7 @@ code in the CLI.
 | Quick personal automation | **skill+tool** |
 
 In short: **MCP optimises for cross-client portability; skill+tool
-optimises for sampyClaw's policy stack.** Pick the one that matches your
+optimises for oxenClaw's policy stack.** Pick the one that matches your
 distribution goal.
 
 ---
@@ -395,16 +395,16 @@ distribution goal.
 ## Importing existing MCP servers (escape hatch)
 
 If a third party already wrote an MCP server you want to use, you don't
-have to reimplement it as a sampyClaw skill. sampyClaw includes an MCP
-**client** (M1 phase, `sampyclaw/pi/mcp/`) that connects to MCP servers
-and surfaces their tools as if they were native sampyClaw tools.
+have to reimplement it as a oxenClaw skill. oxenClaw includes an MCP
+**client** (M1 phase, `oxenclaw/pi/mcp/`) that connects to MCP servers
+and surfaces their tools as if they were native oxenClaw tools.
 
 > For a worked end-to-end example using `yfmcp` (Yahoo Finance over
 > stdio), see [`docs/MCP_YAHOO_FINANCE.md`](MCP_YAHOO_FINANCE.md).
 
 ### Configure
 
-Drop a config at `~/.sampyclaw/mcp.json` using the standard shape (the
+Drop a config at `~/.oxenclaw/mcp.json` using the standard shape (the
 same shape Claude Desktop and `mcp` CLI use, so configs are portable):
 
 ```json
@@ -429,9 +429,9 @@ are visible, not silently empty).
 ### Wire into the agent
 
 ```python
-from sampyclaw.agents.factory import build_agent, load_mcp_tools
+from oxenclaw.agents.factory import build_agent, load_mcp_tools
 
-mcp_tools, pool = await load_mcp_tools()   # reads ~/.sampyclaw/mcp.json
+mcp_tools, pool = await load_mcp_tools()   # reads ~/.oxenclaw/mcp.json
 agent = build_agent(
     agent_id="default",
     provider="pi",
@@ -462,7 +462,7 @@ What you get for free:
 
 ### Limits / not yet supported
 
-- Server-side: **exposing sampyClaw's own tools as an MCP server** is a
+- Server-side: **exposing oxenClaw's own tools as an MCP server** is a
   separate phase (M2) and is not yet implemented.
 - Authorization beyond static headers (OAuth flows, mutual TLS) is
   out of scope — set up a token-issuing proxy if you need it.
@@ -479,12 +479,12 @@ directly, they're 50–200 LOC each:
 
 | Skill | What to learn from it |
 |---|---|
-| [`summarize`](../sampyclaw/skills/summarize/) + [`tools_pkg/summarize.py`](../sampyclaw/tools_pkg/summarize.py) | Pure-LLM sub-call (no external deps) |
-| [`weather`](../sampyclaw/skills/weather/) + [`tools_pkg/weather.py`](../sampyclaw/tools_pkg/weather.py) | HTTP fetch with SSRF guard, multi-provider fallback |
-| [`github`](../sampyclaw/skills/github/) + [`tools_pkg/github.py`](../sampyclaw/tools_pkg/github.py) | Shelling out to a CLI (`gh`) with verb allow-list |
-| [`session_logs`](../sampyclaw/skills/session_logs/) + [`tools_pkg/session_logs.py`](../sampyclaw/tools_pkg/session_logs.py) | Reading sampyClaw's own internal state (meta-tool pattern) |
-| [`healthcheck`](../sampyclaw/skills/healthcheck/) + [`tools_pkg/healthcheck.py`](../sampyclaw/tools_pkg/healthcheck.py) | Aggregating multiple subsystem probes |
-| [`skill_creator`](../sampyclaw/skills/skill_creator/) + [`tools_pkg/skill_creator.py`](../sampyclaw/tools_pkg/skill_creator.py) | Writing files into the skills dir + frontmatter validation |
+| [`summarize`](../oxenclaw/skills/summarize/) + [`tools_pkg/summarize.py`](../oxenclaw/tools_pkg/summarize.py) | Pure-LLM sub-call (no external deps) |
+| [`weather`](../oxenclaw/skills/weather/) + [`tools_pkg/weather.py`](../oxenclaw/tools_pkg/weather.py) | HTTP fetch with SSRF guard, multi-provider fallback |
+| [`github`](../oxenclaw/skills/github/) + [`tools_pkg/github.py`](../oxenclaw/tools_pkg/github.py) | Shelling out to a CLI (`gh`) with verb allow-list |
+| [`session_logs`](../oxenclaw/skills/session_logs/) + [`tools_pkg/session_logs.py`](../oxenclaw/tools_pkg/session_logs.py) | Reading oxenClaw's own internal state (meta-tool pattern) |
+| [`healthcheck`](../oxenclaw/skills/healthcheck/) + [`tools_pkg/healthcheck.py`](../oxenclaw/tools_pkg/healthcheck.py) | Aggregating multiple subsystem probes |
+| [`skill_creator`](../oxenclaw/skills/skill_creator/) + [`tools_pkg/skill_creator.py`](../oxenclaw/tools_pkg/skill_creator.py) | Writing files into the skills dir + frontmatter validation |
 
 ---
 
@@ -513,7 +513,7 @@ directly, they're 50–200 LOC each:
 ## Decision tree (quick)
 
 ```
-Q1. Is the tool sampyClaw-only?
+Q1. Is the tool oxenClaw-only?
     YES → skill+tool
     NO  → Q2
 

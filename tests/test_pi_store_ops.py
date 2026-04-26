@@ -5,14 +5,14 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
-from sampyclaw.pi import (
+from oxenclaw.pi import (
     AssistantMessage,
     CreateAgentSessionOptions,
     TextContent,
     UserMessage,
 )
-from sampyclaw.pi.persistence import SQLiteSessionManager
-from sampyclaw.pi.store_ops import (
+from oxenclaw.pi.persistence import SQLiteSessionManager
+from oxenclaw.pi.store_ops import (
     MaintenanceConfig,
     Migration,
     StoreLock,
@@ -205,7 +205,7 @@ def test_default_holder_format() -> None:
 
 def test_read_cache_lru_eviction() -> None:
     cache = StoreReadCache(capacity=2)
-    from sampyclaw.pi.session import AgentSession
+    from oxenclaw.pi.session import AgentSession
 
     a = AgentSession(id="a")
     b = AgentSession(id="b")
@@ -220,7 +220,7 @@ def test_read_cache_lru_eviction() -> None:
 
 def test_read_cache_get_promotes_to_recent() -> None:
     cache = StoreReadCache(capacity=2)
-    from sampyclaw.pi.session import AgentSession
+    from oxenclaw.pi.session import AgentSession
 
     cache.put("a", AgentSession(id="a"))
     cache.put("b", AgentSession(id="b"))
@@ -232,7 +232,7 @@ def test_read_cache_get_promotes_to_recent() -> None:
 
 def test_read_cache_invalidate_drops_entry() -> None:
     cache = StoreReadCache()
-    from sampyclaw.pi.session import AgentSession
+    from oxenclaw.pi.session import AgentSession
 
     cache.put("x", AgentSession(id="x"))
     cache.invalidate("x")

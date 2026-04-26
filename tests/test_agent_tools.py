@@ -5,8 +5,8 @@ from __future__ import annotations
 import pytest
 from pydantic import BaseModel
 
-from sampyclaw.agents.builtin_tools import default_tools, echo_tool, get_time_tool
-from sampyclaw.agents.tools import FunctionTool, Tool, ToolRegistry
+from oxenclaw.agents.builtin_tools import default_tools, echo_tool, get_time_tool
+from oxenclaw.agents.tools import FunctionTool, Tool, ToolRegistry
 
 
 class _Args(BaseModel):

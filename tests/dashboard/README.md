@@ -1,6 +1,6 @@
 # Dashboard E2E tests
 
-Headless-browser tests for the bundled SPA at `sampyclaw/static/`. Each
+Headless-browser tests for the bundled SPA at `oxenclaw/static/`. Each
 test boots an in-process gateway on a unique port + token and drives a
 real Chromium tab against it via Playwright. The shared `page` fixture
 listens for `pageerror` and `console.error` events and fails the test if

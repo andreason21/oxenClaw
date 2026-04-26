@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sampyclaw.extensions.telegram.thread_bindings import ThreadBindings
+from oxenclaw.extensions.telegram.thread_bindings import ThreadBindings
 
 
 class _FakeClock:

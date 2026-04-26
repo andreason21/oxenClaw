@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from sampyclaw.extensions.telegram.bot_core import (
+from oxenclaw.extensions.telegram.bot_core import (
     UpdateDeduplicator,
     envelope_from_message,
 )

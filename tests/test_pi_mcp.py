@@ -1,4 +1,4 @@
-"""Tests for the MCP client phase (`sampyclaw/pi/mcp/`)."""
+"""Tests for the MCP client phase (`oxenclaw/pi/mcp/`)."""
 
 from __future__ import annotations
 
@@ -11,16 +11,16 @@ from typing import Any
 
 import pytest
 
-from sampyclaw.pi.mcp.adapter import materialize_mcp_tools
-from sampyclaw.pi.mcp.client import MCPClient, MCPClientPool, MCPError
-from sampyclaw.pi.mcp.config import (
+from oxenclaw.pi.mcp.adapter import materialize_mcp_tools
+from oxenclaw.pi.mcp.client import MCPClient, MCPClientPool, MCPError
+from oxenclaw.pi.mcp.config import (
     DANGEROUS_ENV_KEYS,
     HttpServerConfig,
     StdioServerConfig,
     parse_server_config,
     parse_servers_map,
 )
-from sampyclaw.pi.mcp.names import (
+from oxenclaw.pi.mcp.names import (
     TOOL_NAME_SEPARATOR,
     build_safe_tool_name,
     sanitize_server_name,
@@ -477,19 +477,19 @@ async def test_adapter_renames_to_avoid_reserved_collisions(tmp_path: Path):
 
 
 def test_loader_returns_empty_when_file_missing(tmp_path: Path):
-    from sampyclaw.config.paths import SampyclawPaths
-    from sampyclaw.pi.mcp.loader import load_mcp_configs
+    from oxenclaw.config.paths import OxenclawPaths
+    from oxenclaw.pi.mcp.loader import load_mcp_configs
 
-    paths = SampyclawPaths(home=tmp_path)
+    paths = OxenclawPaths(home=tmp_path)
     configs, diagnostics = load_mcp_configs(paths)
     assert configs == [] and diagnostics == []
 
 
 def test_loader_parses_servers_map(tmp_path: Path):
-    from sampyclaw.config.paths import SampyclawPaths
-    from sampyclaw.pi.mcp.loader import load_mcp_configs
+    from oxenclaw.config.paths import OxenclawPaths
+    from oxenclaw.pi.mcp.loader import load_mcp_configs
 
-    paths = SampyclawPaths(home=tmp_path)
+    paths = OxenclawPaths(home=tmp_path)
     paths.mcp_config_file.write_text(
         json.dumps(
             {
@@ -508,10 +508,10 @@ def test_loader_parses_servers_map(tmp_path: Path):
 
 
 def test_loader_expands_env_refs(tmp_path: Path, monkeypatch):
-    from sampyclaw.config.paths import SampyclawPaths
-    from sampyclaw.pi.mcp.loader import load_mcp_configs
+    from oxenclaw.config.paths import OxenclawPaths
+    from oxenclaw.pi.mcp.loader import load_mcp_configs
 
-    paths = SampyclawPaths(home=tmp_path)
+    paths = OxenclawPaths(home=tmp_path)
     monkeypatch.setenv("FAKE_TOKEN", "tok-xyz")
     paths.mcp_config_file.write_text(
         json.dumps(
@@ -532,10 +532,10 @@ def test_loader_expands_env_refs(tmp_path: Path, monkeypatch):
 
 
 def test_loader_reports_bad_json(tmp_path: Path):
-    from sampyclaw.config.paths import SampyclawPaths
-    from sampyclaw.pi.mcp.loader import load_mcp_configs
+    from oxenclaw.config.paths import OxenclawPaths
+    from oxenclaw.pi.mcp.loader import load_mcp_configs
 
-    paths = SampyclawPaths(home=tmp_path)
+    paths = OxenclawPaths(home=tmp_path)
     paths.mcp_config_file.write_text("not json {")
     configs, diagnostics = load_mcp_configs(paths)
     assert configs == []
@@ -543,10 +543,10 @@ def test_loader_reports_bad_json(tmp_path: Path):
 
 
 def test_build_pool_returns_none_when_no_servers(tmp_path: Path):
-    from sampyclaw.config.paths import SampyclawPaths
-    from sampyclaw.pi.mcp.loader import build_pool_from_config
+    from oxenclaw.config.paths import OxenclawPaths
+    from oxenclaw.pi.mcp.loader import build_pool_from_config
 
-    paths = SampyclawPaths(home=tmp_path)
+    paths = OxenclawPaths(home=tmp_path)
     assert build_pool_from_config(paths) is None
 
 
@@ -557,12 +557,12 @@ def test_build_pool_returns_none_when_no_servers(tmp_path: Path):
 async def test_factory_load_mcp_tools_integrates_with_build_agent(
     tmp_path: Path,
 ):
-    from sampyclaw.agents.factory import build_agent, load_mcp_tools
-    from sampyclaw.config.paths import SampyclawPaths
+    from oxenclaw.agents.factory import build_agent, load_mcp_tools
+    from oxenclaw.config.paths import OxenclawPaths
 
     script_path = tmp_path / "fake_mcp_server.py"
     script_path.write_text(_FAKE_STDIO_SERVER_SCRIPT)
-    paths = SampyclawPaths(home=tmp_path)
+    paths = OxenclawPaths(home=tmp_path)
     paths.mcp_config_file.write_text(
         json.dumps(
             {
@@ -611,7 +611,7 @@ async def test_adapter_returns_unavailable_string_when_server_dropped(
         assert tools == []
         # Manually construct a proxy tool that points at the failed server
         # to verify the runtime fallback.
-        from sampyclaw.pi.mcp.adapter import _MCPProxyTool
+        from oxenclaw.pi.mcp.adapter import _MCPProxyTool
 
         proxy = _MCPProxyTool(
             name="dead__t",

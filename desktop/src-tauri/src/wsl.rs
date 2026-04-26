@@ -1,4 +1,4 @@
-//! Optional helper to spawn `sampyclaw gateway start` inside WSL when
+//! Optional helper to spawn `oxenclaw gateway start` inside WSL when
 //! the configured gateway URL is unreachable.
 //!
 //! Off by default — the user opts in via the setup screen. The helper
@@ -13,7 +13,7 @@ pub struct WslLaunchOptions {
     /// WSL distro name (e.g. "Ubuntu-24.04"). When None, default distro.
     pub distro: Option<String>,
     /// Command to run inside the distro. Default:
-    /// `sampyclaw gateway start --port 7331 --allowed-origins tauri://localhost`.
+    /// `oxenclaw gateway start --port 7331 --allowed-origins tauri://localhost`.
     pub command: Option<String>,
 }
 
@@ -21,7 +21,7 @@ pub struct WslLaunchOptions {
 pub fn launch(opts: &WslLaunchOptions) -> std::io::Result<()> {
     use std::process::Command;
     let cmd = opts.command.as_deref().unwrap_or(
-        "sampyclaw gateway start --port 7331 --allowed-origins tauri://localhost",
+        "oxenclaw gateway start --port 7331 --allowed-origins tauri://localhost",
     );
     let mut wsl = Command::new("wsl.exe");
     if let Some(d) = &opts.distro {

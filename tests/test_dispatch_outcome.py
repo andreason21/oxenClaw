@@ -7,16 +7,16 @@ from pathlib import Path
 
 import pytest
 
-from sampyclaw.agents.base import AgentContext
-from sampyclaw.agents.dispatch import Dispatcher, DispatchOutcome
-from sampyclaw.agents.registry import AgentRegistry
-from sampyclaw.plugin_sdk.channel_contract import (
+from oxenclaw.agents.base import AgentContext
+from oxenclaw.agents.dispatch import Dispatcher, DispatchOutcome
+from oxenclaw.agents.registry import AgentRegistry
+from oxenclaw.plugin_sdk.channel_contract import (
     ChannelTarget,
     InboundEnvelope,
     SendParams,
     SendResult,
 )
-from sampyclaw.plugin_sdk.config_schema import (
+from oxenclaw.plugin_sdk.config_schema import (
     AgentChannelRouting,
     AgentConfig,
     RootConfig,
@@ -195,7 +195,7 @@ async def test_agent_yielded_but_send_failed_is_not_a_drop():
     """Dashboard scenario: the channel name has no plugin loaded so
     `_send` raises every time. The agent still ran and saved its
     reply to history. We must not classify this as a drop."""
-    from sampyclaw.plugin_sdk.error_runtime import UserVisibleError
+    from oxenclaw.plugin_sdk.error_runtime import UserVisibleError
 
     agent = _RecordingAgent("assistant")
     cfg = RootConfig()
@@ -231,14 +231,14 @@ async def test_legacy_dispatch_method_returns_list_of_results():
 async def test_chat_send_rpc_returns_dropped_status_with_reason(tmp_path: Path):
     """End-to-end: the chat.send handler from cli.gateway_cmd._build_router
     needs to forward the dispatcher's drop reason to the wire result."""
-    from sampyclaw.agents.factory import build_agent
-    from sampyclaw.approvals import ApprovalManager
-    from sampyclaw.channels import ChannelRouter
-    from sampyclaw.cli.gateway_cmd import _build_router
-    from sampyclaw.config.paths import SampyclawPaths
-    from sampyclaw.cron import CronJobStore, CronScheduler
+    from oxenclaw.agents.factory import build_agent
+    from oxenclaw.approvals import ApprovalManager
+    from oxenclaw.channels import ChannelRouter
+    from oxenclaw.cli.gateway_cmd import _build_router
+    from oxenclaw.config.paths import OxenclawPaths
+    from oxenclaw.cron import CronJobStore, CronScheduler
 
-    paths = SampyclawPaths(home=tmp_path)
+    paths = OxenclawPaths(home=tmp_path)
     paths.ensure_home()
 
     agents = AgentRegistry()

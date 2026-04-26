@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from sampyclaw.gateway.isolation_methods import register_isolation_methods
-from sampyclaw.gateway.router import Router
+from oxenclaw.gateway.isolation_methods import register_isolation_methods
+from oxenclaw.gateway.router import Router
 
 
 async def test_backends_reports_available_and_strongest() -> None:

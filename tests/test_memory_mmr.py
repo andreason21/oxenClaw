@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from sampyclaw.memory.mmr import MMRConfig, jaccard_similarity, mmr_rerank, tokenize
-from sampyclaw.memory.models import MemoryChunk, MemorySearchResult
+from oxenclaw.memory.mmr import MMRConfig, jaccard_similarity, mmr_rerank, tokenize
+from oxenclaw.memory.models import MemoryChunk, MemorySearchResult
 
 
 def _r(id_: str, text: str, score: float) -> MemorySearchResult:

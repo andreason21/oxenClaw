@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from sampyclaw.pi.cache_observability import (
+from oxenclaw.pi.cache_observability import (
     CacheObserver,
     should_apply_cache_markers,
 )
-from sampyclaw.pi.system_prompt import (
+from oxenclaw.pi.system_prompt import (
     SystemPromptContribution,
     assemble_system_prompt,
     embedded_context_contribution,

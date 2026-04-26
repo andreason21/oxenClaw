@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from sampyclaw.memory.embedding_cache import EmbeddingCache
-from sampyclaw.memory.store import MemoryStore
-from sampyclaw.pi import (
+from oxenclaw.memory.embedding_cache import EmbeddingCache
+from oxenclaw.memory.store import MemoryStore
+from oxenclaw.pi import (
     AssistantMessage,
     CreateAgentSessionOptions,
     InMemorySessionManager,
@@ -17,14 +17,14 @@ from sampyclaw.pi import (
     ToolUseBlock,
     UserMessage,
 )
-from sampyclaw.pi.lifecycle import (
+from oxenclaw.pi.lifecycle import (
     LifecycleBus,
     LifecycleEvent,
     archive_session,
 )
-from sampyclaw.pi.persistence import SQLiteSessionManager
-from sampyclaw.pi.session import AgentSession
-from sampyclaw.pi.session_memory_hook import (
+from oxenclaw.pi.persistence import SQLiteSessionManager
+from oxenclaw.pi.session import AgentSession
+from oxenclaw.pi.session_memory_hook import (
     SESSION_SOURCE,
     SessionMemoryHook,
     render_transcript,

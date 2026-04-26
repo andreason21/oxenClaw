@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
-from sampyclaw.memory.inbox import append_to_inbox
+from oxenclaw.memory.inbox import append_to_inbox
 
 
 def test_creates_file_when_missing(tmp_path: Path) -> None:

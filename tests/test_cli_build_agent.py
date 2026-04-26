@@ -5,9 +5,9 @@ from __future__ import annotations
 import pytest
 import typer
 
-from sampyclaw.agents import EchoAgent
-from sampyclaw.agents.pi_agent import PiAgent
-from sampyclaw.cli.gateway_cmd import build_agent
+from oxenclaw.agents import EchoAgent
+from oxenclaw.agents.pi_agent import PiAgent
+from oxenclaw.cli.gateway_cmd import build_agent
 
 
 def test_build_echo_agent() -> None:

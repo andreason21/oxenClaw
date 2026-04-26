@@ -13,12 +13,12 @@ from unittest.mock import AsyncMock
 import pytest
 from pydantic import BaseModel
 
-from sampyclaw.agents.base import AgentContext
-from sampyclaw.agents.history import ConversationHistory
-from sampyclaw.agents.local_agent import DEFAULT_MODEL, LocalAgent
-from sampyclaw.agents.tools import FunctionTool, ToolRegistry
-from sampyclaw.config.paths import SampyclawPaths
-from sampyclaw.plugin_sdk.channel_contract import ChannelTarget, InboundEnvelope
+from oxenclaw.agents.base import AgentContext
+from oxenclaw.agents.history import ConversationHistory
+from oxenclaw.agents.local_agent import DEFAULT_MODEL, LocalAgent
+from oxenclaw.agents.tools import FunctionTool, ToolRegistry
+from oxenclaw.config.paths import OxenclawPaths
+from oxenclaw.plugin_sdk.channel_contract import ChannelTarget, InboundEnvelope
 
 
 def _response_text(text: str, finish_reason: str = "stop") -> dict[str, Any]:
@@ -61,8 +61,8 @@ def _response_tool_call(
     }
 
 
-def _paths(tmp_path) -> SampyclawPaths:  # type: ignore[no-untyped-def]
-    p = SampyclawPaths(home=tmp_path)
+def _paths(tmp_path) -> OxenclawPaths:  # type: ignore[no-untyped-def]
+    p = OxenclawPaths(home=tmp_path)
     p.ensure_home()
     return p
 
@@ -592,7 +592,7 @@ async def test_payload_includes_num_predict_alias(tmp_path) -> None:  # type: ig
 async def test_usage_logged(tmp_path, caplog) -> None:  # type: ignore[no-untyped-def]
     import logging as _logging
 
-    caplog.set_level(_logging.INFO, logger="sampyclaw.agents.local")
+    caplog.set_level(_logging.INFO, logger="oxenclaw.agents.local")
     response = {
         "choices": [{"message": {"role": "assistant", "content": "hi"}, "finish_reason": "stop"}],
         "usage": {"prompt_tokens": 12, "completion_tokens": 3, "total_tokens": 15},

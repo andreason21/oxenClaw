@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from sampyclaw.clawhub.registries import (
+from oxenclaw.clawhub.registries import (
     ClawHubRegistries,
     MultiRegistryClient,
     RegistryConfig,

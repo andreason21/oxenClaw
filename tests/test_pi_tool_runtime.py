@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sampyclaw.pi.tool_runtime import (
+from oxenclaw.pi.tool_runtime import (
     DEFAULT_MAX_TOOL_RESULT_CHARS,
     MIN_TOOL_RESULT_CHARS,
     EffectiveToolPolicy,

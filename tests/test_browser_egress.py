@@ -1,4 +1,4 @@
-"""Unit tests for sampyclaw.browser.egress.build_route_handler.
+"""Unit tests for oxenclaw.browser.egress.build_route_handler.
 
 These tests use a hand-rolled Request / Route stub instead of spinning
 up Playwright — the handler API surface is small (`request.url`,
@@ -14,10 +14,10 @@ from typing import Any
 
 import pytest
 
-from sampyclaw.browser.egress import build_route_handler
-from sampyclaw.browser.pinning import HostPinCache
-from sampyclaw.browser.policy import BrowserPolicy
-from sampyclaw.security.net.policy import NetPolicy
+from oxenclaw.browser.egress import build_route_handler
+from oxenclaw.browser.pinning import HostPinCache
+from oxenclaw.browser.policy import BrowserPolicy
+from oxenclaw.security.net.policy import NetPolicy
 
 
 @dataclass
@@ -46,7 +46,7 @@ def _patch_resolver(monkeypatch: pytest.MonkeyPatch, mapping: dict[str, list[str
             raise socket.gaierror("nope")
         return [(socket.AF_INET, socket.SOCK_STREAM, 0, "", (ip, 0)) for ip in ips]
 
-    monkeypatch.setattr("sampyclaw.browser.pinning.socket.getaddrinfo", fake)
+    monkeypatch.setattr("oxenclaw.browser.pinning.socket.getaddrinfo", fake)
 
 
 @pytest.mark.asyncio

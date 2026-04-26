@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from sampyclaw.memory.embedding_cache import EmbeddingCache
-from sampyclaw.memory.store import MemoryStore
+from oxenclaw.memory.embedding_cache import EmbeddingCache
+from oxenclaw.memory.store import MemoryStore
 from tests._memory_stubs import StubEmbeddings
 
 
@@ -55,7 +55,7 @@ async def test_dims_recorded(tmp_path: Path) -> None:
 
 
 def _content_hash(t: str) -> str:
-    from sampyclaw.memory.hashing import sha256_text
+    from oxenclaw.memory.hashing import sha256_text
 
     return sha256_text(t)
 

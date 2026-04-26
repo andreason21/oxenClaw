@@ -13,10 +13,10 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from sampyclaw.clawhub.client import ClawHubClient, sha256_integrity
-from sampyclaw.clawhub.installer import InstallError, SkillInstaller
-from sampyclaw.clawhub.lockfile import Lockfile, OriginMetadata
-from sampyclaw.config.paths import SampyclawPaths
+from oxenclaw.clawhub.client import ClawHubClient, sha256_integrity
+from oxenclaw.clawhub.installer import InstallError, SkillInstaller
+from oxenclaw.clawhub.lockfile import Lockfile, OriginMetadata
+from oxenclaw.config.paths import OxenclawPaths
 
 SAMPLE_SKILL_MD = """---
 name: foo
@@ -57,8 +57,8 @@ def _empty_zip() -> bytes:
 
 
 @pytest.fixture()
-def paths(tmp_path) -> SampyclawPaths:  # type: ignore[no-untyped-def]
-    p = SampyclawPaths(home=tmp_path)
+def paths(tmp_path) -> OxenclawPaths:  # type: ignore[no-untyped-def]
+    p = OxenclawPaths(home=tmp_path)
     p.ensure_home()
     return p
 

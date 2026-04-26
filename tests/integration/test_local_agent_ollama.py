@@ -30,16 +30,16 @@ from collections.abc import AsyncIterator
 import pytest
 from pydantic import BaseModel
 
-from sampyclaw.agents import (
+from oxenclaw.agents import (
     AgentContext,
     FunctionTool,
     LocalAgent,
     ToolRegistry,
     default_tools,
 )
-from sampyclaw.agents.history import ConversationHistory
-from sampyclaw.config.paths import SampyclawPaths
-from sampyclaw.plugin_sdk.channel_contract import ChannelTarget, InboundEnvelope
+from oxenclaw.agents.history import ConversationHistory
+from oxenclaw.config.paths import OxenclawPaths
+from oxenclaw.plugin_sdk.channel_contract import ChannelTarget, InboundEnvelope
 
 
 def _envelope(text: str) -> InboundEnvelope:
@@ -98,7 +98,7 @@ def _secret_token_tool(secret: str) -> FunctionTool:
 
 def _build_agent(
     *,
-    paths: SampyclawPaths,
+    paths: OxenclawPaths,
     base_url: str,
     model: str,
     tools: ToolRegistry,
@@ -116,7 +116,7 @@ def _build_agent(
 
 @pytest.fixture()
 async def agent(tmp_path, ollama_base_url: str, ollama_model: str) -> AsyncIterator[LocalAgent]:  # type: ignore[no-untyped-def]
-    paths = SampyclawPaths(home=tmp_path)
+    paths = OxenclawPaths(home=tmp_path)
     paths.ensure_home()
 
     tools = ToolRegistry()
@@ -219,7 +219,7 @@ async def test_secret_token_tool_was_invoked(
     for that value to leak."""
     secret = f"SAMPY-{uuid.uuid4().hex[:10].upper()}"
 
-    paths = SampyclawPaths(home=tmp_path)
+    paths = OxenclawPaths(home=tmp_path)
     paths.ensure_home()
     tools = ToolRegistry()
     tools.register(_secret_token_tool(secret))
@@ -371,7 +371,7 @@ async def test_plan_with_tool_and_memory(tmp_path, ollama_base_url: str, ollama_
         handler=_deadline_handler,
     )
 
-    paths = SampyclawPaths(home=tmp_path)
+    paths = OxenclawPaths(home=tmp_path)
     paths.ensure_home()
     tools = ToolRegistry()
     tools.register_all(default_tools())

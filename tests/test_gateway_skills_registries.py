@@ -8,16 +8,16 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from sampyclaw.clawhub.client import ClawHubClient, sha256_integrity
-from sampyclaw.clawhub.installer import SkillInstaller
-from sampyclaw.clawhub.registries import (
+from oxenclaw.clawhub.client import ClawHubClient, sha256_integrity
+from oxenclaw.clawhub.installer import SkillInstaller
+from oxenclaw.clawhub.registries import (
     ClawHubRegistries,
     MultiRegistryClient,
     RegistryConfig,
 )
-from sampyclaw.config.paths import SampyclawPaths
-from sampyclaw.gateway.router import Router
-from sampyclaw.gateway.skills_methods import register_skills_methods
+from oxenclaw.config.paths import OxenclawPaths
+from oxenclaw.gateway.router import Router
+from oxenclaw.gateway.skills_methods import register_skills_methods
 
 SAMPLE = """---
 name: foo
@@ -52,7 +52,7 @@ def _stub(client: ClawHubClient) -> ClawHubClient:
 
 @pytest.fixture()
 def setup(tmp_path):  # type: ignore[no-untyped-def]
-    paths = SampyclawPaths(home=tmp_path)
+    paths = OxenclawPaths(home=tmp_path)
     paths.ensure_home()
     cfg = ClawHubRegistries(
         default="mirror",

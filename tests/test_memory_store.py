@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from sampyclaw.memory.hashing import sha256_text
-from sampyclaw.memory.store import MemoryStore
+from oxenclaw.memory.hashing import sha256_text
+from oxenclaw.memory.store import MemoryStore
 
 
 def _store(tmp_path: Path) -> MemoryStore:

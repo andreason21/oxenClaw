@@ -7,10 +7,10 @@ import sys
 import pytest
 from pydantic import BaseModel
 
-from sampyclaw.agents.tools import Tool
-from sampyclaw.security.isolated_function import IsolatedFunctionTool
-from sampyclaw.security.isolation.policy import IsolationPolicy
-from sampyclaw.security.shell_tool import (
+from oxenclaw.agents.tools import Tool
+from oxenclaw.security.isolated_function import IsolatedFunctionTool
+from oxenclaw.security.isolation.policy import IsolationPolicy
+from oxenclaw.security.shell_tool import (
     ShellTool,
     ShellToolError,
     ping_host_tool,
@@ -101,8 +101,8 @@ async def test_python_snippet_tool_runs() -> None:
     """The default python_snippet policy is strict (network=False); requires
     a backend that can actually enforce that. On hosts without bwrap/container,
     fail-closed is the correct outcome — skip the live-run test."""
-    from sampyclaw.security.isolation.policy import IsolationPolicy as _Pol
-    from sampyclaw.security.isolation.registry import resolve_backend
+    from oxenclaw.security.isolation.policy import IsolationPolicy as _Pol
+    from oxenclaw.security.isolation.registry import resolve_backend
 
     backend = await resolve_backend(_Pol(network=False, filesystem="none"))
     if backend.name == "subprocess":

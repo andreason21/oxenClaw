@@ -4,15 +4,15 @@ from __future__ import annotations
 
 import pytest
 
-from sampyclaw.plugin_sdk import (
+from oxenclaw.plugin_sdk import (
     ChannelPlugin,
     InboundEnvelope,
     RateLimitedError,
     SendParams,
     SendResult,
 )
-from sampyclaw.plugin_sdk.channel_contract import ChannelTarget
-from sampyclaw.plugin_sdk.reply_runtime import chunk_text
+from oxenclaw.plugin_sdk.channel_contract import ChannelTarget
+from oxenclaw.plugin_sdk.reply_runtime import chunk_text
 
 
 def test_send_params_roundtrip() -> None:

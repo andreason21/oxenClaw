@@ -323,7 +323,7 @@ jobs:
     if: ${{ !contains(github.ref_name, '-') }}
     environment:
       name: pypi
-      url: https://pypi.org/p/sampyclaw
+      url: https://pypi.org/p/oxenclaw
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -394,12 +394,12 @@ jobs:
           # the linux-build job comment). `.deb` users upgrade via apt.
           MSI=$(ls *.msi | head -1)
           MSI_SIG=$(cat "${MSI}.sig" 2>/dev/null || echo "")
-          BASE="https://github.com/andreason21/sampyClaw/releases/download/v${VERSION}"
+          BASE="https://github.com/andreason21/oxenClaw/releases/download/v${VERSION}"
           PUB_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           cat > latest.json <<JSON
           {
             "version": "${VERSION}",
-            "notes": "See https://github.com/andreason21/sampyClaw/releases/tag/v${VERSION}",
+            "notes": "See https://github.com/andreason21/oxenClaw/releases/tag/v${VERSION}",
             "pub_date": "${PUB_DATE}",
             "platforms": {
               "windows-x86_64": { "signature": "${MSI_SIG}",    "url": "${BASE}/${MSI}" }
@@ -423,7 +423,7 @@ jobs:
           echo "" >> NOTES.md
           echo "### Install" >> NOTES.md
           echo '```' >> NOTES.md
-          echo "pip install sampyclaw==${GITHUB_REF_NAME#v}" >> NOTES.md
+          echo "pip install oxenclaw==${GITHUB_REF_NAME#v}" >> NOTES.md
           echo '```' >> NOTES.md
           echo "" >> NOTES.md
           echo "Windows desktop app: download the \`.msi\` below or use the NSIS \`.exe\`." >> NOTES.md
@@ -462,7 +462,7 @@ jobs:
           files: |
             release-assets/*.sig
 
-  # ─── 7. Submit to winget-pkgs (one-click `winget install sampyclaw`) ──
+  # ─── 7. Submit to winget-pkgs (one-click `winget install oxenclaw`) ──
   winget-submit:
     runs-on: windows-latest
     needs: [github-release]
@@ -479,6 +479,6 @@ jobs:
           WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
         uses: vedantmgoyal9/winget-releaser@v2
         with:
-          identifier: sampyClaw.sampyClaw
+          identifier: oxenClaw.oxenClaw
           installers-regex: '\.msi$'
           token: ${{ secrets.WINGET_TOKEN }}

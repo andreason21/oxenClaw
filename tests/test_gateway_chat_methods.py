@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from sampyclaw.agents.history import ConversationHistory
-from sampyclaw.config.paths import SampyclawPaths
-from sampyclaw.gateway.chat_methods import register_chat_methods
-from sampyclaw.gateway.router import Router
+from oxenclaw.agents.history import ConversationHistory
+from oxenclaw.config.paths import OxenclawPaths
+from oxenclaw.gateway.chat_methods import register_chat_methods
+from oxenclaw.gateway.router import Router
 
 
 def _setup(tmp_path):  # type: ignore[no-untyped-def]
-    paths = SampyclawPaths(home=tmp_path)
+    paths = OxenclawPaths(home=tmp_path)
     paths.ensure_home()
     router = Router()
     register_chat_methods(router, paths=paths)

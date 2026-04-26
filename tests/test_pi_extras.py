@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import asyncio
 
-from sampyclaw.pi import (
+from oxenclaw.pi import (
     AssistantMessage,
     Model,
     TextContent,
     ThinkingBlock,
     UserMessage,
 )
-from sampyclaw.pi.extras import (
+from oxenclaw.pi.extras import (
     LaneRouter,
     UsageAccumulator,
     cancel_on,

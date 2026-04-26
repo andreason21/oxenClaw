@@ -1,6 +1,6 @@
-# OpenClaw Architecture Analysis — sampyClaw Port Reference
+# OpenClaw Architecture Analysis — oxenClaw Port Reference
 
-> This document is the **frozen spec** for porting openclaw (TypeScript monorepo) to sampyClaw (Python). It was produced from a deep read of `/home/andrew21son/1.work/1.git/openclaw/` on 2026-04-24. Cross-reference the TS source as authoritative when this doc and the code disagree; then update this doc.
+> This document is the **frozen spec** for porting openclaw (TypeScript monorepo) to oxenClaw (Python). It was produced from a deep read of `/home/andrew21son/1.work/1.git/openclaw/` on 2026-04-24. Cross-reference the TS source as authoritative when this doc and the code disagree; then update this doc.
 
 ## 1. Top-Level Module Map
 
@@ -285,12 +285,12 @@ TelegramChannelConfigSchema = {
 
 - **Manifest-first** — Control plane must load manifests WITHOUT executing plugin code. In Python, keep the manifest as a JSON file; load plugin code only when needed via `importlib`.
 - **Plugin registry** — Global mutable registry. Use module-level dict or singleton class.
-- **SDK isolation** — Plugins import only `sampyclaw.plugin_sdk.*`; core never imports `sampyclaw.extensions.*.internal.*`. Enforce with package layout + import linter (e.g., `import-linter`).
+- **SDK isolation** — Plugins import only `oxenclaw.plugin_sdk.*`; core never imports `oxenclaw.extensions.*.internal.*`. Enforce with package layout + import linter (e.g., `import-linter`).
 
 ### Config & credentials
 
 - YAML config → `PyYAML` + Pydantic. Env var substitution (`$TELEGRAM_BOT_TOKEN`) → resolve at load via `os.environ`.
-- Credentials as JSON files at `~/.openclaw/credentials/...` (keep path for compat, or move to `~/.sampyclaw/` — **DECISION NEEDED**).
+- Credentials as JSON files at `~/.openclaw/credentials/...` (keep path for compat, or move to `~/.oxenclaw/` — **DECISION NEEDED**).
 
 ### Gateway protocol
 
@@ -326,18 +326,18 @@ TelegramChannelConfigSchema = {
 
 **Phase B — Telegram proof-of-concept:**
 
-1. `sampyclaw/plugin_sdk/` — abstract channel contract, Pydantic config models, logger/runtime env.
-2. `sampyclaw/gateway/` — WebSocket server, JSON-RPC protocol.
-3. `sampyclaw/extensions/telegram/` — mirror TS file structure: `channel.py`, `bot_core.py`, `send.py`, `monitor.py`, …
-4. `sampyclaw/cli/` — `typer`-based CLI skeleton.
+1. `oxenclaw/plugin_sdk/` — abstract channel contract, Pydantic config models, logger/runtime env.
+2. `oxenclaw/gateway/` — WebSocket server, JSON-RPC protocol.
+3. `oxenclaw/extensions/telegram/` — mirror TS file structure: `channel.py`, `bot_core.py`, `send.py`, `monitor.py`, …
+4. `oxenclaw/cli/` — `typer`-based CLI skeleton.
 
 **Phase A — Core expansion:** agents, canvas host, more channels.
 
-**BR-1 — Browser tools (shipped 2026-04-26):** thin `sampyclaw/browser/` package wrapping Playwright with the existing `security/net/` SSRF/pinning/audit primitives. Closed-by-default `BrowserPolicy`, layered egress (URL preflight + per-request route + DNS rebind defense + dead proxy), `default_browser_tools` bundle of 5 always-safe tools. See [`BROWSER.md`](./BROWSER.md).
+**BR-1 — Browser tools (shipped 2026-04-26):** thin `oxenclaw/browser/` package wrapping Playwright with the existing `security/net/` SSRF/pinning/audit primitives. Closed-by-default `BrowserPolicy`, layered egress (URL preflight + per-request route + DNS rebind defense + dead proxy), `default_browser_tools` bundle of 5 always-safe tools. See [`BROWSER.md`](./BROWSER.md).
 
-**CV-1 — Dashboard canvas (shipped 2026-04-26):** `sampyclaw/canvas/` package + `gateway/canvas_methods.py` + `tools_pkg/canvas.py` + dashboard SPA additions. Dashboard-only output via sandboxed `<iframe srcdoc>` — no native node, no Tailscale, no live-reload watcher, no external URL fetch. Empirically gated on `gemma4:latest` 25/25 before commit. See [`CANVAS.md`](./CANVAS.md).
+**CV-1 — Dashboard canvas (shipped 2026-04-26):** `oxenclaw/canvas/` package + `gateway/canvas_methods.py` + `tools_pkg/canvas.py` + dashboard SPA additions. Dashboard-only output via sandboxed `<iframe srcdoc>` — no native node, no Tailscale, no live-reload watcher, no external URL fetch. Empirically gated on `gemma4:latest` 25/25 before commit. See [`CANVAS.md`](./CANVAS.md).
 
-**Dashboard SPA — `sampyclaw/static/` (vanilla JS, no build step):** the openclaw `ui/` Vue/TS app is out of scope, but sampyClaw ships its own minimal control plane that serves on the same port as the JSON-RPC websocket. 10 routes (chat, agents, channels, sessions, cron, approvals, skills, memory, config, rpc), light/dark theme toggle with system-preference detection, Ctrl+K command palette (14 actions), in-app login gate, sessions browser wired to `sessions.*` RPCs, dashboard chat image upload (📎 → 10 MiB cap → `data:image/...` URI). Responsive: < 900 px collapses the sidebar to a slide-in drawer. 23-test Playwright E2E suite under `tests/dashboard/` exercises every interactive surface and asserts no JS errors fired during the test.
+**Dashboard SPA — `oxenclaw/static/` (vanilla JS, no build step):** the openclaw `ui/` Vue/TS app is out of scope, but oxenClaw ships its own minimal control plane that serves on the same port as the JSON-RPC websocket. 10 routes (chat, agents, channels, sessions, cron, approvals, skills, memory, config, rpc), light/dark theme toggle with system-preference detection, Ctrl+K command palette (14 actions), in-app login gate, sessions browser wired to `sessions.*` RPCs, dashboard chat image upload (📎 → 10 MiB cap → `data:image/...` URI). Responsive: < 900 px collapses the sidebar to a slide-in drawer. 23-test Playwright E2E suite under `tests/dashboard/` exercises every interactive surface and asserts no JS errors fired during the test.
 
 **Anthropic agent (removed 2026-04-26):** the inline `AnthropicAgent` was deleted in favour of `PiAgent`'s richer Anthropic path (cache_control, thinking, cache observability, compaction, persistence). `--provider anthropic` is now a thin CLI alias of `pi` pinned to `claude-sonnet-4-6` by default; pass `--model` to override.
 

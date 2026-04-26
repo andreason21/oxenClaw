@@ -21,13 +21,13 @@ from pathlib import Path
 
 from websockets.asyncio.client import connect as ws_connect
 
-from sampyclaw.config.paths import SampyclawPaths
-from sampyclaw.memory import (
+from oxenclaw.config.paths import OxenclawPaths
+from oxenclaw.memory import (
     MemoryRetriever,
     MemoryStore,
     OpenAIEmbeddings,
 )
-from sampyclaw.memory.embedding_cache import EmbeddingCache
+from oxenclaw.memory.embedding_cache import EmbeddingCache
 
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://127.0.0.1:11434/v1")
 EMBED_MODEL = os.environ.get("EMBED_MODEL", "nomic-embed-text")
@@ -41,7 +41,7 @@ The user prefers green tea in the morning and coffee after lunch.
 
 The user avoids dairy. Favourite dish is spicy tofu stew.
 """,
-    "projects/sampyclaw.md": """# sampyClaw project
+    "projects/oxenclaw.md": """# oxenClaw project
 
 Python port of the openclaw TypeScript monorepo. Phase B pilot ports the
 Telegram extension end-to-end.
@@ -78,7 +78,7 @@ def _write_fixtures(memory_dir: Path) -> None:
 
 
 def _build_retriever(home: Path) -> MemoryRetriever:
-    paths = SampyclawPaths(home=home)
+    paths = OxenclawPaths(home=home)
     paths.ensure_home()
     (home / "memory").mkdir(parents=True, exist_ok=True)
     embeddings = OpenAIEmbeddings(base_url=OLLAMA_BASE_URL, model=EMBED_MODEL)
@@ -191,7 +191,7 @@ async def scenario_5_embedding_cache_hits(retriever: MemoryRetriever) -> bool:
 
 
 async def scenario_6_incremental_change(retriever: MemoryRetriever) -> bool:
-    f = retriever.memory_dir / "projects/sampyclaw.md"
+    f = retriever.memory_dir / "projects/oxenclaw.md"
     original = f.read_text(encoding="utf-8")
     f.write_text(
         original + "\n## Status\n\nP0 memory rewrite shipped 2026-04-25.\n",
@@ -244,10 +244,10 @@ async def scenario_8_rebuild(retriever: MemoryRetriever) -> bool:
 
 def scenario_9_cli(home: Path) -> bool:
     env = os.environ.copy()
-    env["SAMPYCLAW_HOME"] = str(home)
-    # `sampyclaw memory stats` should succeed and print a total_chunks line.
+    env["OXENCLAW_HOME"] = str(home)
+    # `oxenclaw memory stats` should succeed and print a total_chunks line.
     res = subprocess.run(
-        [sys.executable, "-m", "sampyclaw.cli", "memory", "stats"],
+        [sys.executable, "-m", "oxenclaw.cli", "memory", "stats"],
         env=env,
         capture_output=True,
         text=True,
@@ -259,10 +259,10 @@ def scenario_9_cli(home: Path) -> bool:
     if "chunks" not in res.stdout.lower() and "files" not in res.stdout.lower():
         _failed("cli stats output shape", res.stdout[:200])
         return False
-    # `sampyclaw memory search "..."` should print at least one line.
+    # `oxenclaw memory search "..."` should print at least one line.
     res2 = subprocess.run(
         [
-            sys.executable, "-m", "sampyclaw.cli", "memory", "search",
+            sys.executable, "-m", "oxenclaw.cli", "memory", "search",
             "what does the user drink", "-k", "2",
         ],
         env=env,
@@ -279,10 +279,10 @@ def scenario_9_cli(home: Path) -> bool:
 
 async def scenario_10_gateway_jsonrpc(home: Path) -> bool:
     env = os.environ.copy()
-    env["SAMPYCLAW_HOME"] = str(home)
+    env["OXENCLAW_HOME"] = str(home)
     port = "47331"
     proc = subprocess.Popen(
-        [sys.executable, "-m", "sampyclaw.cli", "gateway", "start", "--port", port],
+        [sys.executable, "-m", "oxenclaw.cli", "gateway", "start", "--port", port],
         env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -334,7 +334,7 @@ async def scenario_10_gateway_jsonrpc(home: Path) -> bool:
 
 async def main() -> int:
     _section("smoke setup")
-    with tempfile.TemporaryDirectory(prefix="sampyclaw-smoke-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="oxenclaw-smoke-") as tmp:
         home = Path(tmp)
         _write_fixtures(home / "memory")
         print(f"  corpus at {home}/memory  ({len(FIXTURES)} fixture files)")

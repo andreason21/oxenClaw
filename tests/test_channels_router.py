@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from sampyclaw.channels import ChannelRouter
-from sampyclaw.plugin_sdk.channel_contract import (
+from oxenclaw.channels import ChannelRouter
+from oxenclaw.plugin_sdk.channel_contract import (
     ChannelTarget,
     ProbeOpts,
     ProbeResult,
@@ -49,7 +49,7 @@ async def test_register_duplicate_raises() -> None:
 
 async def test_require_missing_raises() -> None:
     cr = ChannelRouter()
-    from sampyclaw.plugin_sdk.error_runtime import UserVisibleError
+    from oxenclaw.plugin_sdk.error_runtime import UserVisibleError
 
     with pytest.raises(UserVisibleError):
         cr.require("telegram", "none")
@@ -80,7 +80,7 @@ async def test_send_unrouted_raises_user_visible() -> None:
     success), so RPC clients see the routing misconfig."""
     import pytest
 
-    from sampyclaw.plugin_sdk.error_runtime import UserVisibleError
+    from oxenclaw.plugin_sdk.error_runtime import UserVisibleError
 
     cr = ChannelRouter()
     with pytest.raises(UserVisibleError, match="no channel plugin"):

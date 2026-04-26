@@ -6,8 +6,8 @@ exercise a live local Ollama, which CI machines don't have and which are
 slow (each call is multiple seconds).
 
 Override the target model/endpoint with:
-  - `SAMPYCLAW_OLLAMA_MODEL`     (default: gemma4:latest)
-  - `SAMPYCLAW_OLLAMA_BASE_URL`  (default: http://127.0.0.1:11434/v1)
+  - `OXENCLAW_OLLAMA_MODEL`     (default: gemma4:latest)
+  - `OXENCLAW_OLLAMA_BASE_URL`  (default: http://127.0.0.1:11434/v1)
 """
 
 from __future__ import annotations
@@ -44,7 +44,7 @@ def pytest_collection_modifyitems(config, items):  # type: ignore[no-untyped-def
                 item.add_marker(skip_marker)
         return
 
-    base_url = os.environ.get("SAMPYCLAW_OLLAMA_BASE_URL", DEFAULT_BASE_URL)
+    base_url = os.environ.get("OXENCLAW_OLLAMA_BASE_URL", DEFAULT_BASE_URL)
     if not _ollama_reachable(base_url):
         skip_marker = pytest.mark.skip(reason=f"Ollama not reachable at {base_url}")
         for item in items:
@@ -54,9 +54,9 @@ def pytest_collection_modifyitems(config, items):  # type: ignore[no-untyped-def
 
 @pytest.fixture(scope="session")
 def ollama_base_url() -> str:
-    return os.environ.get("SAMPYCLAW_OLLAMA_BASE_URL", DEFAULT_BASE_URL)
+    return os.environ.get("OXENCLAW_OLLAMA_BASE_URL", DEFAULT_BASE_URL)
 
 
 @pytest.fixture(scope="session")
 def ollama_model() -> str:
-    return os.environ.get("SAMPYCLAW_OLLAMA_MODEL", DEFAULT_MODEL)
+    return os.environ.get("OXENCLAW_OLLAMA_MODEL", DEFAULT_MODEL)

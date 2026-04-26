@@ -6,13 +6,13 @@ from pathlib import Path
 
 import pytest
 
-from sampyclaw.clawhub.frontmatter import parse_skill_text
-from sampyclaw.clawhub.loader import InstalledSkill
-from sampyclaw.clawhub.runtime import (
+from oxenclaw.clawhub.frontmatter import parse_skill_text
+from oxenclaw.clawhub.loader import InstalledSkill
+from oxenclaw.clawhub.runtime import (
     prepare_skill_runtime,
     resolve_env_overrides,
 )
-from sampyclaw.config.paths import SampyclawPaths
+from oxenclaw.config.paths import OxenclawPaths
 
 
 def _skill(metadata: str | None = None) -> InstalledSkill:
@@ -31,8 +31,8 @@ def _skill(metadata: str | None = None) -> InstalledSkill:
     )
 
 
-def _paths(tmp_path: Path) -> SampyclawPaths:
-    p = SampyclawPaths(home=tmp_path)
+def _paths(tmp_path: Path) -> OxenclawPaths:
+    p = OxenclawPaths(home=tmp_path)
     p.ensure_home()
     return p
 
@@ -150,4 +150,4 @@ def test_runtime_workspace_root_under_home(tmp_path: Path) -> None:
     paths = _paths(tmp_path)
     with prepare_skill_runtime(skill, paths=paths) as rt:
         assert rt.workspace_dir.parent == tmp_path / "skill-workspaces"
-        assert rt.workspace_dir.name.startswith("sampyclaw-t-skill-")
+        assert rt.workspace_dir.name.startswith("oxenclaw-t-skill-")

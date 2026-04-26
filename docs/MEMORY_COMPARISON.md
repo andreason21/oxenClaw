@@ -1,10 +1,10 @@
-# Memory system: openclaw ↔ sampyClaw
+# Memory system: openclaw ↔ oxenClaw
 
 Side-by-side so we can decide what to actually port. openclaw's memory stack is much larger than the Python stub and the two are **not** modelling the same object — see §Conceptual delta before any port.
 
 ## File inventory
 
-| Layer | openclaw | sampyClaw |
+| Layer | openclaw | oxenClaw |
 |---|---|---|
 | Core engine | `src/memory-host-sdk/` (17 top-level + `host/` 40 = **57 ts files** non-test) | — (monolithic) |
 | Root-file loader | `src/memory/root-memory-files.ts` (1 file) | — |
@@ -12,9 +12,9 @@ Side-by-side so we can decide what to actually port. openclaw's memory stack is 
 | Storage backend | `extensions/memory-lancedb/` (**6 files**) | — |
 | Wiki source | `extensions/memory-wiki/` (**34 files**) | — |
 | Active-memory agent | `extensions/active-memory/` (**1 file**) | — |
-| Python impl | — | `sampyclaw/memory/` (**5 modules**: store, retriever, embeddings, tools, models) |
+| Python impl | — | `oxenclaw/memory/` (**5 modules**: store, retriever, embeddings, tools, models) |
 
-openclaw total ≈ **168 non-test files**. sampyClaw ≈ **5 modules**.
+openclaw total ≈ **168 non-test files**. oxenClaw ≈ **5 modules**.
 
 ## Conceptual delta (most important)
 
@@ -26,18 +26,18 @@ openclaw total ≈ **168 non-test files**. sampyClaw ≈ **5 modules**.
 - Backends: built-in SQLite + FTS5 + embedding column, or the Lancedb plug-in.
 - Optional "QMD" query-language for scoped searches (`@scope: path/...`).
 
-**sampyClaw memory = opaque row-per-fact vector store.**
+**oxenClaw memory = opaque row-per-fact vector store.**
 - A "memory" is a single short text: `(id, agent_id, session_key, text, tags, metadata, embedding, created_at)`.
 - No file backing. `memory_save` tool appends a row; `memory_search` runs cosine top-k.
 - Isolation is per `agent_id` + optional `session_key` (agent-global facts use `session_key IS NULL`).
 - `sqlite-vec` for vectors, no FTS, no chunking, no citations.
 - Single schema; backend is not pluggable yet.
 
-These are **different products**. openclaw's design is "agent reads your knowledge base and cites from it." sampyClaw's design is "agent writes discrete facts and recalls them later." Don't blindly port — decide first which product sampyClaw should be.
+These are **different products**. openclaw's design is "agent reads your knowledge base and cites from it." oxenClaw's design is "agent writes discrete facts and recalls them later." Don't blindly port — decide first which product oxenClaw should be.
 
 ## Feature matrix
 
-| Feature | openclaw | sampyClaw | Port-priority |
+| Feature | openclaw | oxenClaw | Port-priority |
 |---|---|---|---|
 | Vector embeddings | ✅ pluggable provider adapters | ✅ OpenAI-shape HTTP (Ollama default) | — (done) |
 | Embedding cache table | ✅ `embedding-cache` table keyed by provider/model/hash | ❌ re-embeds every call | **P1** (cheap win) |
@@ -86,7 +86,7 @@ embedding_cache (provider, model, provider_key, hash, embedding, dims, updated_a
 + FTS5 shadow table on chunks.text
 ```
 
-sampyClaw `store.py` builds two:
+oxenClaw `store.py` builds two:
 
 ```
 memories  (id, agent_id, session_key, text, tags, metadata, created_at)
@@ -102,9 +102,9 @@ Column-level gaps to close if we keep current design:
 
 Recorded 2026-04-25.
 
-1. **Memory unit: chunk-of-file (openclaw model).** `sampyclaw/memory/` will be rebuilt around markdown files on disk at `~/.sampyclaw/memory/**.md` (mirrors openclaw's `~/.openclaw/memory/`). A memory = `(path, start_line, end_line, hash, text, embedding)`. Writing a memory = editing the markdown file; engine re-indexes on mtime/hash change. Current row-of-fact store in `sampyclaw/memory/store.py` is superseded — kept only until the new pipeline lands, then deleted.
+1. **Memory unit: chunk-of-file (openclaw model).** `oxenclaw/memory/` will be rebuilt around markdown files on disk at `~/.oxenclaw/memory/**.md` (mirrors openclaw's `~/.openclaw/memory/`). A memory = `(path, start_line, end_line, hash, text, embedding)`. Writing a memory = editing the markdown file; engine re-indexes on mtime/hash change. Current row-of-fact store in `oxenclaw/memory/store.py` is superseded — kept only until the new pipeline lands, then deleted.
 2. **Source pluralisation:** port the `"memory" | "sessions"` distinction from openclaw. Session transcripts will be indexed separately from the memory corpus so `memory_search` can scope or mix.
-3. **Backend plugin boundary:** mirror `memory-core` as a plug-in shape (`sampyclaw/extensions/memory_core/` or similar) so a future Lancedb-equivalent can register through `plugin_sdk`. v1 ships only the sqlite backend; the seam is what matters.
+3. **Backend plugin boundary:** mirror `memory-core` as a plug-in shape (`oxenclaw/extensions/memory_core/` or similar) so a future Lancedb-equivalent can register through `plugin_sdk`. v1 ships only the sqlite backend; the seam is what matters.
 4. **Dreaming / consolidation:** still deferred for v1. Design the schema so it can be layered later (keep `sessions` source separate; add a `dreams` table stub in `meta` without a producer).
 
 ## Port plan for memory (chunk-of-file)
@@ -115,12 +115,12 @@ Ordered. Each step must land green before the next. Phase labels refer to `docs/
 2. **(P0 / A.1)** **File walker + chunker.** Port `memory-host-sdk/host/session-files.ts` + `read-file.ts` + chunking logic. Walk `memory_dir`, hash files, diff against `files` table, re-chunk and re-embed only dirty files. Configurable chunk size/overlap.
 3. **(P0 / A.1)** **Embedding cache.** Port `embedding_cache` table (`provider, model, provider_key, hash → embedding`) so re-runs don't re-embed unchanged text.
 4. **(P0 / A.1)** **Search path.** Replace `store.search()` with a chunk-level top-k + citation (`path:start-end`). Update `MemoryRetriever` + `format_memories_for_prompt()` to render citations in the system prompt.
-5. **(P0 / A.1)** **Tool surface.** Rework `memory_save` tool: instead of inserting a row, it appends to a single "inbox" markdown file (`~/.sampyclaw/memory/inbox.md`) and triggers an incremental reindex on that file. Add `memory_get` tool that reads a file range by citation (mirrors openclaw `MemoryReadResult`). Keep `memory_search` but return the new chunk shape.
+5. **(P0 / A.1)** **Tool surface.** Rework `memory_save` tool: instead of inserting a row, it appends to a single "inbox" markdown file (`~/.oxenclaw/memory/inbox.md`) and triggers an incremental reindex on that file. Add `memory_get` tool that reads a file range by citation (mirrors openclaw `MemoryReadResult`). Keep `memory_search` but return the new chunk shape.
 6. **(P1)** **Sessions source.** Wire session transcripts as a second `source="sessions"` feed into `files`/`chunks`. Pull transcript paths from the sessions subsystem (once it lands) or from a configured dir.
 7. **(P1)** **MMR diversity re-rank** — port `memory/mmr.ts`. Wire as retriever option.
 8. **(P1)** **Temporal-decay re-rank** — `score = cos_sim * exp(-λ·age)`. Opt-in.
 9. **(P1)** **FTS5 hybrid ranking.** Use the shadow table for BM25 keyword path and blend with cosine + MMR. This is openclaw's "builtin" search mode.
-10. **(P1)** **Reindex command.** `sampyclaw memory rebuild` — atomic reindex via temp DB + swap (mirror `manager-atomic-reindex.ts`). Required when `embedding_model` changes.
+10. **(P1)** **Reindex command.** `oxenclaw memory rebuild` — atomic reindex via temp DB + swap (mirror `manager-atomic-reindex.ts`). Required when `embedding_model` changes.
 11. **(P1)** **Memory CLI.** Finish `cli/memory_cmd.py` — `list`, `sync`, `stats`, `rebuild`, `get PATH:L1-L2`.
 12. **(P1)** **Gateway surface.** Flesh out `gateway/memory_methods.py` for list/search/status/sync so UI clients can drive the engine.
 13. **(P1)** **Plugin boundary.** Move the concrete backend under `extensions/memory_core/` behind a `MemoryBackend` Protocol; wire discovery through `plugin_sdk`.
@@ -138,7 +138,7 @@ Ordered. Each step must land green before the next. Phase labels refer to `docs/
 
 ## Migration impact on current code
 
-Current `sampyclaw/memory/` (row-of-fact) must be treated as a v0 throwaway once step 1–5 land:
+Current `oxenclaw/memory/` (row-of-fact) must be treated as a v0 throwaway once step 1–5 land:
 
 - `store.py` — schema replaced wholesale.
 - `retriever.py` — signature stable (`save`/`search`/`format_memories_for_prompt`) but internals rewritten; `save()` now edits a markdown file instead of inserting a row.

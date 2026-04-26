@@ -1,6 +1,6 @@
-# sampyClaw Security Model
+# oxenClaw Security Model
 
-This document describes what sampyClaw protects against, what it does
+This document describes what oxenClaw protects against, what it does
 not, and how the layered defenses fit together. **Read it before
 deploying with non-trivial tools or accepting third-party skills.**
 
@@ -31,7 +31,7 @@ deploying with non-trivial tools or accepting third-party skills.**
 
 ### 1. Skill scanner (static)
 
-Implementation: `sampyclaw/security/skill_scanner.py`.
+Implementation: `oxenclaw/security/skill_scanner.py`.
 
 Every SKILL.md fetched from ClawHub is statically scanned **before** the
 files are copied into the install directory. The scanner emits findings
@@ -52,20 +52,20 @@ evade it. It is a first line of defense, not the last.
 
 ### 2. Archive safety
 
-Implementation: `sampyclaw/clawhub/installer.py`.
+Implementation: `oxenclaw/clawhub/installer.py`.
 
 - **SHA256 integrity** is recomputed locally and compared to what
   ClawHub reported.
 - ZIP entries with absolute paths or `..` segments are rejected
   pre-extract.
 - The install target path is resolved and refused if it would land
-  outside `~/.sampyclaw/skills/`.
+  outside `~/.oxenclaw/skills/`.
 - Slugs must match `^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$` — no slashes,
   no shell metacharacters.
 
 ### 3. Tool execution isolation
 
-Implementation: `sampyclaw/security/isolation/`.
+Implementation: `oxenclaw/security/isolation/`.
 
 Tools that wrap shell commands (`ShellTool`) or invoke a Python callable
 in a separate process (`IsolatedFunctionTool`) run under one of four
@@ -104,7 +104,7 @@ explicitly.
 
 ### 4. Approval gate
 
-Implementation: `sampyclaw/approvals/`.
+Implementation: `oxenclaw/approvals/`.
 
 Wrap any tool with `gated_tool(tool, manager=approvals)` to require a
 human approve every invocation. The agent gets a "denied" string back if
@@ -131,14 +131,14 @@ HTTP/WS request — `aiohttp` (web tool, MCP HTTP transport), Playwright
   the browser route handler): hostname resolves to its first-seen IPs;
   later disjoint resolutions raise `RebindBlockedError`.
 - **L3 audit** (`OutboundAuditStore`, opt-in via
-  `SAMPYCLAW_AUDIT_OUTBOUND=1`): every request → WAL sqlite at
-  `~/.sampyclaw/outbound-audit.db`.
+  `OXENCLAW_AUDIT_OUTBOUND=1`): every request → WAL sqlite at
+  `~/.oxenclaw/outbound-audit.db`.
 - **L4 webhook ingress guards** (`webhook_guards`): body-size limiter,
   fixed-window rate limiter, constant-time HMAC verifier.
 
 ### 7. Browser sandbox (BR-1)
 
-`sampyclaw/browser/` adds a fifth layer specific to Chromium:
+`oxenclaw/browser/` adds a fifth layer specific to Chromium:
 `--proxy-server=http://0.0.0.0:1` is set at launch so any request that
 escapes Playwright's `context.route("**/*", …)` interception still dies
 at the OS network layer. `BrowserPolicy.closed()` is fully closed —

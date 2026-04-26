@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sampyclaw.clawhub.lockfile import Lockfile, OriginMetadata
+from oxenclaw.clawhub.lockfile import Lockfile, OriginMetadata
 
 
 def test_lockfile_empty_when_missing(tmp_path) -> None:  # type: ignore[no-untyped-def]

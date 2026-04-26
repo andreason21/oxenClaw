@@ -9,9 +9,9 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
-from sampyclaw.extensions.telegram.bot_core import UpdateDeduplicator
-from sampyclaw.extensions.telegram.monitor import TelegramPollingSession
-from sampyclaw.plugin_sdk.channel_contract import InboundEnvelope
+from oxenclaw.extensions.telegram.bot_core import UpdateDeduplicator
+from oxenclaw.extensions.telegram.monitor import TelegramPollingSession
+from oxenclaw.plugin_sdk.channel_contract import InboundEnvelope
 
 
 def _msg(message_id: int, text: str | None = "hi"):  # type: ignore[no-untyped-def]

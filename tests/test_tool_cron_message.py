@@ -4,21 +4,21 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from sampyclaw.agents.dispatch import Dispatcher
-from sampyclaw.agents.echo import EchoAgent
-from sampyclaw.agents.registry import AgentRegistry
-from sampyclaw.channels.router import ChannelRouter
-from sampyclaw.cron.scheduler import CronScheduler
-from sampyclaw.cron.store import CronJobStore
-from sampyclaw.plugin_sdk.channel_contract import (
+from oxenclaw.agents.dispatch import Dispatcher
+from oxenclaw.agents.echo import EchoAgent
+from oxenclaw.agents.registry import AgentRegistry
+from oxenclaw.channels.router import ChannelRouter
+from oxenclaw.cron.scheduler import CronScheduler
+from oxenclaw.cron.store import CronJobStore
+from oxenclaw.plugin_sdk.channel_contract import (
     ProbeOpts,
     ProbeResult,
     SendParams,
     SendResult,
 )
-from sampyclaw.plugin_sdk.config_schema import RootConfig
-from sampyclaw.tools_pkg.cron_tool import cron_tool
-from sampyclaw.tools_pkg.message_tool import message_tool
+from oxenclaw.plugin_sdk.config_schema import RootConfig
+from oxenclaw.tools_pkg.cron_tool import cron_tool
+from oxenclaw.tools_pkg.message_tool import message_tool
 
 # ─── Fake channel for message tool ──────────────────────────────────
 

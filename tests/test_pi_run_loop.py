@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import asyncio
 
-import sampyclaw.pi.providers  # noqa: F401  registers wrappers
-from sampyclaw.pi import (
+import oxenclaw.pi.providers  # noqa: F401  registers wrappers
+from oxenclaw.pi import (
     Api,
     AssistantMessage,
     Model,
@@ -14,8 +14,8 @@ from sampyclaw.pi import (
     register_provider_stream,
     text_message,
 )
-from sampyclaw.pi.run import RuntimeConfig, run_agent_turn, run_attempt
-from sampyclaw.pi.streaming import (
+from oxenclaw.pi.run import RuntimeConfig, run_agent_turn, run_attempt
+from oxenclaw.pi.streaming import (
     ErrorEvent,
     StopEvent,
     TextDeltaEvent,

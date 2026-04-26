@@ -4,15 +4,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from sampyclaw.config.paths import SampyclawPaths
-from sampyclaw.gateway.memory_methods import register_memory_methods
-from sampyclaw.gateway.router import Router
-from sampyclaw.memory.retriever import MemoryRetriever
+from oxenclaw.config.paths import OxenclawPaths
+from oxenclaw.gateway.memory_methods import register_memory_methods
+from oxenclaw.gateway.router import Router
+from oxenclaw.memory.retriever import MemoryRetriever
 from tests._memory_stubs import StubEmbeddings
 
 
 def _setup(tmp_path: Path) -> tuple[Router, MemoryRetriever]:
-    paths = SampyclawPaths(home=tmp_path)
+    paths = OxenclawPaths(home=tmp_path)
     paths.ensure_home()
     retriever = MemoryRetriever.for_root(paths, StubEmbeddings())
     router = Router()

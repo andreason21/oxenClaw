@@ -6,31 +6,31 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-import sampyclaw.pi.providers  # noqa: F401  registers wrappers
-from sampyclaw.agents.base import AgentContext
-from sampyclaw.agents.factory import SUPPORTED_PROVIDERS, build_agent
-from sampyclaw.agents.pi_agent import PiAgent
-from sampyclaw.agents.tools import FunctionTool, ToolRegistry
-from sampyclaw.config.paths import SampyclawPaths
-from sampyclaw.pi import (
+import oxenclaw.pi.providers  # noqa: F401  registers wrappers
+from oxenclaw.agents.base import AgentContext
+from oxenclaw.agents.factory import SUPPORTED_PROVIDERS, build_agent
+from oxenclaw.agents.pi_agent import PiAgent
+from oxenclaw.agents.tools import FunctionTool, ToolRegistry
+from oxenclaw.config.paths import OxenclawPaths
+from oxenclaw.pi import (
     InMemoryAuthStorage,
     InMemorySessionManager,
     Model,
     register_provider_stream,
 )
-from sampyclaw.pi.registry import InMemoryModelRegistry
-from sampyclaw.pi.streaming import (
+from oxenclaw.pi.registry import InMemoryModelRegistry
+from oxenclaw.pi.streaming import (
     StopEvent,
     TextDeltaEvent,
     ToolUseEndEvent,
     ToolUseInputDeltaEvent,
     ToolUseStartEvent,
 )
-from sampyclaw.plugin_sdk.channel_contract import ChannelTarget, InboundEnvelope
+from oxenclaw.plugin_sdk.channel_contract import ChannelTarget, InboundEnvelope
 
 
-def _paths(tmp_path: Path) -> SampyclawPaths:
-    p = SampyclawPaths(home=tmp_path)
+def _paths(tmp_path: Path) -> OxenclawPaths:
+    p = OxenclawPaths(home=tmp_path)
     p.ensure_home()
     return p
 

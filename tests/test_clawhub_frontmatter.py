@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from sampyclaw.clawhub.frontmatter import (
+from oxenclaw.clawhub.frontmatter import (
     SkillManifestError,
     is_valid_slug,
     parse_skill_text,

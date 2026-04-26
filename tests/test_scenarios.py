@@ -34,16 +34,16 @@ import pytest
 from pydantic import BaseModel
 from typer.testing import CliRunner
 
-import sampyclaw.pi.providers  # noqa: F401  registers stream wrappers
-from sampyclaw.agents.base import AgentContext
-from sampyclaw.agents.pi_agent import PiAgent
-from sampyclaw.agents.tools import FunctionTool, ToolRegistry
-from sampyclaw.cli.sessions_cmd import app as sessions_cli_app
-from sampyclaw.config.paths import SampyclawPaths
-from sampyclaw.memory.embedding_cache import EmbeddingCache
-from sampyclaw.memory.retriever import MemoryRetriever
-from sampyclaw.memory.store import MemoryStore
-from sampyclaw.pi import (
+import oxenclaw.pi.providers  # noqa: F401  registers stream wrappers
+from oxenclaw.agents.base import AgentContext
+from oxenclaw.agents.pi_agent import PiAgent
+from oxenclaw.agents.tools import FunctionTool, ToolRegistry
+from oxenclaw.cli.sessions_cmd import app as sessions_cli_app
+from oxenclaw.config.paths import OxenclawPaths
+from oxenclaw.memory.embedding_cache import EmbeddingCache
+from oxenclaw.memory.retriever import MemoryRetriever
+from oxenclaw.memory.store import MemoryStore
+from oxenclaw.pi import (
     AssistantMessage,
     CreateAgentSessionOptions,
     InMemoryAuthStorage,
@@ -53,12 +53,12 @@ from sampyclaw.pi import (
     UserMessage,
     register_provider_stream,
 )
-from sampyclaw.pi.cache_observability import (
+from oxenclaw.pi.cache_observability import (
     CacheObserver,
     should_apply_cache_markers,
 )
-from sampyclaw.pi.extras import classify_failure, select_failover_model
-from sampyclaw.pi.lifecycle import (
+from oxenclaw.pi.extras import classify_failure, select_failover_model
+from oxenclaw.pi.lifecycle import (
     ForkOptions,
     LifecycleBus,
     LifecycleEvent,
@@ -66,22 +66,22 @@ from sampyclaw.pi.lifecycle import (
     fork_session,
     restore_archive,
 )
-from sampyclaw.pi.persistence import SQLiteSessionManager
-from sampyclaw.pi.policy import (
+from oxenclaw.pi.persistence import SQLiteSessionManager
+from oxenclaw.pi.policy import (
     SendMode,
     SendPolicy,
     SessionChatType,
     SessionPolicy,
 )
-from sampyclaw.pi.registry import InMemoryModelRegistry
-from sampyclaw.pi.run import RuntimeConfig, run_agent_turn
-from sampyclaw.pi.session_memory_hook import SessionMemoryHook
-from sampyclaw.pi.store_ops import (
+from oxenclaw.pi.registry import InMemoryModelRegistry
+from oxenclaw.pi.run import RuntimeConfig, run_agent_turn
+from oxenclaw.pi.session_memory_hook import SessionMemoryHook
+from oxenclaw.pi.store_ops import (
     MaintenanceConfig,
     StoreMaintenance,
     db_size_bytes,
 )
-from sampyclaw.pi.streaming import (
+from oxenclaw.pi.streaming import (
     ErrorEvent,
     StopEvent,
     TextDeltaEvent,
@@ -90,14 +90,14 @@ from sampyclaw.pi.streaming import (
     ToolUseStartEvent,
     UsageEvent,
 )
-from sampyclaw.plugin_sdk.channel_contract import ChannelTarget, InboundEnvelope
+from oxenclaw.plugin_sdk.channel_contract import ChannelTarget, InboundEnvelope
 from tests._memory_stubs import StubEmbeddings
 
 # ─── helpers ─────────────────────────────────────────────────────────
 
 
-def _paths(tmp_path: Path) -> SampyclawPaths:
-    p = SampyclawPaths(home=tmp_path)
+def _paths(tmp_path: Path) -> OxenclawPaths:
+    p = OxenclawPaths(home=tmp_path)
     p.ensure_home()
     return p
 
@@ -277,13 +277,13 @@ async def test_scenario_group_chat_send_policy_gates_inbound() -> None:
     assert p2.should_reply(chat_type=SessionChatType.GROUP, sender_id="alice", text="x") is False
 
     # ADDRESSED_ONLY: needs mention or reply-to-bot.
-    p3 = SendPolicy(mode=SendMode.ADDRESSED_ONLY, addressed_handles=("@sampyclaw",))
+    p3 = SendPolicy(mode=SendMode.ADDRESSED_ONLY, addressed_handles=("@oxenclaw",))
     assert (
         p3.should_reply(chat_type=SessionChatType.GROUP, sender_id="anyone", text="random chat")
         is False
     )
     assert (
-        p3.should_reply(chat_type=SessionChatType.GROUP, sender_id="anyone", text="@sampyclaw help")
+        p3.should_reply(chat_type=SessionChatType.GROUP, sender_id="anyone", text="@oxenclaw help")
         is True
     )
     assert (
@@ -499,9 +499,9 @@ async def test_scenario_disk_budget_prunes_oldest_sessions(tmp_path: Path) -> No
 def test_scenario_cli_full_session_lifecycle(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Drive `sampyclaw session ...` against a freshly-seeded store:
+    """Drive `oxenclaw session ...` against a freshly-seeded store:
     list → show → fork → archive → restore → delete."""
-    monkeypatch.setenv("SAMPYCLAW_HOME", str(tmp_path))
+    monkeypatch.setenv("OXENCLAW_HOME", str(tmp_path))
 
     async def _seed() -> str:
         sm = SQLiteSessionManager(tmp_path / "sessions.db")
@@ -570,7 +570,7 @@ async def test_scenario_pi_agent_web_search_then_fetch(tmp_path: Path) -> None:
     web_fetch on a target. Both tools are injected as fakes — the test
     asserts the run loop wires tool args/results across two iterations
     and that the SSRF guard fires on a private URL."""
-    from sampyclaw.tools_pkg.web import (
+    from oxenclaw.tools_pkg.web import (
         SearchHit,
         web_fetch_tool,
         web_search_tool,
@@ -645,9 +645,9 @@ async def test_scenario_pi_agent_web_search_then_fetch(tmp_path: Path) -> None:
 async def test_scenario_coding_agent_runs_in_skill_workspace(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from sampyclaw.clawhub.frontmatter import parse_skill_text
-    from sampyclaw.clawhub.loader import InstalledSkill
-    from sampyclaw.tools_pkg.coding import coding_agent_tool
+    from oxenclaw.clawhub.frontmatter import parse_skill_text
+    from oxenclaw.clawhub.loader import InstalledSkill
+    from oxenclaw.tools_pkg.coding import coding_agent_tool
 
     bd = tmp_path / "bin"
     bd.mkdir(parents=True)
@@ -693,7 +693,7 @@ async def test_scenario_parent_spawns_subagent_and_summarises(
 ) -> None:
     """Parent's stream issues a `subagents` tool call; the child runs one
     turn against its own model and returns text. Parent then wraps it."""
-    from sampyclaw.tools_pkg.subagent import SubagentConfig, subagents_tool
+    from oxenclaw.tools_pkg.subagent import SubagentConfig, subagents_tool
 
     state = {"parent_calls": 0, "child_calls": 0}
 

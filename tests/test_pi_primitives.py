@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from sampyclaw.pi import (
+from oxenclaw.pi import (
     AgentSession,
     AssistantMessage,
     Context,
@@ -101,7 +101,7 @@ def test_thinking_level_enum_round_trip() -> None:
 
 def test_stream_simple_dispatches_via_registry() -> None:
     async def fake_stream(ctx, opts):  # type: ignore[no-untyped-def]
-        from sampyclaw.pi.streaming import StopEvent, TextDeltaEvent
+        from oxenclaw.pi.streaming import StopEvent, TextDeltaEvent
 
         yield TextDeltaEvent(delta="ok")
         yield StopEvent(reason="end_turn")

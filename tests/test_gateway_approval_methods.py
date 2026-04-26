@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import asyncio
 
-from sampyclaw.approvals import ApprovalManager
-from sampyclaw.gateway.approval_methods import register_approval_methods
-from sampyclaw.gateway.router import Router
+from oxenclaw.approvals import ApprovalManager
+from oxenclaw.gateway.approval_methods import register_approval_methods
+from oxenclaw.gateway.router import Router
 
 
 def _setup() -> tuple[Router, ApprovalManager]:

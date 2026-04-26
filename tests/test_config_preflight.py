@@ -1,16 +1,16 @@
-"""Tests for `sampyclaw.config.preflight`."""
+"""Tests for `oxenclaw.config.preflight`."""
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
 
-from sampyclaw.config.paths import SampyclawPaths
-from sampyclaw.config.preflight import run_preflight
+from oxenclaw.config.paths import OxenclawPaths
+from oxenclaw.config.preflight import run_preflight
 
 
-def _paths(tmp_path: Path) -> SampyclawPaths:
-    paths = SampyclawPaths(home=tmp_path)
+def _paths(tmp_path: Path) -> OxenclawPaths:
+    paths = OxenclawPaths(home=tmp_path)
     paths.ensure_home()
     return paths
 
@@ -90,7 +90,7 @@ def test_preflight_flags_malformed_credentials(tmp_path: Path):
 
 
 def test_preflight_finding_format_is_human_readable():
-    from sampyclaw.config.preflight import PreflightFinding
+    from oxenclaw.config.preflight import PreflightFinding
 
     f = PreflightFinding(severity="error", source="config.yaml", message="missing 'channels'")
     assert f.format() == "[error] config.yaml: missing 'channels'"

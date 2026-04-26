@@ -1,4 +1,4 @@
-"""Tests for sampyclaw.observability.logging."""
+"""Tests for oxenclaw.observability.logging."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import logging
 
 import pytest
 
-from sampyclaw.observability import (
+from oxenclaw.observability import (
     configure_logging,
     correlation_scope,
     get_context,
@@ -19,7 +19,7 @@ from sampyclaw.observability import (
 
 def _make_logger(stream: io.StringIO, fmt: str) -> logging.Logger:
     configure_logging(level="DEBUG", fmt=fmt, stream=stream)
-    return logging.getLogger("sampyclaw.test.logging")
+    return logging.getLogger("oxenclaw.test.logging")
 
 
 def test_new_correlation_id_is_short_hex():
@@ -98,9 +98,9 @@ def test_human_formatter_no_suffix_when_no_context():
 
 def test_env_var_picks_format(monkeypatch):
     stream = io.StringIO()
-    monkeypatch.setenv("SAMPYCLAW_LOG_FORMAT", "json")
+    monkeypatch.setenv("OXENCLAW_LOG_FORMAT", "json")
     configure_logging(level="INFO", stream=stream)
-    log = logging.getLogger("sampyclaw.test.envfmt")
+    log = logging.getLogger("oxenclaw.test.envfmt")
     log.info("msg")
     line = stream.getvalue().strip().splitlines()[-1]
     payload = json.loads(line)

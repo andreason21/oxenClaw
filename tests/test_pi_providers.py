@@ -10,8 +10,8 @@ import json
 
 import pytest
 
-import sampyclaw.pi.providers  # registers all wrappers  # noqa: F401
-from sampyclaw.pi import (
+import oxenclaw.pi.providers  # registers all wrappers  # noqa: F401
+from oxenclaw.pi import (
     Api,
     Context,
     Model,
@@ -23,11 +23,11 @@ from sampyclaw.pi import (
     get_provider_stream,
     text_message,
 )
-from sampyclaw.pi.providers._openai_shared import build_openai_payload
-from sampyclaw.pi.providers.anthropic import build_anthropic_payload
-from sampyclaw.pi.providers.bedrock import is_anthropic_bedrock_model
-from sampyclaw.pi.providers.google import build_google_payload
-from sampyclaw.pi.streaming import (
+from oxenclaw.pi.providers._openai_shared import build_openai_payload
+from oxenclaw.pi.providers.anthropic import build_anthropic_payload
+from oxenclaw.pi.providers.bedrock import is_anthropic_bedrock_model
+from oxenclaw.pi.providers.google import build_google_payload
+from oxenclaw.pi.streaming import (
     StopEvent,
     TextDeltaEvent,
     ToolUseEndEvent,
@@ -91,7 +91,7 @@ def test_openai_payload_serializes_tool_use_and_result() -> None:
     model = Model(id="gpt-4o", provider="openai")
     api = Api(base_url="https://api.openai.com/v1", api_key="sk-x")
     asst = ToolUseBlock(id="t1", name="echo", input={"x": 1})
-    from sampyclaw.pi.messages import AssistantMessage as A
+    from oxenclaw.pi.messages import AssistantMessage as A
 
     ctx = Context(
         model=model,
@@ -197,7 +197,7 @@ def test_anthropic_payload_serializes_tool_result_message() -> None:
 def test_google_payload_lifts_system_and_renames_assistant_role() -> None:
     model = Model(id="gemini-2.5-pro", provider="google")
     api = Api(base_url="https://generativelanguage.googleapis.com", api_key="k")
-    from sampyclaw.pi.messages import AssistantMessage as A
+    from oxenclaw.pi.messages import AssistantMessage as A
 
     ctx = Context(
         model=model,
@@ -312,7 +312,7 @@ class _FakeAiohttpModule:
 
 
 async def test_openai_sse_translates_text_and_tool_deltas(patch_aiohttp) -> None:
-    from sampyclaw.pi.providers import _openai_shared as shared
+    from oxenclaw.pi.providers import _openai_shared as shared
 
     chunks = [
         'data: {"choices":[{"delta":{"content":"he"}}]}',
@@ -351,7 +351,7 @@ async def test_openai_sse_translates_text_and_tool_deltas(patch_aiohttp) -> None
 async def test_anthropic_sse_translates_thinking_text_and_tool(
     patch_aiohttp,
 ) -> None:
-    from sampyclaw.pi.providers import anthropic as ant
+    from oxenclaw.pi.providers import anthropic as ant
 
     chunks = [
         ('data: {"type":"content_block_start","index":0,"content_block":{"type":"thinking"}}'),
@@ -393,7 +393,7 @@ async def test_anthropic_sse_translates_thinking_text_and_tool(
     async for ev in ant.stream_anthropic(ctx, SimpleStreamOptions()):
         events.append(ev)
 
-    from sampyclaw.pi.streaming import ThinkingDeltaEvent
+    from oxenclaw.pi.streaming import ThinkingDeltaEvent
 
     assert any(isinstance(e, ThinkingDeltaEvent) for e in events)
     assert "".join(e.delta for e in events if isinstance(e, TextDeltaEvent)) == "hi"
@@ -405,7 +405,7 @@ async def test_anthropic_sse_translates_thinking_text_and_tool(
 
 
 async def test_google_sse_translates_function_call(patch_aiohttp) -> None:
-    from sampyclaw.pi.providers import google as goo
+    from oxenclaw.pi.providers import google as goo
 
     chunks = [
         (
@@ -426,8 +426,8 @@ async def test_google_sse_translates_function_call(patch_aiohttp) -> None:
 
 
 async def test_openai_http_error_emits_retryable_event(patch_aiohttp) -> None:
-    from sampyclaw.pi.providers import _openai_shared as shared
-    from sampyclaw.pi.streaming import ErrorEvent
+    from oxenclaw.pi.providers import _openai_shared as shared
+    from oxenclaw.pi.streaming import ErrorEvent
 
     patch_aiohttp(shared, [], status=503)
     model = Model(id="gpt-4o", provider="openai")

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from sampyclaw.pi.registry import InMemoryAuthStorage
-from sampyclaw.tools_pkg.web import (
+from oxenclaw.pi.registry import InMemoryAuthStorage
+from oxenclaw.tools_pkg.web import (
     SearchHit,
     SSRFBlocked,
     assert_public_url,

@@ -5,9 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from sampyclaw.plugins.discovery import discover_plugins
-from sampyclaw.plugins.manifest import Manifest
-from sampyclaw.plugins.registry import PluginEntry
+from oxenclaw.plugins.discovery import discover_plugins
+from oxenclaw.plugins.manifest import Manifest
+from oxenclaw.plugins.registry import PluginEntry
 
 
 @dataclass

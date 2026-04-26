@@ -7,8 +7,8 @@ from collections.abc import Callable
 
 import pytest
 
-from sampyclaw.channels.runner import ChannelRunner
-from sampyclaw.plugin_sdk.channel_contract import InboundEnvelope, MonitorOpts
+from oxenclaw.channels.runner import ChannelRunner
+from oxenclaw.plugin_sdk.channel_contract import InboundEnvelope, MonitorOpts
 
 
 class _FakeChannel:

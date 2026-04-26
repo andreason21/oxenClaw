@@ -5,8 +5,8 @@ from __future__ import annotations
 import pytest
 from pydantic import BaseModel
 
-from sampyclaw.gateway import ChatSendParams, ChatSendResult, ErrorCode, Router
-from sampyclaw.plugin_sdk.error_runtime import ChannelError, RateLimitedError
+from oxenclaw.gateway import ChatSendParams, ChatSendResult, ErrorCode, Router
+from oxenclaw.plugin_sdk.error_runtime import ChannelError, RateLimitedError
 
 
 @pytest.fixture()

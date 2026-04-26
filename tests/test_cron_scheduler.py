@@ -9,14 +9,14 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock
 
-from sampyclaw.agents.dispatch import Dispatcher
-from sampyclaw.agents.echo import EchoAgent
-from sampyclaw.agents.registry import AgentRegistry
-from sampyclaw.cron.models import NewCronJob
-from sampyclaw.cron.scheduler import CronScheduler
-from sampyclaw.cron.store import CronJobStore
-from sampyclaw.plugin_sdk.channel_contract import SendResult
-from sampyclaw.plugin_sdk.config_schema import (
+from oxenclaw.agents.dispatch import Dispatcher
+from oxenclaw.agents.echo import EchoAgent
+from oxenclaw.agents.registry import AgentRegistry
+from oxenclaw.cron.models import NewCronJob
+from oxenclaw.cron.scheduler import CronScheduler
+from oxenclaw.cron.store import CronJobStore
+from oxenclaw.plugin_sdk.channel_contract import SendResult
+from oxenclaw.plugin_sdk.config_schema import (
     AgentChannelRouting,
     AgentConfig,
     RootConfig,

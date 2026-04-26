@@ -1,13 +1,13 @@
 # Install on Windows (via WSL2)
 
-sampyClaw is a Linux/macOS service. On Windows you run it inside **WSL2**
+oxenClaw is a Linux/macOS service. On Windows you run it inside **WSL2**
 — the Microsoft-supported Linux subsystem. Windows native (without WSL)
 is not supported because sandboxing, signal handling, and the Linux
 networking stack the gateway depends on don't have direct equivalents
 on Win32.
 
 This guide takes you from a fresh Windows install to a running
-sampyClaw gateway with Ollama-backed local LLM, in 15–25 minutes.
+oxenClaw gateway with Ollama-backed local LLM, in 15–25 minutes.
 
 [**한국어 ↓**](#한국어)
 
@@ -54,7 +54,7 @@ wsl --set-version Ubuntu-22.04 2
 
 ## 3. Install Python 3.11+
 
-Ubuntu 22.04 ships Python 3.10. sampyClaw needs **3.11+**. Install via
+Ubuntu 22.04 ships Python 3.10. oxenClaw needs **3.11+**. Install via
 the deadsnakes PPA:
 
 ```bash
@@ -120,7 +120,7 @@ ip route show default | awk '{print $3}'
 Then start the gateway with `--base-url`:
 
 ```bash
-sampyclaw gateway start \
+oxenclaw gateway start \
   --provider local --model gemma4:latest \
   --base-url http://172.28.176.1:11434/v1
 ```
@@ -153,15 +153,15 @@ on WSL is partial.
 
 ---
 
-## 6. Install sampyClaw
+## 6. Install oxenClaw
 
 Clone into your **Linux home directory** (NOT under `/mnt/c/`, which
 is 10–100× slower for `git` and `pip`):
 
 ```bash
 cd ~
-git clone https://github.com/andreason21/sampyClaw.git
-cd sampyClaw
+git clone https://github.com/andreason21/oxenClaw.git
+cd oxenClaw
 
 python3.12 -m venv .venv
 source .venv/bin/activate
@@ -173,8 +173,8 @@ pip install -e ".[dev]"
 Sanity check:
 
 ```bash
-sampyclaw paths
-sampyclaw config validate
+oxenclaw paths
+oxenclaw config validate
 ```
 
 Run the test suite (takes ~10 seconds):
@@ -188,7 +188,7 @@ pytest -q
 
 ## 7. Configure + start
 
-Create `~/.sampyclaw/config.yaml`:
+Create `~/.oxenclaw/config.yaml`:
 
 ```yaml
 channels: {}
@@ -203,8 +203,8 @@ agents:
 Generate a token and start:
 
 ```bash
-export SAMPYCLAW_GATEWAY_TOKEN=$(openssl rand -hex 32)
-sampyclaw gateway start --provider local
+export OXENCLAW_GATEWAY_TOKEN=$(openssl rand -hex 32)
+oxenclaw gateway start --provider local
 ```
 
 You should see `gateway listening on http://127.0.0.1:7331`.
@@ -221,7 +221,7 @@ If you want the gateway reachable from another machine on your LAN
 (through the Windows host), bind to `0.0.0.0`:
 
 ```bash
-sampyclaw gateway start --host 0.0.0.0 --port 7331 --provider local
+oxenclaw gateway start --host 0.0.0.0 --port 7331 --provider local
 ```
 
 Then open Windows port 7331 if your Windows Firewall blocks it. WSL2
@@ -245,7 +245,7 @@ the systemd unit from [`docs/OPERATIONS.md`](OPERATIONS.md).
 If systemd isn't available, run under `tmux` / `screen` / `nohup`:
 
 ```bash
-nohup sampyclaw gateway start --provider local > ~/sampyclaw.log 2>&1 &
+nohup oxenclaw gateway start --provider local > ~/oxenclaw.log 2>&1 &
 disown
 ```
 
@@ -256,7 +256,7 @@ disown
 Telegram bot inbound is **outbound-only** — your gateway long-polls
 Telegram's servers. No port forwarding, no public IP, no Windows
 Firewall changes required. Just put your token at
-`~/.sampyclaw/credentials/telegram/main.json` and add the binding to
+`~/.oxenclaw/credentials/telegram/main.json` and add the binding to
 `config.yaml` exactly as in the main README.
 
 ---
@@ -266,7 +266,7 @@ Firewall changes required. Just put your token at
 | Symptom | Cause / fix |
 |---|---|
 | `pip install` extremely slow, weird disk errors | You cloned into `/mnt/c/...`. Move to `~`. WSL2's NTFS bridge is much slower than ext4. |
-| `Connection refused` to `127.0.0.1:11434` from sampyClaw | Ollama is running on Windows host, not in WSL2. Use Option B above (Windows host IP) or install Ollama in WSL2. |
+| `Connection refused` to `127.0.0.1:11434` from oxenClaw | Ollama is running on Windows host, not in WSL2. Use Option B above (Windows host IP) or install Ollama in WSL2. |
 | Browser can't reach `localhost:7331` from Windows | Make sure you bound to `127.0.0.1` (default) or `0.0.0.0`. Try `wsl --shutdown` and relaunch — sometimes the localhost forwarder gets stuck. |
 | `pyright` or `pre-commit` reports CRLF errors | `git config --global core.autocrlf input` inside WSL2 to keep files LF. |
 | `gpgsign` errors on `git commit` | WSL2 doesn't have your Windows GPG agent. Either disable signing (`git config --local commit.gpgsign false`) or set up `gpg` inside Ubuntu. |
@@ -291,7 +291,7 @@ curl -s http://127.0.0.1:7331/readyz
 curl -s http://127.0.0.1:7331/metrics | head
 
 # 5. End-to-end RPC via CLI
-sampyclaw message send --agent default "say hi"
+oxenclaw message send --agent default "say hi"
 ```
 
 If all five succeed, you're production-ready on WSL2.
@@ -300,12 +300,12 @@ If all five succeed, you're production-ready on WSL2.
 
 ## 한국어
 
-sampyClaw는 Linux/macOS 서비스. Windows에서는 **WSL2** 안에서 실행한다.
+oxenClaw는 Linux/macOS 서비스. Windows에서는 **WSL2** 안에서 실행한다.
 Win32 네이티브는 지원하지 않음 — 샌드박스, 시그널 처리, 게이트웨이가
 의존하는 Linux 네트워크 스택의 동등 기능이 Windows에 없다.
 
 이 가이드는 깨끗한 Windows에서 Ollama 기반 로컬 LLM이 동작하는
-sampyClaw 게이트웨이까지 15–25분 소요.
+oxenClaw 게이트웨이까지 15–25분 소요.
 
 ### 1. 사전 요구사항
 
@@ -376,7 +376,7 @@ Windows의 `127.0.0.1`은 직접 접근 불가 → Windows 호스트 IP 필요:
 ip route show default | awk '{print $3}'
 # 예: 172.28.176.1
 
-sampyclaw gateway start \
+oxenclaw gateway start \
   --provider local --model gemma4:latest \
   --base-url http://172.28.176.1:11434/v1
 ```
@@ -396,22 +396,22 @@ NVIDIA:
 
 AMD/Intel은 Ollama GPU 호환표 참고 — WSL 커버리지 부분적.
 
-### 6. sampyClaw 설치
+### 6. oxenClaw 설치
 
 **Linux 홈 디렉토리**에 클론 (`/mnt/c/...` 아래 X — git/pip가 10–100배 느림):
 
 ```bash
 cd ~
-git clone https://github.com/andreason21/sampyClaw.git
-cd sampyClaw
+git clone https://github.com/andreason21/oxenClaw.git
+cd oxenClaw
 
 python3.12 -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip
 pip install -e ".[dev]"
 
-sampyclaw paths
-sampyclaw config validate
+oxenclaw paths
+oxenclaw config validate
 
 pytest -q
 # 1026 passed, 33 skipped   (10 env-gated + 23 dashboard E2E auto-skipped without Chromium deps)
@@ -419,7 +419,7 @@ pytest -q
 
 ### 7. 설정 + 실행
 
-`~/.sampyclaw/config.yaml`:
+`~/.oxenclaw/config.yaml`:
 
 ```yaml
 channels: {}
@@ -432,8 +432,8 @@ agents:
 ```
 
 ```bash
-export SAMPYCLAW_GATEWAY_TOKEN=$(openssl rand -hex 32)
-sampyclaw gateway start --provider local
+export OXENCLAW_GATEWAY_TOKEN=$(openssl rand -hex 32)
+oxenclaw gateway start --provider local
 ```
 
 `gateway listening on http://127.0.0.1:7331` 확인. **Windows 브라우저**에서
@@ -444,7 +444,7 @@ sampyclaw gateway start --provider local
 다른 PC에서 접근하려면 `0.0.0.0` 바인드:
 
 ```bash
-sampyclaw gateway start --host 0.0.0.0 --port 7331 --provider local
+oxenclaw gateway start --host 0.0.0.0 --port 7331 --provider local
 ```
 
 Windows 방화벽이 막으면 7331 포트 열기. WSL2가 LAN 자동 포워딩.
@@ -464,7 +464,7 @@ PowerShell에서 `wsl --shutdown` → 재시작 →
 systemd 없으면 `nohup`:
 
 ```bash
-nohup sampyclaw gateway start --provider local > ~/sampyclaw.log 2>&1 &
+nohup oxenclaw gateway start --provider local > ~/oxenclaw.log 2>&1 &
 disown
 ```
 
@@ -472,7 +472,7 @@ disown
 
 Telegram은 outbound-only — 게이트웨이가 Telegram 서버에 long-polling.
 포트 포워딩, 공인 IP, 방화벽 설정 모두 불필요. README와 동일하게
-`~/.sampyclaw/credentials/telegram/main.json` 작성 + `config.yaml`에 바인딩만 추가.
+`~/.oxenclaw/credentials/telegram/main.json` 작성 + `config.yaml`에 바인딩만 추가.
 
 ### 11. 자주 겪는 문제
 
@@ -493,7 +493,7 @@ curl -s http://127.0.0.1:11434/api/tags | head            # Ollama 응답
 curl -s http://127.0.0.1:7331/healthz                      # 게이트웨이 alive
 curl -s http://127.0.0.1:7331/readyz                       # readiness OK/degraded
 curl -s http://127.0.0.1:7331/metrics | head               # 메트릭 노출
-sampyclaw message send --agent default "say hi"            # E2E RPC
+oxenclaw message send --agent default "say hi"            # E2E RPC
 ```
 
 5개 모두 성공하면 WSL2에서 프로덕션 가능 상태.

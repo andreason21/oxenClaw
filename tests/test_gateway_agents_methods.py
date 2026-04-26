@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from sampyclaw.agents import AgentRegistry
-from sampyclaw.gateway.agents_methods import register_agents_methods
-from sampyclaw.gateway.router import Router
+from oxenclaw.agents import AgentRegistry
+from oxenclaw.gateway.agents_methods import register_agents_methods
+from oxenclaw.gateway.router import Router
 
 
 def _setup() -> tuple[Router, AgentRegistry]:

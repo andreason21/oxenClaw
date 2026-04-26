@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Bump the project version across the three files that hold it.
 
-sampyClaw stores its version in three places that must stay in sync:
+oxenClaw stores its version in three places that must stay in sync:
 
 - `pyproject.toml`            — Python package version (PyPI)
 - `desktop/src-tauri/Cargo.toml` — Rust crate version

@@ -5,14 +5,14 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
-from sampyclaw.pi import (
+from oxenclaw.pi import (
     AssistantMessage,
     CreateAgentSessionOptions,
     SystemMessage,
     TextContent,
     UserMessage,
 )
-from sampyclaw.pi.lifecycle import (
+from oxenclaw.pi.lifecycle import (
     ForkOptions,
     LifecycleBus,
     LifecycleEvent,
@@ -23,8 +23,8 @@ from sampyclaw.pi.lifecycle import (
     reset_session_messages,
     restore_archive,
 )
-from sampyclaw.pi.persistence import SQLiteSessionManager
-from sampyclaw.pi.session import AgentSession, CompactionEntry
+from oxenclaw.pi.persistence import SQLiteSessionManager
+from oxenclaw.pi.session import AgentSession, CompactionEntry
 
 
 def _seeded_session(*, n_user: int = 4, with_system: bool = True) -> AgentSession:

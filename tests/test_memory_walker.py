@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from sampyclaw.memory.walker import scan_memory_dir
+from oxenclaw.memory.walker import scan_memory_dir
 
 
 def test_missing_dir_yields_empty(tmp_path: Path) -> None:

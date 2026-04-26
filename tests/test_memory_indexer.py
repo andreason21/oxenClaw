@@ -5,9 +5,9 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
-from sampyclaw.memory.embedding_cache import EmbeddingCache
-from sampyclaw.memory.indexer import MemoryIndexer
-from sampyclaw.memory.store import MemoryStore
+from oxenclaw.memory.embedding_cache import EmbeddingCache
+from oxenclaw.memory.indexer import MemoryIndexer
+from oxenclaw.memory.store import MemoryStore
 from tests._memory_stubs import StubEmbeddings
 
 

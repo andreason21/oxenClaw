@@ -1,4 +1,4 @@
-# sampyClaw Porting Plan
+# oxenClaw Porting Plan
 
 A phased roadmap for porting [openclaw](https://github.com/openclaw/openclaw) (TypeScript monorepo, ~2.46M LOC) to Python. Companion to [`ARCHITECTURE.md`](./ARCHITECTURE.md).
 
@@ -28,14 +28,14 @@ Output: [`ARCHITECTURE.md`](./ARCHITECTURE.md). Reference spec for all subsequen
 
 ### Phase B — Telegram proof-of-concept
 
-Goal: prove the port pattern end-to-end with one real channel. When a real Telegram bot can receive and reply through sampyClaw, the pattern is validated.
+Goal: prove the port pattern end-to-end with one real channel. When a real Telegram bot can receive and reply through oxenClaw, the pattern is validated.
 
 **B.1 — Project scaffold.**
 - `pyproject.toml` (hatch build backend, Python 3.11+).
-- `sampyclaw/` top-level package.
+- `oxenclaw/` top-level package.
 - Dev tooling: `pytest`, `pytest-asyncio`, `ruff`, `pyright`, `pre-commit`.
 
-**B.2 — Plugin SDK foundation** (`sampyclaw/plugin_sdk/`).
+**B.2 — Plugin SDK foundation** (`oxenclaw/plugin_sdk/`).
 - `channel_contract.py` — `ChannelPlugin` Protocol/ABC mirroring `src/channels/plugins/types.plugin.ts`.
 - `config_schema.py` — base Pydantic models for plugin config.
 - `config_runtime.py` — config loader (`load_config()`, `resolve_channel_group_policy()`).
@@ -44,18 +44,18 @@ Goal: prove the port pattern end-to-end with one real channel. When a real Teleg
 - `media_runtime.py` — media envelope types.
 - `error_runtime.py` — error taxonomy.
 
-**B.3 — Config & credential store** (`sampyclaw/config/`).
+**B.3 — Config & credential store** (`oxenclaw/config/`).
 - YAML load/validate (`config.yaml`).
-- Credential read/write (`~/.sampyclaw/credentials/<channel>/<accountId>.json`).
+- Credential read/write (`~/.oxenclaw/credentials/<channel>/<accountId>.json`).
 - Env var substitution (`$TELEGRAM_BOT_TOKEN`).
 - Migration stubs (not needed for greenfield Python but keep shape).
 
-**B.4 — Gateway protocol** (`sampyclaw/gateway/`).
+**B.4 — Gateway protocol** (`oxenclaw/gateway/`).
 - `protocol/schemas.py` — Pydantic models for RPC params/results (minimum needed for Telegram flow).
 - `server.py` — FastAPI + `websockets` JSON-RPC server.
 - `router.py` — method dispatch.
 
-**B.5 — Telegram extension** (`sampyclaw/extensions/telegram/`). File-for-file mirror of `openclaw/extensions/telegram/src/`:
+**B.5 — Telegram extension** (`oxenclaw/extensions/telegram/`). File-for-file mirror of `openclaw/extensions/telegram/src/`:
 - `manifest.json` ← `openclaw.plugin.json`.
 - `channel.py` ← `channel.ts` — plugin definition + routing.
 - `bot_core.py` ← `bot-core.ts` — `aiogram`-backed bot factory, update dedup.
@@ -71,12 +71,12 @@ Goal: prove the port pattern end-to-end with one real channel. When a real Teleg
 - `network_errors.py`, `request_timeouts.py`.
 - `action_runtime.py` ← `action-runtime.ts`.
 
-**B.6 — Minimal agent** (`sampyclaw/agents/`).
+**B.6 — Minimal agent** (`oxenclaw/agents/`).
 - Echo agent for integration testing.
 - Tool schema → Pydantic.
 - Inference loop stub (actual LLM calls via `anthropic` SDK).
 
-**B.7 — CLI** (`sampyclaw/cli/`).
+**B.7 — CLI** (`oxenclaw/cli/`).
 - `typer` app with `gateway start`, `message send`, `config get/set`.
 
 **B.8 — Test harness.**
@@ -84,7 +84,7 @@ Goal: prove the port pattern end-to-end with one real channel. When a real Teleg
 - Port `extensions/telegram/src/test-support/` fixtures.
 - Integration test: fake Telegram → gateway → echo agent → outbound call verified.
 
-**Exit criteria for B:** `pytest` green, a real Telegram bot runs via `sampyclaw gateway start` and echoes messages end-to-end.
+**Exit criteria for B:** `pytest` green, a real Telegram bot runs via `oxenclaw gateway start` and echoes messages end-to-end.
 
 ### Phase A — Core expansion
 
@@ -99,21 +99,21 @@ Only start after B exit criteria met.
 
 ### CV-1 — Dashboard canvas
 
-Status: **Shipped 2026-04-26**. ~600 LOC across `sampyclaw/canvas/{errors,store,events}.py` + `sampyclaw/gateway/canvas_methods.py` + `sampyclaw/tools_pkg/canvas.py` + ~150 LOC of dashboard SPA additions + `sampyclaw/skills/canvas/SKILL.md`. 39 new unit tests + 1 live `gemma4:latest` integration test. Architecture: see [`CANVAS.md`](./CANVAS.md).
+Status: **Shipped 2026-04-26**. ~600 LOC across `oxenclaw/canvas/{errors,store,events}.py` + `oxenclaw/gateway/canvas_methods.py` + `oxenclaw/tools_pkg/canvas.py` + ~150 LOC of dashboard SPA additions + `oxenclaw/skills/canvas/SKILL.md`. 39 new unit tests + 1 live `gemma4:latest` integration test. Architecture: see [`CANVAS.md`](./CANVAS.md).
 
 What this replaces from openclaw `src/canvas-host/` (~16K LOC of Tailscale-aware HTTP host + bridge + a2ui bundle): the LLM-callable canvas surface, collapsed onto the existing dashboard. Native-node / Tailscale / live-reload / a2ui are out of scope by design. **Empirical gate: gemma4:latest scored 25/25 on canvas tool calls before commit.**
 
 ### BR-1 — Browser tools (Playwright, fail-closed)
 
-Status: **Shipped 2026-04-26**. ~900 LOC across `sampyclaw/browser/{policy,errors,pinning,egress,session}.py` + `sampyclaw/tools_pkg/browser.py` + `sampyclaw/skills/browser/SKILL.md`. 29 new tests. Architecture: see [`BROWSER.md`](./BROWSER.md).
+Status: **Shipped 2026-04-26**. ~900 LOC across `oxenclaw/browser/{policy,errors,pinning,egress,session}.py` + `oxenclaw/tools_pkg/browser.py` + `oxenclaw/skills/browser/SKILL.md`. 29 new tests. Architecture: see [`BROWSER.md`](./BROWSER.md).
 
-What this replaces from openclaw `extensions/browser/` (~24K LOC, 156 files): the LLM-callable subset of `pw-tools-core.*` (`navigate`, `snapshot`, `screenshot`, `click`, `fill`, `evaluate`, `download`) and the egress security from `navigation-guard.ts` + `request-policy.ts` + `cdp-reachability-policy.ts`. The CDP bridge / `chrome-mcp` / `qa-lab` surface is intentionally out of scope — sampyClaw exposes browser tools in-process, not as a remote control plane.
+What this replaces from openclaw `extensions/browser/` (~24K LOC, 156 files): the LLM-callable subset of `pw-tools-core.*` (`navigate`, `snapshot`, `screenshot`, `click`, `fill`, `evaluate`, `download`) and the egress security from `navigation-guard.ts` + `request-policy.ts` + `cdp-reachability-policy.ts`. The CDP bridge / `chrome-mcp` / `qa-lab` surface is intentionally out of scope — oxenClaw exposes browser tools in-process, not as a remote control plane.
 
 ## Risks & open decisions
 
 | Decision | Options | Default |
 |---|---|---|
-| Config/credential dir | `~/.openclaw/` (compat) vs `~/.sampyclaw/` (clean) | **`~/.sampyclaw/`** — clean break; write a one-shot importer later if needed |
+| Config/credential dir | `~/.openclaw/` (compat) vs `~/.oxenclaw/` (clean) | **`~/.oxenclaw/`** — clean break; write a one-shot importer later if needed |
 | Telegram library | `aiogram` vs `python-telegram-bot` | **`aiogram`** — native asyncio, closer to `grammy`'s ergonomics |
 | Gateway framework | `FastAPI` vs `aiohttp` | **`FastAPI`** — Pydantic-native, better tooling |
 | CLI framework | `typer` vs `click` | **`typer`** — type hints, less boilerplate |

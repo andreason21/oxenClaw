@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sampyclaw.pi import (
+from oxenclaw.pi import (
     AssistantMessage,
     CreateAgentSessionOptions,
     InMemorySessionManager,
@@ -13,7 +13,7 @@ from sampyclaw.pi import (
     ToolUseBlock,
     UserMessage,
 )
-from sampyclaw.pi.compaction import (
+from oxenclaw.pi.compaction import (
     apply_compaction,
     decide_compaction,
     maybe_compact,

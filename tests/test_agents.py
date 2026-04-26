@@ -4,19 +4,19 @@ from __future__ import annotations
 
 import pytest
 
-from sampyclaw.agents import (
+from oxenclaw.agents import (
     AgentRegistry,
     Dispatcher,
     EchoAgent,
     session_key_for,
 )
-from sampyclaw.plugin_sdk.channel_contract import (
+from oxenclaw.plugin_sdk.channel_contract import (
     ChannelTarget,
     InboundEnvelope,
     SendParams,
     SendResult,
 )
-from sampyclaw.plugin_sdk.config_schema import (
+from oxenclaw.plugin_sdk.config_schema import (
     AgentChannelRouting,
     AgentConfig,
     RootConfig,
@@ -68,7 +68,7 @@ def test_registry_require_missing_raises() -> None:
 
 async def test_echo_agent_yields_prefixed_text() -> None:
     agent = EchoAgent()
-    from sampyclaw.agents.base import AgentContext
+    from oxenclaw.agents.base import AgentContext
 
     ctx = AgentContext(agent_id="echo", session_key="s")
     out = [sp async for sp in agent.handle(_env("hello"), ctx)]
@@ -79,7 +79,7 @@ async def test_echo_agent_yields_prefixed_text() -> None:
 
 async def test_echo_agent_empty_text_yields_nothing() -> None:
     agent = EchoAgent()
-    from sampyclaw.agents.base import AgentContext
+    from oxenclaw.agents.base import AgentContext
 
     ctx = AgentContext(agent_id="echo", session_key="s")
     out = [sp async for sp in agent.handle(_env(""), ctx)]

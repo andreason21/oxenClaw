@@ -4,17 +4,17 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from sampyclaw.clawhub.frontmatter import parse_skill_text
-from sampyclaw.clawhub.loader import InstalledSkill
-from sampyclaw.config.paths import SampyclawPaths
-from sampyclaw.tools_pkg.coding import (
+from oxenclaw.clawhub.frontmatter import parse_skill_text
+from oxenclaw.clawhub.loader import InstalledSkill
+from oxenclaw.config.paths import OxenclawPaths
+from oxenclaw.tools_pkg.coding import (
     coding_agent_tool,
     detect_available_clis,
 )
 
 
-def _paths(tmp_path: Path) -> SampyclawPaths:
-    p = SampyclawPaths(home=tmp_path)
+def _paths(tmp_path: Path) -> OxenclawPaths:
+    p = OxenclawPaths(home=tmp_path)
     p.ensure_home()
     return p
 

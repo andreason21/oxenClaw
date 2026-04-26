@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from sampyclaw.cron.models import CronJob, NewCronJob
+from oxenclaw.cron.models import CronJob, NewCronJob
 
 
 def test_new_cron_job_accepts_valid_expression() -> None:

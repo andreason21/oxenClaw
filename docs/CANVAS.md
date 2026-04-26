@@ -1,6 +1,6 @@
 # Canvas tools (CV-1)
 
-sampyClaw exposes a *dashboard-only* canvas surface so an agent can
+oxenClaw exposes a *dashboard-only* canvas surface so an agent can
 render HTML, charts, mini-games, and ad-hoc visualizations on the
 sidebar of the user's dashboard tab. There is no native node, no
 external URL fetch, and no separate canvas server — all output lives
@@ -11,7 +11,7 @@ already authenticated to.
 
 openclaw's `extensions/browser/canvas-host` ships an HTTP server on
 port 18793 + a Tailscale-aware bridge so connected Mac/iOS/Android
-apps can render canvas content in their WebView. sampyClaw has no
+apps can render canvas content in their WebView. oxenClaw has no
 native node app, so that whole rig has nowhere to land. The natural
 target is the SPA dashboard already served on port 7331.
 
@@ -21,7 +21,7 @@ Benefits of this collapsed model:
 - **Zero external resources.** The `srcdoc=` iframe receives the HTML
   inline; no `http://` fetch leaves the host.
 - **Single auth boundary.** The dashboard already gates on
-  `SAMPYCLAW_GATEWAY_TOKEN`; canvas inherits the same gate.
+  `OXENCLAW_GATEWAY_TOKEN`; canvas inherits the same gate.
 - **No background watcher / live-reload.** State lives in
   `CanvasStore` in process memory — a new `canvas_present` IS the
   reload.
@@ -67,18 +67,18 @@ LLM ─tool→ canvas_present(html, title)
    <iframe sandbox="allow-scripts" srcdoc="…">
 ```
 
-- `sampyclaw/canvas/store.py` — `CanvasStore`: per-agent latest
+- `oxenclaw/canvas/store.py` — `CanvasStore`: per-agent latest
   state with LRU eviction. Bounded by `capacity` + an absolute 1 MiB
   per-payload ceiling enforced in the RPC layer.
-- `sampyclaw/canvas/events.py` — `CanvasEventBus`: pub/sub with
+- `oxenclaw/canvas/events.py` — `CanvasEventBus`: pub/sub with
   bounded subscriber queues; publisher never blocks on slow consumers.
   Also tracks `canvas.eval` request/response futures.
-- `sampyclaw/gateway/canvas_methods.py` — six RPCs:
+- `oxenclaw/gateway/canvas_methods.py` — six RPCs:
   `canvas.{present,navigate,hide,eval,eval_result,get_state}`.
-- `sampyclaw/cli/gateway_cmd.py` — `_pump_canvas_events`: a
+- `oxenclaw/cli/gateway_cmd.py` — `_pump_canvas_events`: a
   background task that drains the bus and fans events out via
   `GatewayServer.broadcast` as `CanvasEventFrame`s.
-- `sampyclaw/static/app.{html,css,js}` — right-side
+- `oxenclaw/static/app.{html,css,js}` — right-side
   `canvas-panel` drawer + `bindCanvasPanel()` event handler that
   renders incoming `present` events into an `<iframe sandbox srcdoc>`.
 
@@ -120,12 +120,12 @@ Opt-in (register manually):
 ## Enabling at the gateway
 
 ```bash
-export SAMPYCLAW_ENABLE_CANVAS=1
-sampyclaw gateway start --provider local --model gemma4:latest \
+export OXENCLAW_ENABLE_CANVAS=1
+oxenclaw gateway start --provider local --model gemma4:latest \
   --auth-token "$TOKEN"
 ```
 
-`agents.factory._maybe_canvas_tools()` reads `SAMPYCLAW_ENABLE_CANVAS`
+`agents.factory._maybe_canvas_tools()` reads `OXENCLAW_ENABLE_CANVAS`
 on agent construction and registers the bundle when set. The gateway
 itself always exposes `canvas.*` RPCs (the cost of the empty store +
 bus is negligible), so even without the env-var the dashboard panel is

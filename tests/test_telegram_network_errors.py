@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from sampyclaw.extensions.telegram.network_errors import classify, is_retryable
-from sampyclaw.plugin_sdk.error_runtime import (
+from oxenclaw.extensions.telegram.network_errors import classify, is_retryable
+from oxenclaw.plugin_sdk.error_runtime import (
     ChannelError,
     NetworkError,
     RateLimitedError,

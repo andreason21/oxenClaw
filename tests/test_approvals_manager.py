@@ -7,8 +7,8 @@ import json
 
 import pytest
 
-from sampyclaw.approvals.manager import ApprovalAuthError, ApprovalManager
-from sampyclaw.approvals.models import ApprovalStatus
+from oxenclaw.approvals.manager import ApprovalAuthError, ApprovalManager
+from oxenclaw.approvals.models import ApprovalStatus
 
 
 async def _request(manager: ApprovalManager, prompt: str = "ok?"):  # type: ignore[no-untyped-def]
@@ -169,7 +169,7 @@ async def test_state_path_persists_pending(tmp_path) -> None:  # type: ignore[no
 async def test_state_path_recovers_into_audit_log(tmp_path, caplog) -> None:  # type: ignore[no-untyped-def]
     import logging as _logging
 
-    caplog.set_level(_logging.INFO, logger="sampyclaw.approvals.manager")
+    caplog.set_level(_logging.INFO, logger="oxenclaw.approvals.manager")
     state = tmp_path / "approvals.json"
     state.write_text(
         json.dumps(

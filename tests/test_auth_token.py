@@ -1,10 +1,10 @@
-"""Tests for `sampyclaw.config.auth_token`."""
+"""Tests for `oxenclaw.config.auth_token`."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from sampyclaw.config.auth_token import (
+from oxenclaw.config.auth_token import (
     TOKEN_FILE_NAME,
     format_startup_banner,
     generate_token,
@@ -13,11 +13,11 @@ from sampyclaw.config.auth_token import (
     token_file_path,
     write_persisted_token,
 )
-from sampyclaw.config.paths import SampyclawPaths
+from oxenclaw.config.paths import OxenclawPaths
 
 
-def _paths(tmp_path: Path) -> SampyclawPaths:
-    return SampyclawPaths(home=tmp_path)
+def _paths(tmp_path: Path) -> OxenclawPaths:
+    return OxenclawPaths(home=tmp_path)
 
 
 def test_generate_token_is_48_hex_chars():
@@ -66,7 +66,7 @@ def test_resolve_explicit_token_wins(tmp_path: Path):
     resolved = resolve_or_generate_token(
         explicit="from-cli",
         paths=paths,
-        env={"SAMPYCLAW_GATEWAY_TOKEN": "from-env"},
+        env={"OXENCLAW_GATEWAY_TOKEN": "from-env"},
     )
     assert resolved.token == "from-cli"
     assert resolved.source == "explicit"
@@ -75,7 +75,7 @@ def test_resolve_explicit_token_wins(tmp_path: Path):
 def test_resolve_env_beats_persisted(tmp_path: Path):
     paths = _paths(tmp_path)
     write_persisted_token("from-file", paths)
-    resolved = resolve_or_generate_token(paths=paths, env={"SAMPYCLAW_GATEWAY_TOKEN": "from-env"})
+    resolved = resolve_or_generate_token(paths=paths, env={"OXENCLAW_GATEWAY_TOKEN": "from-env"})
     assert resolved.token == "from-env"
     assert resolved.source == "env"
 
@@ -113,12 +113,12 @@ def test_resolve_rotate_replaces_persisted(tmp_path: Path):
 def test_resolve_empty_env_var_is_treated_as_unset(tmp_path: Path):
     paths = _paths(tmp_path)
     write_persisted_token("from-file", paths)
-    resolved = resolve_or_generate_token(paths=paths, env={"SAMPYCLAW_GATEWAY_TOKEN": "   "})
+    resolved = resolve_or_generate_token(paths=paths, env={"OXENCLAW_GATEWAY_TOKEN": "   "})
     assert resolved.source == "persisted"
 
 
 def test_format_startup_banner_for_generated_includes_token_and_url():
-    from sampyclaw.config.auth_token import ResolvedToken
+    from oxenclaw.config.auth_token import ResolvedToken
 
     r = ResolvedToken(token="ABC123", source="generated", path=Path("/x/gateway-token"))
     text = format_startup_banner(r, host="127.0.0.1", port=7331)
@@ -128,7 +128,7 @@ def test_format_startup_banner_for_generated_includes_token_and_url():
 
 
 def test_format_startup_banner_for_persisted_includes_rotate_hint():
-    from sampyclaw.config.auth_token import ResolvedToken
+    from oxenclaw.config.auth_token import ResolvedToken
 
     r = ResolvedToken(token="XYZ", source="persisted", path=Path("/x/gateway-token"))
     text = format_startup_banner(r, host="h", port=1)
@@ -137,16 +137,16 @@ def test_format_startup_banner_for_persisted_includes_rotate_hint():
 
 
 def test_format_startup_banner_env_does_not_print_secret():
-    from sampyclaw.config.auth_token import ResolvedToken
+    from oxenclaw.config.auth_token import ResolvedToken
 
     r = ResolvedToken(token="SECRET-FROM-ENV", source="env")
     text = format_startup_banner(r, host="h", port=1)
     assert "SECRET-FROM-ENV" not in text
-    assert "SAMPYCLAW_GATEWAY_TOKEN" in text
+    assert "OXENCLAW_GATEWAY_TOKEN" in text
 
 
 def test_format_startup_banner_explicit_does_not_print_secret():
-    from sampyclaw.config.auth_token import ResolvedToken
+    from oxenclaw.config.auth_token import ResolvedToken
 
     r = ResolvedToken(token="SECRET-FROM-CLI", source="explicit")
     text = format_startup_banner(r, host="h", port=1)

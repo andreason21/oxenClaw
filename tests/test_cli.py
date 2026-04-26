@@ -7,14 +7,14 @@ import json
 import pytest
 from typer.testing import CliRunner
 
-from sampyclaw.cli.__main__ import app
+from oxenclaw.cli.__main__ import app
 
 runner = CliRunner()
 
 
 @pytest.fixture()
 def sampy_home(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
-    monkeypatch.setenv("SAMPYCLAW_HOME", str(tmp_path))
+    monkeypatch.setenv("OXENCLAW_HOME", str(tmp_path))
     return tmp_path
 
 

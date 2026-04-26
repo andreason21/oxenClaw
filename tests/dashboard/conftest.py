@@ -3,7 +3,7 @@
 The whole module is skipped (with a clear `reason`) when either:
 
 1. `playwright` Python package is not installed — `pip install
-   sampyclaw[dev,dashboard-tests]` or `pip install playwright pytest-asyncio`.
+   oxenclaw[dev,dashboard-tests]` or `pip install playwright pytest-asyncio`.
 2. The bundled Chromium browser is missing — run `playwright install chromium`.
 3. System libraries the bundled Chromium needs are missing — run
    `sudo playwright install-deps chromium` once on a Linux host (or
@@ -113,22 +113,22 @@ async def gateway(tmp_path) -> AsyncIterator[dict]:  # type: ignore[no-untyped-d
     Yields a dict with `url`, `token`, `home`, `port`. Tears the gateway
     down on exit by triggering its graceful-shutdown event.
     """
-    from sampyclaw.agents import (
+    from oxenclaw.agents import (
         AgentRegistry,
         Dispatcher,
         EchoAgent,
     )
-    from sampyclaw.approvals import ApprovalManager
-    from sampyclaw.channels import ChannelRouter
-    from sampyclaw.cli.gateway_cmd import _build_router
-    from sampyclaw.config.paths import SampyclawPaths
-    from sampyclaw.cron import CronJobStore, CronScheduler
-    from sampyclaw.gateway import GatewayServer
-    from sampyclaw.plugin_sdk.config_schema import RootConfig
+    from oxenclaw.approvals import ApprovalManager
+    from oxenclaw.channels import ChannelRouter
+    from oxenclaw.cli.gateway_cmd import _build_router
+    from oxenclaw.config.paths import OxenclawPaths
+    from oxenclaw.cron import CronJobStore, CronScheduler
+    from oxenclaw.gateway import GatewayServer
+    from oxenclaw.plugin_sdk.config_schema import RootConfig
 
     home = tmp_path / "home"
     home.mkdir()
-    paths = SampyclawPaths(home=home)
+    paths = OxenclawPaths(home=home)
     paths.ensure_home()
 
     agents = AgentRegistry()

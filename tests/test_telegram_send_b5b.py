@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from sampyclaw.extensions.telegram.send import send_message_telegram
-from sampyclaw.plugin_sdk.channel_contract import (
+from oxenclaw.extensions.telegram.send import send_message_telegram
+from oxenclaw.plugin_sdk.channel_contract import (
     ChannelTarget,
     InlineButton,
     MediaItem,

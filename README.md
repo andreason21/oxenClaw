@@ -1,6 +1,6 @@
-# sampyClaw
+# oxenClaw
 
-[![ci](https://github.com/andreason21/sampyClaw/actions/workflows/ci.yml/badge.svg)](https://github.com/andreason21/sampyClaw/actions/workflows/ci.yml)
+[![ci](https://github.com/andreason21/oxenClaw/actions/workflows/ci.yml/badge.svg)](https://github.com/andreason21/oxenClaw/actions/workflows/ci.yml)
 [![python](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/)
 [![license](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
@@ -16,7 +16,7 @@ and run it as a long-lived service with production-grade observability.
 
 ---
 
-## Why sampyClaw?
+## Why oxenClaw?
 
 | | |
 |---|---|
@@ -29,7 +29,7 @@ and run it as a long-lived service with production-grade observability.
 | 📊 **Operationally serious** | Prometheus `/metrics`, `/healthz` + `/readyz`, structured JSON logs with per-RPC `trace_id`, graceful SIGTERM drain, online SQLite backup/restore. |
 | 🧠 **Memory built-in** | sqlite-vec vector store + FTS5 + MMR rerank + embedding cache. Sessions persist with WAL; auto-compaction; durable knowledge base ("memory wiki"). |
 | 🛠️ **Easy to extend** | Two files (`SKILL.md` + a Python tool) and your tool is in. Or import any existing MCP server via `mcp.json`. |
-| 🪞 **No cloud lock-in** | Runs on a laptop, Pi, or systemd unit. All state under `~/.sampyclaw/`. |
+| 🪞 **No cloud lock-in** | Runs on a laptop, Pi, or systemd unit. All state under `~/.oxenclaw/`. |
 
 ---
 
@@ -41,14 +41,14 @@ and run it as a long-lived service with production-grade observability.
 
 ```bash
 # Clone and install in editable mode
-git clone https://github.com/andreason21/sampyClaw.git
-cd sampyClaw
+git clone https://github.com/andreason21/oxenClaw.git
+cd oxenClaw
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 
 # Sanity check
-sampyclaw paths
-sampyclaw config validate
+oxenclaw paths
+oxenclaw config validate
 ```
 
 **Linux / macOS / WSL2** are supported. Requires Python **3.11+**. The
@@ -71,7 +71,7 @@ Override the model with `--model <id>`. Tested models:
 | `llama3.1:8b` | 128K | Broadly capable. |
 | `mistral-nemo:12b` | 128K | Slower, more verbose. |
 
-You can run sampyClaw with no LLM (RPC + tools only) by using
+You can run oxenClaw with no LLM (RPC + tools only) by using
 `--provider echo` for testing.
 
 #### Internal vLLM server
@@ -80,7 +80,7 @@ If your team runs an internal vLLM (`vllm serve …`) box, point the
 gateway at it directly — no Ollama required:
 
 ```bash
-sampyclaw gateway start \
+oxenclaw gateway start \
     --provider vllm \
     --base-url http://internal-vllm.lan:8000/v1 \
     --model meta-llama/Llama-3.1-8B-Instruct \
@@ -108,7 +108,7 @@ agents:
 
 ### 1. Minimum config
 
-Create `~/.sampyclaw/config.yaml`:
+Create `~/.oxenclaw/config.yaml`:
 
 ```yaml
 channels: {}     # populate per channel below
@@ -124,7 +124,7 @@ agents:
 ### 2. Optional — connect Telegram
 
 Get a bot token from [@BotFather](https://t.me/botfather) and write
-`~/.sampyclaw/credentials/telegram/main.json`:
+`~/.oxenclaw/credentials/telegram/main.json`:
 
 ```json
 { "bot_token": "123456:ABC..." }
@@ -142,8 +142,8 @@ channels:
 ### 3. Start the gateway
 
 ```bash
-export SAMPYCLAW_GATEWAY_TOKEN=$(openssl rand -hex 32)
-sampyclaw gateway start --provider local
+export OXENCLAW_GATEWAY_TOKEN=$(openssl rand -hex 32)
+oxenclaw gateway start --provider local
 ```
 
 The gateway binds to `127.0.0.1` only — it **refuses to expose
@@ -156,12 +156,12 @@ for opt-in setups (reverse proxy, k8s, internal corp net).
 The bundled dashboard is at `http://127.0.0.1:7331/` and Prometheus
 metrics at `/metrics`. **Open the dashboard URL in any browser** — when
 auth is configured, the page detects the missing token and renders an
-in-app login gate. Paste the value of `SAMPYCLAW_GATEWAY_TOKEN`, click
+in-app login gate. Paste the value of `OXENCLAW_GATEWAY_TOKEN`, click
 *Connect*, and the dashboard remembers it for 12 hours via cookie +
 `localStorage` so reloads need nothing extra.
 
 You can also bypass the form entirely with
-`http://127.0.0.1:7331/?token=<SAMPYCLAW_GATEWAY_TOKEN>` — the gateway
+`http://127.0.0.1:7331/?token=<OXENCLAW_GATEWAY_TOKEN>` — the gateway
 sets the cookie on first response and the dashboard JS strips the
 token out of the address bar so it doesn't leak via screenshots or
 browser history. `/healthz`, `/readyz`, `/metrics` always remain
@@ -173,7 +173,7 @@ full tool access.
 ### 4. Send a one-off message via CLI
 
 ```bash
-sampyclaw message send --agent default "summarize today's news headlines"
+oxenclaw message send --agent default "summarize today's news headlines"
 ```
 
 ---
@@ -194,7 +194,7 @@ http://localhost:7331/
 ```
 
 A login overlay appears the first time. Paste the token printed by
-`sampyclaw gateway token` (or the value of `SAMPYCLAW_GATEWAY_TOKEN`).
+`oxenclaw gateway token` (or the value of `OXENCLAW_GATEWAY_TOKEN`).
 Tick "Remember on this device" to write a 12-hour cookie + localStorage.
 
 What you get:
@@ -212,21 +212,21 @@ test catalogue is also a usage map).
 ### Native desktop app (Windows + Ubuntu)
 
 Pre-built installers are attached to every GitHub Release at
-[`/releases`](https://github.com/andreason21/sampyClaw/releases).
+[`/releases`](https://github.com/andreason21/oxenClaw/releases).
 Pick the one for your OS:
 
 | OS | File | Install |
 |---|---|---|
-| Windows 11 | `sampyclaw_X.Y.Z_x64_en-US.msi` | double-click, or `winget install sampyClaw.sampyClaw` |
-| Windows 11 (no admin) | `sampyClaw_X.Y.Z_x64-setup.exe` | double-click (NSIS, per-user) |
-| Ubuntu 22.04 | `sampyclaw_X.Y.Z_amd64_ubuntu22.04.deb` | `sudo apt install ./sampyclaw_*.deb` |
-| Ubuntu 24.04 | `sampyclaw_X.Y.Z_amd64_ubuntu24.04.deb` | same with the matching file |
-| Any glibc Linux | `sampyclaw_X.Y.Z_amd64_*.AppImage` | `chmod +x *.AppImage && ./sampyclaw_*.AppImage` |
+| Windows 11 | `oxenclaw_X.Y.Z_x64_en-US.msi` | double-click, or `winget install oxenClaw.oxenClaw` |
+| Windows 11 (no admin) | `oxenClaw_X.Y.Z_x64-setup.exe` | double-click (NSIS, per-user) |
+| Ubuntu 22.04 | `oxenclaw_X.Y.Z_amd64_ubuntu22.04.deb` | `sudo apt install ./oxenclaw_*.deb` |
+| Ubuntu 24.04 | `oxenclaw_X.Y.Z_amd64_ubuntu24.04.deb` | same with the matching file |
+| Any glibc Linux | `oxenclaw_X.Y.Z_amd64_*.AppImage` | `chmod +x *.AppImage && ./oxenclaw_*.AppImage` |
 
 First-run wizard asks for:
 - **Gateway URL** — `http://localhost:7331` for a local agent, or the
   remote host's URL for a shared gateway.
-- **Bearer token** — paste from `sampyclaw gateway token`. Stored in
+- **Bearer token** — paste from `oxenclaw gateway token`. Stored in
   the OS keychain (Credential Manager on Windows, libsecret on Linux),
   never localStorage.
 - (optional) **Auto-start on login**, **WSL auto-launch** (Windows only).
@@ -241,7 +241,7 @@ Full guide: [`docs/DESKTOP_APP.md`](docs/DESKTOP_APP.md).
 ### Messaging channels (Telegram, Slack, …)
 
 Channels are how the agent reaches users on platforms they already
-use. Configure them in `~/.sampyclaw/config.yaml`:
+use. Configure them in `~/.oxenclaw/config.yaml`:
 
 ```yaml
 channels:
@@ -253,15 +253,15 @@ channels:
       - account_id: alerts       # outbound-only — for #alerts notifications
 ```
 
-Then drop the bot token at `~/.sampyclaw/credentials/<channel>/<account_id>.json`
-(mode 0600). After `sampyclaw gateway start` picks them up:
+Then drop the bot token at `~/.oxenclaw/credentials/<channel>/<account_id>.json`
+(mode 0600). After `oxenclaw gateway start` picks them up:
 
 - **Telegram** — DM the bot; the agent runs full turns with tool use.
   See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the deep dive.
 - **Slack** — push notifications via `chat.postMessage`. Walk-through
   for Enterprise Grid + corp proxies in [`docs/SLACK.md`](docs/SLACK.md).
 - **Custom channel** — ship a Python plugin with a
-  `sampyclaw.plugins` entry point; the runner picks it up at gateway
+  `oxenclaw.plugins` entry point; the runner picks it up at gateway
   boot. See "Add a custom channel" below.
 
 ---
@@ -326,9 +326,9 @@ porting plan: [`docs/PORTING_PLAN.md`](docs/PORTING_PLAN.md).
 ### Build your own tool / skill (recommended)
 
 ```python
-# ~/.sampyclaw/skills/ticket-lookup/ticket_lookup.py
+# ~/.oxenclaw/skills/ticket-lookup/ticket_lookup.py
 from pydantic import BaseModel, Field
-from sampyclaw.agents.tools import FunctionTool
+from oxenclaw.agents.tools import FunctionTool
 
 class _Args(BaseModel):
     ticket_id: str = Field(..., description="Linear ticket id")
@@ -349,7 +349,7 @@ Full guide: [`docs/AUTHORING_SKILLS.md`](docs/AUTHORING_SKILLS.md).
 
 ### Import any existing MCP server
 
-`~/.sampyclaw/mcp.json` (same shape Claude Desktop / mcp-cli use):
+`~/.oxenclaw/mcp.json` (same shape Claude Desktop / mcp-cli use):
 
 ```json
 {
@@ -375,17 +375,17 @@ configure → connect → direct call → agent wiring), see
 ### Schedule recurring work
 
 ```bash
-sampyclaw message send --agent default "summarize my Slack DMs hourly"
+oxenclaw message send --agent default "summarize my Slack DMs hourly"
 # ... agent invokes the cron tool to register the job
 ```
 
 ### Add a custom channel
 
-Drop a Python package with a `sampyclaw.plugins` entry point:
+Drop a Python package with a `oxenclaw.plugins` entry point:
 
 ```toml
 # pyproject.toml of your plugin
-[project.entry-points."sampyclaw.plugins"]
+[project.entry-points."oxenclaw.plugins"]
 discord = "my_pkg.discord_plugin:DISCORD_PLUGIN"
 ```
 
@@ -401,11 +401,11 @@ Highlights:
 - **systemd unit** with `SIGTERM`-driven graceful shutdown.
 - **Prometheus alerts** on RPC error rate, p99 turn duration,
   approval backlog.
-- **`sampyclaw backup create/verify/restore`** with consistent SQLite
+- **`oxenclaw backup create/verify/restore`** with consistent SQLite
   snapshots even while the gateway runs.
 - **`scripts/soak.py --duration 14400`** for pre-release stability
   validation (CSV trace + automatic memory/FD-leak threshold check).
-- **`SAMPYCLAW_LOG_FORMAT=json`** for log aggregators (Loki/Datadog/…).
+- **`OXENCLAW_LOG_FORMAT=json`** for log aggregators (Loki/Datadog/…).
   Every log line carries the `trace_id` of the originating RPC.
 
 ---
@@ -417,9 +417,9 @@ Highlights:
 | Core gateway, agent runtime, Telegram channel | ✅ Production-ready |
 | Memory + sessions + wiki | ✅ |
 | MCP **client** (import existing servers) | ✅ |
-| Browser tools (BR-1, fail-closed Playwright) | ✅ Opt-in via `SAMPYCLAW_ENABLE_BROWSER=1` |
-| Canvas tools (CV-1, dashboard-embedded HTML) | ✅ Opt-in via `SAMPYCLAW_ENABLE_CANVAS=1` |
-| MCP **server** (expose sampyClaw to other clients) | ⏳ Future phase |
+| Browser tools (BR-1, fail-closed Playwright) | ✅ Opt-in via `OXENCLAW_ENABLE_BROWSER=1` |
+| Canvas tools (CV-1, dashboard-embedded HTML) | ✅ Opt-in via `OXENCLAW_ENABLE_CANVAS=1` |
+| MCP **server** (expose oxenClaw to other clients) | ⏳ Future phase |
 | Slack (outbound notifications) | ✅ Enterprise-Grid-friendly, alert-only — see [`docs/SLACK.md`](docs/SLACK.md) |
 | Discord + 4 more channels (full bidirectional) | ⏳ Future phase |
 | Native mobile / desktop apps | ❌ Out of scope |
@@ -471,7 +471,7 @@ MIT.
 > [openclaw](https://github.com/openclaw/openclaw)의 Python 포트 —
 > 서버/CLI 부분만 추려서 자체 호스팅이 가능하도록 강화·문서화한 버전.
 
-### 왜 sampyClaw?
+### 왜 oxenClaw?
 
 | | |
 |---|---|
@@ -484,7 +484,7 @@ MIT.
 | 📊 **운영을 진지하게** | Prometheus `/metrics`, `/healthz` + `/readyz`, RPC 단위 `trace_id` 가 박힌 구조화 JSON 로그, SIGTERM 그레이스풀 드레인, 온라인 SQLite 백업/복구. |
 | 🧠 **내장 메모리** | sqlite-vec 벡터 스토어 + FTS5 + MMR 재정렬 + 임베딩 캐시. WAL 영속 세션, 자동 압축, 영속 지식 베이스 ("memory wiki"). |
 | 🛠️ **확장 쉬움** | `SKILL.md` + Python 도구 두 파일이면 끝. 또는 `mcp.json`에 기존 MCP 서버 등록. |
-| 🪞 **클라우드 종속 없음** | 노트북, Raspberry Pi, systemd 어디서든. 모든 상태는 `~/.sampyclaw/` 아래. |
+| 🪞 **클라우드 종속 없음** | 노트북, Raspberry Pi, systemd 어디서든. 모든 상태는 `~/.oxenclaw/` 아래. |
 
 ### 설치
 
@@ -493,13 +493,13 @@ MIT.
 > (샌드박스 + 시그널 + Linux 네트워킹 의존).
 
 ```bash
-git clone https://github.com/andreason21/sampyClaw.git
-cd sampyClaw
+git clone https://github.com/andreason21/oxenClaw.git
+cd oxenClaw
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 
-sampyclaw paths
-sampyclaw config validate
+oxenclaw paths
+oxenclaw config validate
 ```
 
 **Linux / macOS / WSL2** 지원. Python **3.11+** 필요. 기본 LLM 백엔드는
@@ -529,7 +529,7 @@ LLM 없이 RPC + 도구만 테스트하려면 `--provider echo` 사용.
 붙일 수 있다:
 
 ```bash
-sampyclaw gateway start \
+oxenclaw gateway start \
     --provider vllm \
     --base-url http://internal-vllm.lan:8000/v1 \
     --model meta-llama/Llama-3.1-8B-Instruct \
@@ -554,7 +554,7 @@ agents:
 
 #### 1. 최소 설정
 
-`~/.sampyclaw/config.yaml`:
+`~/.oxenclaw/config.yaml`:
 
 ```yaml
 channels: {}
@@ -570,7 +570,7 @@ agents:
 #### 2. (선택) Telegram 연결
 
 [@BotFather](https://t.me/botfather)에서 봇 토큰 발급 →
-`~/.sampyclaw/credentials/telegram/main.json`:
+`~/.oxenclaw/credentials/telegram/main.json`:
 
 ```json
 { "bot_token": "123456:ABC..." }
@@ -588,8 +588,8 @@ channels:
 #### 3. 게이트웨이 실행
 
 ```bash
-export SAMPYCLAW_GATEWAY_TOKEN=$(openssl rand -hex 32)
-sampyclaw gateway start --provider local
+export OXENCLAW_GATEWAY_TOKEN=$(openssl rand -hex 32)
+oxenclaw gateway start --provider local
 ```
 
 게이트웨이는 `127.0.0.1`만 바인딩한다 — `--allow-non-loopback`을
@@ -601,11 +601,11 @@ sampyclaw gateway start --provider local
 
 번들 대시보드: `http://127.0.0.1:7331/`. Prometheus: `/metrics`.
 **브라우저에서 대시보드 URL을 그냥 열기** — 인증이 설정된 상태면 SPA가
-토큰 없음을 감지하고 화면 안에 로그인 폼을 띄움. `SAMPYCLAW_GATEWAY_TOKEN`
+토큰 없음을 감지하고 화면 안에 로그인 폼을 띄움. `OXENCLAW_GATEWAY_TOKEN`
 값을 붙여넣고 *Connect* — 12시간 쿠키 + `localStorage`에 저장되어 새로고침
 시 별도 입력 불필요.
 
-URL 한 방으로 끝내고 싶으면 `http://127.0.0.1:7331/?token=<SAMPYCLAW_GATEWAY_TOKEN>`
+URL 한 방으로 끝내고 싶으면 `http://127.0.0.1:7331/?token=<OXENCLAW_GATEWAY_TOKEN>`
 도 가능 — 게이트웨이가 응답에 쿠키를 설정하고 SPA가 주소창에서 토큰을
 제거 (스크린샷·브라우저 히스토리 누출 방지). `/healthz`, `/readyz`,
 `/metrics`는 오케스트레이터 프로브용으로 항상 비인증 유지.
@@ -615,7 +615,7 @@ Telegram DM을 보내면 로컬 모델이 도구를 사용해 답한다.
 #### 4. CLI에서 일회성 메시지
 
 ```bash
-sampyclaw message send --agent default "오늘 뉴스 헤드라인 요약해줘"
+oxenclaw message send --agent default "오늘 뉴스 헤드라인 요약해줘"
 ```
 
 ### 클라이언트
@@ -632,8 +632,8 @@ sampyclaw message send --agent default "오늘 뉴스 헤드라인 요약해줘"
 http://localhost:7331/
 ```
 
-처음 열면 로그인 오버레이가 뜬다. `sampyclaw gateway token`이 출력한
-토큰 (또는 `SAMPYCLAW_GATEWAY_TOKEN` 값)을 붙여넣고 "Remember on this
+처음 열면 로그인 오버레이가 뜬다. `oxenclaw gateway token`이 출력한
+토큰 (또는 `OXENCLAW_GATEWAY_TOKEN` 값)을 붙여넣고 "Remember on this
 device"를 체크하면 12시간 쿠키 + localStorage 에 저장된다.
 
 제공 기능:
@@ -650,21 +650,21 @@ device"를 체크하면 12시간 쿠키 + localStorage 에 저장된다.
 #### 네이티브 데스크톱 앱 (Windows + Ubuntu)
 
 매 GitHub Release에 사전 빌드된 인스톨러가 첨부된다 →
-[`/releases`](https://github.com/andreason21/sampyClaw/releases).
+[`/releases`](https://github.com/andreason21/oxenClaw/releases).
 OS에 맞는 파일을 받는다:
 
 | OS | 파일 | 설치 |
 |---|---|---|
-| Windows 11 | `sampyclaw_X.Y.Z_x64_en-US.msi` | 더블클릭, 또는 `winget install sampyClaw.sampyClaw` |
-| Windows 11 (관리자 없음) | `sampyClaw_X.Y.Z_x64-setup.exe` | 더블클릭 (NSIS, per-user) |
-| Ubuntu 22.04 | `sampyclaw_X.Y.Z_amd64_ubuntu22.04.deb` | `sudo apt install ./sampyclaw_*.deb` |
-| Ubuntu 24.04 | `sampyclaw_X.Y.Z_amd64_ubuntu24.04.deb` | 동일 (24.04용 파일로) |
-| 기타 glibc Linux | `sampyclaw_X.Y.Z_amd64_*.AppImage` | `chmod +x *.AppImage && ./sampyclaw_*.AppImage` |
+| Windows 11 | `oxenclaw_X.Y.Z_x64_en-US.msi` | 더블클릭, 또는 `winget install oxenClaw.oxenClaw` |
+| Windows 11 (관리자 없음) | `oxenClaw_X.Y.Z_x64-setup.exe` | 더블클릭 (NSIS, per-user) |
+| Ubuntu 22.04 | `oxenclaw_X.Y.Z_amd64_ubuntu22.04.deb` | `sudo apt install ./oxenclaw_*.deb` |
+| Ubuntu 24.04 | `oxenclaw_X.Y.Z_amd64_ubuntu24.04.deb` | 동일 (24.04용 파일로) |
+| 기타 glibc Linux | `oxenclaw_X.Y.Z_amd64_*.AppImage` | `chmod +x *.AppImage && ./oxenclaw_*.AppImage` |
 
 첫 실행 마법사가 묻는 것:
 - **Gateway URL** — 로컬 에이전트면 `http://localhost:7331`, 원격이면
   해당 호스트의 URL.
-- **Bearer 토큰** — `sampyclaw gateway token`에서 복사. OS 키체인
+- **Bearer 토큰** — `oxenclaw gateway token`에서 복사. OS 키체인
   (Windows = Credential Manager, Linux = libsecret) 에 저장되며
   localStorage 에는 절대 안 들어간다.
 - (선택) **로그인 시 자동 시작**, **WSL 자동 부팅** (Windows 전용).
@@ -678,7 +678,7 @@ OS에 맞는 파일을 받는다:
 #### 메시징 채널 (Telegram, Slack, …)
 
 채널은 사용자가 평소 쓰는 플랫폼에서 에이전트와 대화하기 위한 통로.
-`~/.sampyclaw/config.yaml`에서 설정:
+`~/.oxenclaw/config.yaml`에서 설정:
 
 ```yaml
 channels:
@@ -690,14 +690,14 @@ channels:
       - account_id: alerts       # 아웃바운드 전용 — #alerts 알림용
 ```
 
-봇 토큰은 `~/.sampyclaw/credentials/<channel>/<account_id>.json`
+봇 토큰은 `~/.oxenclaw/credentials/<channel>/<account_id>.json`
 (권한 0600) 에 저장. 게이트웨이 재시작 시 자동 로드:
 
 - **Telegram** — 봇에 DM 보내면 도구 사용 포함 풀 턴 실행. 자세한 흐름은
   [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) 참고.
 - **Slack** — `chat.postMessage` 통한 알림 발송. Enterprise Grid +
   사내 프록시 셋업은 [`docs/SLACK.md`](docs/SLACK.md).
-- **커스텀 채널** — `sampyclaw.plugins` entry point 가진 Python 패키지
+- **커스텀 채널** — `oxenclaw.plugins` entry point 가진 Python 패키지
   배포하면 게이트웨이 부팅 시 자동 로드. 아래 "커스텀 채널 추가" 참고.
 
 ### 아키텍처
@@ -758,9 +758,9 @@ channels:
 #### 자기 도구·스킬 만들기 (권장)
 
 ```python
-# ~/.sampyclaw/skills/ticket-lookup/ticket_lookup.py
+# ~/.oxenclaw/skills/ticket-lookup/ticket_lookup.py
 from pydantic import BaseModel, Field
-from sampyclaw.agents.tools import FunctionTool
+from oxenclaw.agents.tools import FunctionTool
 
 class _Args(BaseModel):
     ticket_id: str = Field(..., description="Linear 티켓 id")
@@ -781,7 +781,7 @@ def ticket_lookup_tool():
 
 #### 기존 MCP 서버 가져오기
 
-`~/.sampyclaw/mcp.json` (Claude Desktop / mcp-cli와 동일 스키마):
+`~/.oxenclaw/mcp.json` (Claude Desktop / mcp-cli와 동일 스키마):
 
 ```json
 {
@@ -799,23 +799,23 @@ def ticket_lookup_tool():
 }
 ```
 
-서버의 도구가 sampyClaw 네이티브 도구처럼 노출된다. 전체 시나리오
+서버의 도구가 oxenClaw 네이티브 도구처럼 노출된다. 전체 시나리오
 (설치 → 연결 → 직접 호출 → 에이전트 연결까지)를 검증한 예제는
 [`docs/MCP_YAHOO_FINANCE.md`](docs/MCP_YAHOO_FINANCE.md) 참고.
 
 #### 반복 작업 스케줄링
 
 ```bash
-sampyclaw message send --agent default "매시간 Slack DM 요약해줘"
+oxenclaw message send --agent default "매시간 Slack DM 요약해줘"
 # 에이전트가 cron 도구를 호출해서 작업 등록
 ```
 
 #### 커스텀 채널 추가
 
-`sampyclaw.plugins` entry-point가 있는 Python 패키지 작성:
+`oxenclaw.plugins` entry-point가 있는 Python 패키지 작성:
 
 ```toml
-[project.entry-points."sampyclaw.plugins"]
+[project.entry-points."oxenclaw.plugins"]
 discord = "my_pkg.discord_plugin:DISCORD_PLUGIN"
 ```
 
@@ -827,11 +827,11 @@ discord = "my_pkg.discord_plugin:DISCORD_PLUGIN"
 
 - **systemd 유닛** + SIGTERM 그레이스풀 종료
 - **Prometheus 알람** RPC 에러율, p99 턴 지연, 승인 백로그 등
-- **`sampyclaw backup create/verify/restore`** — 게이트웨이 가동 중에도
+- **`oxenclaw backup create/verify/restore`** — 게이트웨이 가동 중에도
   일관된 SQLite 스냅샷
 - **`scripts/soak.py --duration 14400`** 릴리스 전 안정성 검증
   (CSV trace + 메모리/FD 누수 임계 자동 검사)
-- **`SAMPYCLAW_LOG_FORMAT=json`** 로그 집약기용. 모든 라인에
+- **`OXENCLAW_LOG_FORMAT=json`** 로그 집약기용. 모든 라인에
   발신 RPC의 `trace_id`가 박힌다.
 
 ### 상태
@@ -841,9 +841,9 @@ discord = "my_pkg.discord_plugin:DISCORD_PLUGIN"
 | 코어 게이트웨이, 에이전트 런타임, Telegram | ✅ 프로덕션 가능 |
 | 메모리 + 세션 + 위키 | ✅ |
 | MCP **클라이언트** (외부 서버 흡수) | ✅ |
-| 브라우저 도구 (BR-1, fail-closed Playwright) | ✅ `SAMPYCLAW_ENABLE_BROWSER=1` 옵트인 |
-| 캔버스 도구 (CV-1, dashboard 임베드 HTML) | ✅ `SAMPYCLAW_ENABLE_CANVAS=1` 옵트인 |
-| MCP **서버** (sampyClaw를 외부 클라이언트에 노출) | ⏳ 차후 |
+| 브라우저 도구 (BR-1, fail-closed Playwright) | ✅ `OXENCLAW_ENABLE_BROWSER=1` 옵트인 |
+| 캔버스 도구 (CV-1, dashboard 임베드 HTML) | ✅ `OXENCLAW_ENABLE_CANVAS=1` 옵트인 |
+| MCP **서버** (oxenClaw를 외부 클라이언트에 노출) | ⏳ 차후 |
 | Slack (아웃바운드 알림) | ✅ Enterprise Grid 호환, 알림 전용 — [`docs/SLACK.md`](docs/SLACK.md) |
 | Discord + 추가 채널 4종 (양방향) | ⏳ 차후 |
 | 네이티브 모바일·데스크톱 앱 | ❌ 범위 외 |

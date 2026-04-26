@@ -6,19 +6,19 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from sampyclaw.cli.sessions_cmd import app as sessions_app
-from sampyclaw.gateway.router import Router
-from sampyclaw.gateway.sessions_methods import register_sessions_methods
-from sampyclaw.pi import (
+from oxenclaw.cli.sessions_cmd import app as sessions_app
+from oxenclaw.gateway.router import Router
+from oxenclaw.gateway.sessions_methods import register_sessions_methods
+from oxenclaw.pi import (
     AssistantMessage,
     CreateAgentSessionOptions,
     SystemMessage,
     TextContent,
     UserMessage,
 )
-from sampyclaw.pi.lifecycle import LifecycleBus
-from sampyclaw.pi.persistence import SQLiteSessionManager
-from sampyclaw.pi.policy import (
+from oxenclaw.pi.lifecycle import LifecycleBus
+from oxenclaw.pi.persistence import SQLiteSessionManager
+from oxenclaw.pi.policy import (
     SessionChatType,
     SessionPolicy,
     get_policy,
@@ -226,7 +226,7 @@ async def test_reset_emits_lifecycle_event_via_bus(tmp_path: Path) -> None:
 
 
 def test_cli_list_then_show(tmp_path: Path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
-    monkeypatch.setenv("SAMPYCLAW_HOME", str(tmp_path))
+    monkeypatch.setenv("OXENCLAW_HOME", str(tmp_path))
 
     # Pre-seed via direct store under the same path the CLI uses.
     import asyncio

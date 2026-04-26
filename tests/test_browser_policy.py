@@ -1,16 +1,16 @@
-"""Unit tests for sampyclaw.browser.policy."""
+"""Unit tests for oxenclaw.browser.policy."""
 
 from __future__ import annotations
 
 import pytest
 
-from sampyclaw.browser.policy import (
+from oxenclaw.browser.policy import (
     ABSOLUTE_MAX_DOM_CHARS,
     ABSOLUTE_MAX_PAGES,
     BrowserPolicy,
     merge_browser_policies,
 )
-from sampyclaw.security.net.policy import NetPolicy
+from oxenclaw.security.net.policy import NetPolicy
 
 
 def test_default_is_fully_closed() -> None:
@@ -61,9 +61,9 @@ def test_with_extra_allowed_hosts() -> None:
 
 def test_from_env_round_trip() -> None:
     env = {
-        "SAMPYCLAW_NET_ALLOW_HOSTS": "example.com,*.test.io",
-        "SAMPYCLAW_BROWSER_MAX_PAGES": "2",
-        "SAMPYCLAW_BROWSER_ALLOW_DOWNLOADS": "1",
+        "OXENCLAW_NET_ALLOW_HOSTS": "example.com,*.test.io",
+        "OXENCLAW_BROWSER_MAX_PAGES": "2",
+        "OXENCLAW_BROWSER_ALLOW_DOWNLOADS": "1",
     }
     pol = BrowserPolicy.from_env(env)
     assert pol.net.allowed_hostnames == ("example.com", "*.test.io")

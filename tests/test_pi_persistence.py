@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
-from sampyclaw.pi import (
+from oxenclaw.pi import (
     AssistantMessage,
     CompactionEntry,
     CreateAgentSessionOptions,
@@ -16,7 +16,7 @@ from sampyclaw.pi import (
     ToolUseBlock,
     UserMessage,
 )
-from sampyclaw.pi.persistence import SQLiteAuthStorage, SQLiteSessionManager
+from oxenclaw.pi.persistence import SQLiteAuthStorage, SQLiteSessionManager
 
 
 async def test_create_get_save_round_trip(tmp_path: Path) -> None:

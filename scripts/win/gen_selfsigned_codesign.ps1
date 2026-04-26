@@ -1,15 +1,15 @@
 <#
 .SYNOPSIS
-  Generate a self-signed Authenticode code-signing certificate for sampyClaw
+  Generate a self-signed Authenticode code-signing certificate for oxenClaw
   Windows MSI / NSIS bundles, export it to .pfx, and print the values you need
   to paste into GitHub repository secrets.
 
 .DESCRIPTION
   Produces three artifacts in the chosen output directory:
-    sampyclaw_codesign.cer        public certificate (distribute to users
+    oxenclaw_codesign.cer        public certificate (distribute to users
                                   who want to import it as Trusted Publisher)
-    sampyclaw_codesign.pfx        private+public bundle (KEEP SECRET)
-    sampyclaw_codesign.pfx.b64    base64 of the .pfx (paste into the
+    oxenclaw_codesign.pfx        private+public bundle (KEEP SECRET)
+    oxenclaw_codesign.pfx.b64    base64 of the .pfx (paste into the
                                   WINDOWS_CERT_PFX repo secret)
 
   Then prints the thumbprint and the base64 blob.
@@ -18,7 +18,7 @@
   SmartScreen blocks anything that doesn't chain to a CA in the Microsoft
   Trusted Root Program. End users will still see "Microsoft Defender
   SmartScreen prevented an unrecognised app from starting" unless they
-  manually import sampyclaw_codesign.cer into their Trusted Publishers /
+  manually import oxenclaw_codesign.cer into their Trusted Publishers /
   Trusted Root store first.
 
   What self-signing DOES buy you:
@@ -29,10 +29,10 @@
       your .cer once trust every future build automatically.
 
 .PARAMETER Subject
-  Subject CN for the cert. Default: "CN=sampyClaw, O=sampyClaw, C=KR".
+  Subject CN for the cert. Default: "CN=oxenClaw, O=oxenClaw, C=KR".
 
 .PARAMETER OutDir
-  Where to drop the .cer / .pfx / .pfx.b64. Default: $env:USERPROFILE\sampyclaw-codesign.
+  Where to drop the .cer / .pfx / .pfx.b64. Default: $env:USERPROFILE\oxenclaw-codesign.
 
 .PARAMETER ValidYears
   Cert validity. Default 10 years — long enough that we don't have to
@@ -47,8 +47,8 @@
 #>
 [CmdletBinding()]
 param(
-    [string] $Subject     = "CN=sampyClaw, O=sampyClaw, C=KR",
-    [string] $OutDir      = (Join-Path $env:USERPROFILE "sampyclaw-codesign"),
+    [string] $Subject     = "CN=oxenClaw, O=oxenClaw, C=KR",
+    [string] $OutDir      = (Join-Path $env:USERPROFILE "oxenclaw-codesign"),
     [int]    $ValidYears  = 10,
     [SecureString] $PfxPassword
 )
@@ -75,9 +75,9 @@ $cert = New-SelfSignedCertificate `
     -NotAfter          $notAfter `
     -TextExtension     @("2.5.29.37={text}1.3.6.1.5.5.7.3.3")
 
-$cerPath  = Join-Path $OutDir "sampyclaw_codesign.cer"
-$pfxPath  = Join-Path $OutDir "sampyclaw_codesign.pfx"
-$b64Path  = Join-Path $OutDir "sampyclaw_codesign.pfx.b64"
+$cerPath  = Join-Path $OutDir "oxenclaw_codesign.cer"
+$pfxPath  = Join-Path $OutDir "oxenclaw_codesign.pfx"
+$b64Path  = Join-Path $OutDir "oxenclaw_codesign.pfx.b64"
 
 Write-Host "Exporting public .cer..." -ForegroundColor Cyan
 Export-Certificate -Cert $cert -FilePath $cerPath -Type CERT | Out-Null
@@ -94,7 +94,7 @@ $b64      = [Convert]::ToBase64String($pfxBytes)
 Set-Content -Path $b64Path -Value $b64 -NoNewline -Encoding ascii
 
 Write-Host ""
-Write-Host "===== sampyClaw self-signed code-signing cert =====" -ForegroundColor Green
+Write-Host "===== oxenClaw self-signed code-signing cert =====" -ForegroundColor Green
 Write-Host "  Subject     : $($cert.Subject)"
 Write-Host "  Thumbprint  : $($cert.Thumbprint)"
 Write-Host "  Not after   : $($cert.NotAfter)"
@@ -105,12 +105,12 @@ Write-Host "    .pfx.b64  : $b64Path  (paste into WINDOWS_CERT_PFX)"
 Write-Host ""
 Write-Host "Next steps:" -ForegroundColor Yellow
 Write-Host "  1. GitHub -> Settings -> Secrets and variables -> Actions -> New repository secret"
-Write-Host "       WINDOWS_CERT_PFX      = (contents of sampyclaw_codesign.pfx.b64)"
+Write-Host "       WINDOWS_CERT_PFX      = (contents of oxenclaw_codesign.pfx.b64)"
 Write-Host "       WINDOWS_CERT_PASSWORD = (the password you just typed)"
 Write-Host "  2. Cut a new release tag — the windows-build job's"
 Write-Host "     'Optional code-signing' step will pick the secrets up"
 Write-Host "     and signtool the .msi + NSIS .exe automatically."
-Write-Host "  3. Distribute sampyclaw_codesign.cer to users who want to"
+Write-Host "  3. Distribute oxenclaw_codesign.cer to users who want to"
 Write-Host "     pre-trust the cert (Import-Certificate to"
 Write-Host "     Cert:\LocalMachine\TrustedPublisher and"
 Write-Host "     Cert:\LocalMachine\Root). Otherwise SmartScreen will"

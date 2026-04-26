@@ -4,15 +4,15 @@ from __future__ import annotations
 
 import pytest
 
-from sampyclaw.agents import (
+from oxenclaw.agents import (
     SUPPORTED_PROVIDERS,
     EchoAgent,
     LocalAgent,
     UnknownProvider,
     build_agent,
 )
-from sampyclaw.agents.factory import DEFAULT_ANTHROPIC_MODEL
-from sampyclaw.agents.pi_agent import PiAgent
+from oxenclaw.agents.factory import DEFAULT_ANTHROPIC_MODEL
+from oxenclaw.agents.pi_agent import PiAgent
 
 
 def test_build_echo() -> None:

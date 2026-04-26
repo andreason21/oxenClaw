@@ -6,10 +6,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from sampyclaw.channels import ChannelRouter
-from sampyclaw.extensions.telegram.channel import TelegramChannel
-from sampyclaw.gateway.channels_methods import register_channels_methods
-from sampyclaw.gateway.router import Router
+from oxenclaw.channels import ChannelRouter
+from oxenclaw.extensions.telegram.channel import TelegramChannel
+from oxenclaw.gateway.channels_methods import register_channels_methods
+from oxenclaw.gateway.router import Router
 
 
 @pytest.fixture()
@@ -24,7 +24,7 @@ def patched_bot(monkeypatch):  # type: ignore[no-untyped-def]
         bot.get_me = AsyncMock(return_value=me)
         return bot
 
-    monkeypatch.setattr("sampyclaw.extensions.telegram.channel.create_bot", _fake)
+    monkeypatch.setattr("oxenclaw.extensions.telegram.channel.create_bot", _fake)
     return monkeypatch
 
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from aiohttp import web
 
-from sampyclaw.clawhub.client import ClawHubClient, ClawHubError, sha256_integrity
+from oxenclaw.clawhub.client import ClawHubClient, ClawHubError, sha256_integrity
 
 
 def test_sha256_integrity_format() -> None:

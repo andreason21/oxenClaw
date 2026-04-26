@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from sampyclaw.clawhub.frontmatter import parse_skill_text
-from sampyclaw.security.skill_scanner import Severity, SkillScanner, scan_skill
+from oxenclaw.clawhub.frontmatter import parse_skill_text
+from oxenclaw.security.skill_scanner import Severity, SkillScanner, scan_skill
 
 
 def _parse(yaml: str, body: str = "") -> tuple:  # type: ignore[type-arg]

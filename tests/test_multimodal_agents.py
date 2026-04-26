@@ -9,18 +9,18 @@ from pathlib import Path
 
 import pytest
 
-from sampyclaw.agents.base import AgentContext
-from sampyclaw.agents.local_agent import LocalAgent
-from sampyclaw.config.paths import SampyclawPaths
-from sampyclaw.plugin_sdk.channel_contract import (
+from oxenclaw.agents.base import AgentContext
+from oxenclaw.agents.local_agent import LocalAgent
+from oxenclaw.config.paths import OxenclawPaths
+from oxenclaw.plugin_sdk.channel_contract import (
     ChannelTarget,
     InboundEnvelope,
     MediaItem,
 )
 
 
-def _paths(tmp_path: Path) -> SampyclawPaths:
-    p = SampyclawPaths(home=tmp_path)
+def _paths(tmp_path: Path) -> OxenclawPaths:
+    p = OxenclawPaths(home=tmp_path)
     p.ensure_home()
     return p
 
@@ -210,8 +210,8 @@ async def test_pi_agent_with_image_capable_model_appends_image_block(tmp_path, m
     """PiAgent UserMessage should carry a list[ImageContent, TextContent]
     when the model supports images. Drives the path without going to
     the network — we just inspect `session.messages` after handle()."""
-    from sampyclaw.agents.factory import build_agent
-    from sampyclaw.pi.messages import ImageContent, TextContent, UserMessage
+    from oxenclaw.agents.factory import build_agent
+    from oxenclaw.pi.messages import ImageContent, TextContent, UserMessage
 
     agent = build_agent(agent_id="pi-test", provider="pi")  # default = gemma4:latest
     env = _envelope(text="caption", photo_b64=_jpeg_b64())
@@ -228,7 +228,7 @@ async def test_pi_agent_with_image_capable_model_appends_image_block(tmp_path, m
         )
 
     # Monkey-patch via pytest fixture so the binding reverts after the test.
-    import sampyclaw.agents.pi_agent as pi_module
+    import oxenclaw.agents.pi_agent as pi_module
 
     monkeypatch.setattr(pi_module, "run_agent_turn", _stub_run_turn)
 

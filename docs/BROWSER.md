@@ -1,6 +1,6 @@
 # Browser tools (BR-1)
 
-sampyClaw ships a sandboxed Playwright-backed browser surface for the
+oxenClaw ships a sandboxed Playwright-backed browser surface for the
 LLM. The design goal: **let an agent read public pages without giving
 it a way to exfiltrate data to anywhere the operator has not approved.**
 
@@ -11,8 +11,8 @@ includes a CDP bridge + control plane + qa-lab harness. The
 *security-relevant* surface is ~700 LOC across 6 files
 (`navigation-guard.ts`, `request-policy.ts`, `cdp-reachability-policy.ts`,
 `ssrf-policy-helpers.ts`, plus the SDK-side `browser-security-runtime`
-helpers). sampyClaw already has the equivalent of all of those in
-`sampyclaw/security/net/`.
+helpers). oxenClaw already has the equivalent of all of those in
+`oxenclaw/security/net/`.
 
 So BR-1 is a thin layer that:
 
@@ -33,7 +33,7 @@ So BR-1 is a thin layer that:
 - **Pinning cache is in-memory + lock-free on hits.** A hot host hits
   the LRU in ~1 µs; cold misses do one `getaddrinfo` (~1 ms). Cache is
   capacity-bounded so a long-running session can't grow unbounded.
-- **Audit is opt-in.** When `SAMPYCLAW_AUDIT_OUTBOUND=1` the route
+- **Audit is opt-in.** When `OXENCLAW_AUDIT_OUTBOUND=1` the route
   handler writes to the same WAL sqlite store as the existing
   `aiohttp` audit layer. When the env is off, the handler does no
   sqlite work — it stays cache-bound.
@@ -64,7 +64,7 @@ everything until extended:
 - `allow_websockets = False`, `allow_downloads = False`.
 - Per-call ephemeral context (no persistent cookies/storage).
 
-Operators opt in via env (`SAMPYCLAW_NET_ALLOW_HOSTS=example.com,*.docs.io`)
+Operators opt in via env (`OXENCLAW_NET_ALLOW_HOSTS=example.com,*.docs.io`)
 or by passing a custom `BrowserPolicy` to `default_browser_tools(policy=...)`.
 
 ## Tools
@@ -89,16 +89,16 @@ The `playwright` Python SDK is an optional extra; default installs stay
 slim and CI does not need Chromium.
 
 ```bash
-pip install 'sampyclaw[browser]'
+pip install 'oxenclaw[browser]'
 playwright install chromium
 ```
 
 ## Enabling at the gateway
 
 ```bash
-export SAMPYCLAW_ENABLE_BROWSER=1
-export SAMPYCLAW_NET_ALLOW_HOSTS='example.com,*.docs.io'
-sampyclaw gateway start --provider pi --auth-token "$TOKEN"
+export OXENCLAW_ENABLE_BROWSER=1
+export OXENCLAW_NET_ALLOW_HOSTS='example.com,*.docs.io'
+oxenclaw gateway start --provider pi --auth-token "$TOKEN"
 ```
 
 `agents.factory._maybe_browser_tools()` reads those env vars on agent

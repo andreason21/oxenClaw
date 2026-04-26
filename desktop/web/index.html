@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>sampyClaw</title>
+  <title>oxenClaw</title>
   <style>
     :root { color-scheme: dark light; font: 14px/1.5 -apple-system, "Segoe UI", sans-serif; }
     html, body { height: 100%; margin: 0; background: #0b0c0e; color: #e6e8ee; }
@@ -31,14 +31,14 @@
 <main>
   <div class="card" id="setup-card">
     <span class="pill">native desktop</span>
-    <h1>Connect to sampyClaw</h1>
+    <h1>Connect to oxenClaw</h1>
     <p>Bearer token is stored in Windows Credential Manager (DPAPI-encrypted) — never localStorage, never the WebView state.</p>
 
     <label for="url">Gateway URL</label>
     <input id="url" type="text" value="http://localhost:7331" spellcheck="false" />
 
     <label for="tok">Bearer token</label>
-    <input id="tok" type="password" placeholder="SAMPYCLAW_GATEWAY_TOKEN" autocomplete="off" />
+    <input id="tok" type="password" placeholder="OXENCLAW_GATEWAY_TOKEN" autocomplete="off" />
 
     <button id="go">Save and connect</button>
     <button id="forget" class="secondary">Forget stored token</button>

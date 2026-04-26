@@ -173,7 +173,7 @@ fn spawn_update_check(app: AppHandle, user_initiated: bool) {
 // ─── Tray ────────────────────────────────────────────────────────────
 
 fn build_tray(app: &AppHandle) -> tauri::Result<()> {
-    let show = MenuItem::with_id(app, "show", "Show sampyClaw", true, None::<&str>)?;
+    let show = MenuItem::with_id(app, "show", "Show oxenClaw", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&show, &quit])?;
     TrayIconBuilder::with_id("main")

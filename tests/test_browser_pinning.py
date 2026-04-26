@@ -1,4 +1,4 @@
-"""Unit tests for sampyclaw.browser.pinning.HostPinCache."""
+"""Unit tests for oxenclaw.browser.pinning.HostPinCache."""
 
 from __future__ import annotations
 
@@ -7,11 +7,11 @@ from typing import Any
 
 import pytest
 
-from sampyclaw.browser.errors import RebindBlockedError
-from sampyclaw.browser.pinning import HostPinCache
-from sampyclaw.browser.policy import BrowserPolicy
-from sampyclaw.security.net.policy import NetPolicy
-from sampyclaw.security.net.ssrf import SsrFBlockedError
+from oxenclaw.browser.errors import RebindBlockedError
+from oxenclaw.browser.pinning import HostPinCache
+from oxenclaw.browser.policy import BrowserPolicy
+from oxenclaw.security.net.policy import NetPolicy
+from oxenclaw.security.net.ssrf import SsrFBlockedError
 
 
 def _patch_resolver(monkeypatch: pytest.MonkeyPatch, mapping: dict[str, list[str]]) -> None:
@@ -26,7 +26,7 @@ def _patch_resolver(monkeypatch: pytest.MonkeyPatch, mapping: dict[str, list[str
         return [(socket.AF_INET, socket.SOCK_STREAM, 0, "", (ip, 0)) for ip in ips]
 
     monkeypatch.setattr(socket, "getaddrinfo", fake)
-    monkeypatch.setattr("sampyclaw.browser.pinning.socket.getaddrinfo", fake)
+    monkeypatch.setattr("oxenclaw.browser.pinning.socket.getaddrinfo", fake)
     return calls  # type: ignore[return-value]
 
 

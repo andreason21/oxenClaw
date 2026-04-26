@@ -20,15 +20,15 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from sampyclaw.agents import (
+from oxenclaw.agents import (
     AgentContext,
     LocalAgent,
     ToolRegistry,
     default_tools,
 )
-from sampyclaw.agents.history import ConversationHistory
-from sampyclaw.config.paths import SampyclawPaths
-from sampyclaw.plugin_sdk.channel_contract import ChannelTarget, InboundEnvelope
+from oxenclaw.agents.history import ConversationHistory
+from oxenclaw.config.paths import OxenclawPaths
+from oxenclaw.plugin_sdk.channel_contract import ChannelTarget, InboundEnvelope
 
 
 def _check_ollama_reachable(base_url: str) -> None:
@@ -62,9 +62,9 @@ async def main(model: str, base_url: str) -> int:
     print(f"== smoke test :: {model} @ {base_url} ==", flush=True)
     _check_ollama_reachable(base_url)
 
-    home = Path("/tmp/sampyclaw-smoke")
+    home = Path("/tmp/oxenclaw-smoke")
     home.mkdir(exist_ok=True)
-    paths = SampyclawPaths(home=home)
+    paths = OxenclawPaths(home=home)
     paths.ensure_home()
     sessions_dir = paths.agent_dir("local-smoke") / "sessions"
     if sessions_dir.exists():

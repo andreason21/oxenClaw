@@ -7,18 +7,18 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from sampyclaw.agents import AgentRegistry, Dispatcher, EchoAgent
-from sampyclaw.approvals import ApprovalManager
-from sampyclaw.channels import ChannelRouter
-from sampyclaw.cli.gateway_cmd import (
+from oxenclaw.agents import AgentRegistry, Dispatcher, EchoAgent
+from oxenclaw.approvals import ApprovalManager
+from oxenclaw.channels import ChannelRouter
+from oxenclaw.cli.gateway_cmd import (
     _build_router,
     _supervise_monitors,
     build_channel_router,
 )
-from sampyclaw.config.paths import SampyclawPaths
-from sampyclaw.cron import CronJobStore, CronScheduler
-from sampyclaw.extensions.telegram.channel import TelegramChannel
-from sampyclaw.plugin_sdk.config_schema import (
+from oxenclaw.config.paths import OxenclawPaths
+from oxenclaw.cron import CronJobStore, CronScheduler
+from oxenclaw.extensions.telegram.channel import TelegramChannel
+from oxenclaw.plugin_sdk.config_schema import (
     AgentChannelRouting,
     AgentConfig,
     RootConfig,
@@ -40,7 +40,7 @@ def mocked_bot_factory(monkeypatch):  # type: ignore[no-untyped-def]
         created.append(bot)
         return bot
 
-    monkeypatch.setattr("sampyclaw.extensions.telegram.channel.create_bot", _fake)
+    monkeypatch.setattr("oxenclaw.extensions.telegram.channel.create_bot", _fake)
     return created
 
 
@@ -66,7 +66,7 @@ def _setup_gateway(tmp_path, mocked_bot_factory):  # type: ignore[no-untyped-def
     dispatcher = Dispatcher(agents=agents, config=config, send=cr.send)
     cron = CronScheduler(store=CronJobStore(path=tmp_path / "cron.json"), dispatcher=dispatcher)
     approvals = ApprovalManager()
-    paths = SampyclawPaths(home=tmp_path)
+    paths = OxenclawPaths(home=tmp_path)
     paths.ensure_home()
 
     router = _build_router(
@@ -135,8 +135,8 @@ async def test_outbound_only_channel_skips_monitor_supervisor(tmp_path) -> None:
     Slack channel sets this so calling .monitor() (NotImplementedError)
     isn't tripped by the supervisor on every restart.
     """
-    from sampyclaw.cli.gateway_cmd import _supervise_monitors
-    from sampyclaw.extensions.slack.channel import SlackChannel
+    from oxenclaw.cli.gateway_cmd import _supervise_monitors
+    from oxenclaw.extensions.slack.channel import SlackChannel
 
     agents = AgentRegistry()
     agents.register(EchoAgent())
@@ -160,7 +160,7 @@ async def test_chat_send_passes_media_into_inbound_envelope(
     # Capture the envelope the dispatcher receives. Patch on the
     # Dispatcher class so we don't need to dig out the live instance.
     captured = {}
-    from sampyclaw.agents.dispatch import Dispatcher
+    from oxenclaw.agents.dispatch import Dispatcher
 
     real = Dispatcher.dispatch_with_outcome
 
@@ -219,7 +219,7 @@ async def test_chat_send_unrouted_returns_local_ok_with_warning(
     empty_cr = ChannelRouter()
     dispatcher = Dispatcher(agents=agents, config=config, send=empty_cr.send)
     cron = CronScheduler(store=CronJobStore(path=tmp_path / "cron.json"), dispatcher=dispatcher)
-    paths = SampyclawPaths(home=tmp_path)
+    paths = OxenclawPaths(home=tmp_path)
     paths.ensure_home()
     router = _build_router(
         agents=agents,
@@ -275,7 +275,7 @@ async def test_supervise_monitors_spawns_and_cancels_tasks(
         async def stop(self) -> None:
             self.stopped = True
 
-    monkeypatch.setattr("sampyclaw.cli.gateway_cmd.ChannelRunner", _FakeRunner)
+    monkeypatch.setattr("oxenclaw.cli.gateway_cmd.ChannelRunner", _FakeRunner)
 
     cr = ChannelRouter()
     cr.register("telegram", "main", TelegramChannel(token="t", account_id="main"))
@@ -304,9 +304,9 @@ async def test_supervise_monitors_spawns_and_cancels_tasks(
 
 def test_build_channel_router_uses_plugin_discovery(monkeypatch, tmp_path) -> None:  # type: ignore[no-untyped-def]
     """build_channel_router loads accounts via the plugin registry (monkey-patched)."""
-    from sampyclaw.plugin_sdk.channel_contract import ChannelPlugin
-    from sampyclaw.plugins.manifest import Manifest
-    from sampyclaw.plugins.registry import PluginEntry, PluginRegistry
+    from oxenclaw.plugin_sdk.channel_contract import ChannelPlugin
+    from oxenclaw.plugins.manifest import Manifest
+    from oxenclaw.plugins.registry import PluginEntry, PluginRegistry
 
     fake_channel = MagicMock(spec=ChannelPlugin)
     fake_channel.id = "fake"
@@ -321,8 +321,8 @@ def test_build_channel_router_uses_plugin_discovery(monkeypatch, tmp_path) -> No
     )
     reg = PluginRegistry()
     reg.register(entry)
-    monkeypatch.setattr("sampyclaw.cli.gateway_cmd.discover_plugins", lambda: reg)
-    monkeypatch.setenv("SAMPYCLAW_HOME", str(tmp_path))
+    monkeypatch.setattr("oxenclaw.cli.gateway_cmd.discover_plugins", lambda: reg)
+    monkeypatch.setenv("OXENCLAW_HOME", str(tmp_path))
 
     cr = build_channel_router()
     assert cr.get("fake", "only") is fake_channel

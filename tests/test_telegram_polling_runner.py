@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from sampyclaw.extensions.telegram.polling_runner import PollingRunner
+from oxenclaw.extensions.telegram.polling_runner import PollingRunner
 
 
 class _FakeSession:

@@ -21,7 +21,7 @@ from PIL import Image, ImageDraw
 
 ICONS_DIR = Path(__file__).resolve().parents[1] / "desktop" / "src-tauri" / "icons"
 
-ACCENT = (255, 102, 0, 255)  # sampyClaw orange
+ACCENT = (255, 102, 0, 255)  # oxenClaw orange
 INK = (255, 255, 255, 255)
 
 

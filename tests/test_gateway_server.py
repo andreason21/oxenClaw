@@ -9,14 +9,14 @@ import json
 import pytest
 from websockets.asyncio.client import connect
 
-from sampyclaw.gateway import (
+from oxenclaw.gateway import (
     ChatSendParams,
     ChatSendResult,
     EventFrame,
     GatewayServer,
     Router,
 )
-from sampyclaw.gateway.protocol import ChatEvent
+from oxenclaw.gateway.protocol import ChatEvent
 
 
 @pytest.fixture()

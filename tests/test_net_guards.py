@@ -1,4 +1,4 @@
-"""Tests for sampyclaw.security.net (Phases N1-N5)."""
+"""Tests for oxenclaw.security.net (Phases N1-N5)."""
 
 from __future__ import annotations
 
@@ -10,28 +10,28 @@ from pathlib import Path
 
 import pytest
 
-from sampyclaw.security.net import (
+from oxenclaw.security.net import (
     NetPolicy,
     NetPolicyError,
     hostname_matches,
     merge_policies,
     policy_from_env,
 )
-from sampyclaw.security.net.audit import (
+from oxenclaw.security.net.audit import (
     AuditConfig,
     OutboundAuditStore,
     should_audit_from_env,
 )
-from sampyclaw.security.net.guarded_fetch import (
+from oxenclaw.security.net.guarded_fetch import (
     _close_audit_store,
     guarded_session,
     policy_pre_flight,
 )
-from sampyclaw.security.net.pinning import (
+from oxenclaw.security.net.pinning import (
     PinnedResolver,
     make_guarded_connector,
 )
-from sampyclaw.security.net.ssrf import (
+from oxenclaw.security.net.ssrf import (
     SsrFBlockedError,
     assert_ip_allowed,
     assert_url_allowed,
@@ -39,7 +39,7 @@ from sampyclaw.security.net.ssrf import (
     is_canonical_ipv4,
     is_loose_ipv4_literal,
 )
-from sampyclaw.security.net.webhook_guards import (
+from oxenclaw.security.net.webhook_guards import (
     BodySizeLimiter,
     BodyTooLargeError,
     FixedWindowRateLimiter,
@@ -131,10 +131,10 @@ def test_merge_ANDs_private_network_flag() -> None:
 def test_policy_from_env_parses_csv() -> None:
     p = policy_from_env(
         {
-            "SAMPYCLAW_NET_ALLOW_HOSTS": "a.com,*.b.com",
-            "SAMPYCLAW_NET_DENY_HOSTS": "internal.com",
-            "SAMPYCLAW_NET_ALLOW_PRIVATE": "1",
-            "SAMPYCLAW_NET_EXTRA_PORTS": "8443,9443",
+            "OXENCLAW_NET_ALLOW_HOSTS": "a.com,*.b.com",
+            "OXENCLAW_NET_DENY_HOSTS": "internal.com",
+            "OXENCLAW_NET_ALLOW_PRIVATE": "1",
+            "OXENCLAW_NET_EXTRA_PORTS": "8443,9443",
         }
     )
     assert p.allowed_hostnames == ("a.com", "*.b.com")
@@ -318,10 +318,10 @@ def test_audit_config_disabled_by_default() -> None:
 def test_audit_config_picks_up_env(tmp_path: Path) -> None:
     cfg = should_audit_from_env(
         {
-            "SAMPYCLAW_AUDIT_OUTBOUND": "1",
-            "SAMPYCLAW_AUDIT_OUTBOUND_BODY": "1",
-            "SAMPYCLAW_AUDIT_OUTBOUND_SAMPLE": "0.5",
-            "SAMPYCLAW_AUDIT_OUTBOUND_PATH": str(tmp_path / "a.db"),
+            "OXENCLAW_AUDIT_OUTBOUND": "1",
+            "OXENCLAW_AUDIT_OUTBOUND_BODY": "1",
+            "OXENCLAW_AUDIT_OUTBOUND_SAMPLE": "0.5",
+            "OXENCLAW_AUDIT_OUTBOUND_PATH": str(tmp_path / "a.db"),
         },
         home=tmp_path,
     )

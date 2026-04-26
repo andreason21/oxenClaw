@@ -14,37 +14,37 @@ from __future__ import annotations
 
 import pytest
 
-from sampyclaw.config.credentials import CredentialStore
-from sampyclaw.config.paths import SampyclawPaths
-from sampyclaw.extensions.slack.accounts import SlackAccountRegistry
-from sampyclaw.extensions.slack.channel import SLACK_CHANNEL_ID, SlackChannel
-from sampyclaw.extensions.slack.client import (
+from oxenclaw.config.credentials import CredentialStore
+from oxenclaw.config.paths import OxenclawPaths
+from oxenclaw.extensions.slack.accounts import SlackAccountRegistry
+from oxenclaw.extensions.slack.channel import SLACK_CHANNEL_ID, SlackChannel
+from oxenclaw.extensions.slack.client import (
     DEFAULT_BASE_URL,
     SlackApiError,
     SlackWebClient,
 )
-from sampyclaw.extensions.slack.send import send_message_slack
-from sampyclaw.extensions.slack.token import SlackTokenResolver
-from sampyclaw.plugin_sdk.channel_contract import (
+from oxenclaw.extensions.slack.send import send_message_slack
+from oxenclaw.extensions.slack.token import SlackTokenResolver
+from oxenclaw.plugin_sdk.channel_contract import (
     ChannelTarget,
     MonitorOpts,
     ProbeOpts,
     SendParams,
 )
-from sampyclaw.plugin_sdk.config_schema import (
+from oxenclaw.plugin_sdk.config_schema import (
     AccountConfig,
     ChannelConfig,
     RootConfig,
 )
-from sampyclaw.plugin_sdk.error_runtime import (
+from oxenclaw.plugin_sdk.error_runtime import (
     NetworkError,
     RateLimitedError,
     UserVisibleError,
 )
 
 
-def _paths(tmp_path) -> SampyclawPaths:  # type: ignore[no-untyped-def]
-    p = SampyclawPaths(home=tmp_path)
+def _paths(tmp_path) -> OxenclawPaths:  # type: ignore[no-untyped-def]
+    p = OxenclawPaths(home=tmp_path)
     p.ensure_home()
     return p
 

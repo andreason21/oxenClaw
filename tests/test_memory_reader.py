@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from sampyclaw.memory.reader import read_file_range
+from oxenclaw.memory.reader import read_file_range
 
 
 def test_happy_slice(tmp_path: Path) -> None:

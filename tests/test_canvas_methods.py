@@ -1,4 +1,4 @@
-"""Tests for sampyclaw.gateway.canvas_methods."""
+"""Tests for oxenclaw.gateway.canvas_methods."""
 
 from __future__ import annotations
 
@@ -6,9 +6,9 @@ import asyncio
 
 import pytest
 
-from sampyclaw.canvas import CanvasEventBus, CanvasStore
-from sampyclaw.gateway.canvas_methods import register_canvas_methods
-from sampyclaw.gateway.router import Router
+from oxenclaw.canvas import CanvasEventBus, CanvasStore
+from oxenclaw.gateway.canvas_methods import register_canvas_methods
+from oxenclaw.gateway.router import Router
 
 
 def _setup() -> tuple[Router, CanvasStore, CanvasEventBus]:

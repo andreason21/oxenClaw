@@ -1,10 +1,10 @@
-"""Tests for sampyclaw.plugin_sdk.runtime_env helpers."""
+"""Tests for oxenclaw.plugin_sdk.runtime_env helpers."""
 
 from __future__ import annotations
 
 from unittest.mock import patch
 
-from sampyclaw.plugin_sdk.runtime_env import (
+from oxenclaw.plugin_sdk.runtime_env import (
     describe_platform,
     get_logger,
     is_wsl,
@@ -13,7 +13,7 @@ from sampyclaw.plugin_sdk.runtime_env import (
 
 def test_get_logger_returns_namespaced_logger():
     logger = get_logger("test.runtime_env")
-    assert logger.name == "sampyclaw.test.runtime_env"
+    assert logger.name == "oxenclaw.test.runtime_env"
 
 
 def test_is_wsl_detects_microsoft_kernel():

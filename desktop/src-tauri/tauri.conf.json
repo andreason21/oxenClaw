@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "sampyClaw",
+  "productName": "oxenClaw",
   "version": "0.1.0-11",
-  "identifier": "ai.sampyclaw.desktop",
+  "identifier": "ai.oxenclaw.desktop",
   "build": {
     "frontendDist": "../web",
     "devUrl": "http://localhost:1420",
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "sampyClaw",
+        "title": "oxenClaw",
         "width": 1280,
         "height": 800,
         "minWidth": 720,
@@ -35,7 +35,7 @@
       "iconPath": "icons/icon.png",
       "iconAsTemplate": false,
       "menuOnLeftClick": false,
-      "tooltip": "sampyClaw"
+      "tooltip": "oxenClaw"
     }
   },
   "bundle": {
@@ -51,12 +51,12 @@
       "icons/icon.ico"
     ],
     "category": "DeveloperTool",
-    "shortDescription": "sampyClaw native desktop app",
-    "longDescription": "Connect to a sampyClaw gateway with native OS keychain token storage, Action Center / freedesktop notifications with action buttons, and a system tray icon.",
+    "shortDescription": "oxenClaw native desktop app",
+    "longDescription": "Connect to a oxenClaw gateway with native OS keychain token storage, Action Center / freedesktop notifications with action buttons, and a system tray icon.",
     "windows": {
       "wix": {
         "language": "en-US",
-        "upgradeCode": "9C9F62C5-3B4A-4E4F-8B7A-3B8B5F3A4E60"
+        "upgradeCode": "C1A9D614-EDFF-4828-A2E2-90D446401F94"
       },
       "nsis": {
         "installMode": "currentUser"
@@ -87,7 +87,7 @@
     "os": {},
     "updater": {
       "endpoints": [
-        "https://github.com/andreason21/sampyClaw/releases/latest/download/latest.json"
+        "https://github.com/andreason21/oxenClaw/releases/latest/download/latest.json"
       ],
       "pubkey": "PLACEHOLDER_REPLACE_WITH_TAURI_SIGNING_PUBLIC_KEY",
       "windows": {

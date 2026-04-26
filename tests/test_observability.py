@@ -1,4 +1,4 @@
-"""Tests for sampyclaw.observability."""
+"""Tests for oxenclaw.observability."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import asyncio
 
 import pytest
 
-from sampyclaw.observability import (
+from oxenclaw.observability import (
     Counter,
     Gauge,
     Histogram,
@@ -83,16 +83,16 @@ def test_metrics_registry_exposes_all_metrics():
     m = Metrics()
     names = {metric.name for metric in m.all_metrics()}
     expected = {
-        "sampyclaw_ws_connections_active",
-        "sampyclaw_ws_rpc_total",
-        "sampyclaw_ws_rpc_duration_seconds",
-        "sampyclaw_channel_inbound_total",
-        "sampyclaw_channel_outbound_total",
-        "sampyclaw_agent_turns_total",
-        "sampyclaw_tool_calls_total",
-        "sampyclaw_mcp_tool_calls_total",
-        "sampyclaw_cron_jobs_active",
-        "sampyclaw_approvals_pending",
+        "oxenclaw_ws_connections_active",
+        "oxenclaw_ws_rpc_total",
+        "oxenclaw_ws_rpc_duration_seconds",
+        "oxenclaw_channel_inbound_total",
+        "oxenclaw_channel_outbound_total",
+        "oxenclaw_agent_turns_total",
+        "oxenclaw_tool_calls_total",
+        "oxenclaw_mcp_tool_calls_total",
+        "oxenclaw_cron_jobs_active",
+        "oxenclaw_approvals_pending",
     }
     assert expected.issubset(names)
 
@@ -101,8 +101,8 @@ def test_render_prometheus_produces_lines():
     m = Metrics()
     m.ws_rpc_total.inc(labels={"method": "chat.send"})
     rendered = render_prometheus(m)
-    assert "TYPE sampyclaw_ws_rpc_total counter" in rendered
-    assert 'sampyclaw_ws_rpc_total{method="chat.send"} 1.0' in rendered
+    assert "TYPE oxenclaw_ws_rpc_total counter" in rendered
+    assert 'oxenclaw_ws_rpc_total{method="chat.send"} 1.0' in rendered
 
 
 def test_label_value_escapes_quotes_and_newlines():

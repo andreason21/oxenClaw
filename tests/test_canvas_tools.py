@@ -1,16 +1,16 @@
-"""Tests for sampyclaw.tools_pkg.canvas tool factories."""
+"""Tests for oxenclaw.tools_pkg.canvas tool factories."""
 
 from __future__ import annotations
 
 import pytest
 
-from sampyclaw.canvas import (
+from oxenclaw.canvas import (
     CanvasEventBus,
     CanvasNotOpenError,
     CanvasResourceCapError,
     CanvasStore,
 )
-from sampyclaw.tools_pkg.canvas import (
+from oxenclaw.tools_pkg.canvas import (
     canvas_eval_tool,
     canvas_hide_tool,
     canvas_present_tool,
@@ -65,17 +65,17 @@ def test_default_bundle_has_two_tools() -> None:
 
 
 def test_factory_returns_no_tools_without_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("SAMPYCLAW_ENABLE_CANVAS", raising=False)
-    from sampyclaw.agents.factory import _maybe_canvas_tools
+    monkeypatch.delenv("OXENCLAW_ENABLE_CANVAS", raising=False)
+    from oxenclaw.agents.factory import _maybe_canvas_tools
 
     assert _maybe_canvas_tools("a") == []
 
 
 def test_factory_returns_tools_with_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("SAMPYCLAW_ENABLE_CANVAS", "1")
+    monkeypatch.setenv("OXENCLAW_ENABLE_CANVAS", "1")
     # reset singletons so the test is isolated
-    from sampyclaw.agents.factory import _maybe_canvas_tools
-    from sampyclaw.canvas import reset_default_canvas
+    from oxenclaw.agents.factory import _maybe_canvas_tools
+    from oxenclaw.canvas import reset_default_canvas
 
     reset_default_canvas()
     tools = _maybe_canvas_tools("a")

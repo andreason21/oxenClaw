@@ -14,7 +14,7 @@
 use keyring::Entry;
 use serde::{Deserialize, Serialize};
 
-const SERVICE: &str = "ai.sampyclaw.desktop";
+const SERVICE: &str = "ai.oxenclaw.desktop";
 const ACCOUNT: &str = "gateway-token";
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

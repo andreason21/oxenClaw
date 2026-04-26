@@ -6,22 +6,22 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from sampyclaw.config.credentials import CredentialStore
-from sampyclaw.config.paths import SampyclawPaths
-from sampyclaw.extensions.telegram.accounts import TelegramAccountRegistry
-from sampyclaw.extensions.telegram.channel import TelegramChannel
-from sampyclaw.extensions.telegram.token import TokenResolver
-from sampyclaw.plugin_sdk.config_schema import (
+from oxenclaw.config.credentials import CredentialStore
+from oxenclaw.config.paths import OxenclawPaths
+from oxenclaw.extensions.telegram.accounts import TelegramAccountRegistry
+from oxenclaw.extensions.telegram.channel import TelegramChannel
+from oxenclaw.extensions.telegram.token import TokenResolver
+from oxenclaw.plugin_sdk.config_schema import (
     AccountConfig,
     ChannelConfig,
     RootConfig,
 )
-from sampyclaw.plugin_sdk.error_runtime import UserVisibleError
+from oxenclaw.plugin_sdk.error_runtime import UserVisibleError
 
 
 @pytest.fixture()
 def store(tmp_path) -> CredentialStore:  # type: ignore[no-untyped-def]
-    paths = SampyclawPaths(home=tmp_path)
+    paths = OxenclawPaths(home=tmp_path)
     paths.ensure_home()
     return CredentialStore(paths)
 
@@ -34,7 +34,7 @@ def patch_create_bot(monkeypatch):  # type: ignore[no-untyped-def]
         bot.session.close = AsyncMock()
         return bot
 
-    monkeypatch.setattr("sampyclaw.extensions.telegram.channel.create_bot", _fake)
+    monkeypatch.setattr("oxenclaw.extensions.telegram.channel.create_bot", _fake)
     return monkeypatch
 
 

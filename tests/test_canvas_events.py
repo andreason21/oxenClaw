@@ -1,4 +1,4 @@
-"""Unit tests for sampyclaw.canvas.events.CanvasEventBus."""
+"""Unit tests for oxenclaw.canvas.events.CanvasEventBus."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import asyncio
 
 import pytest
 
-from sampyclaw.canvas.events import CanvasEvent, CanvasEventBus
+from oxenclaw.canvas.events import CanvasEvent, CanvasEventBus
 
 
 @pytest.mark.asyncio

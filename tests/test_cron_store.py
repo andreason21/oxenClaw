@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from sampyclaw.cron.models import CronJob
-from sampyclaw.cron.store import CronJobStore
+from oxenclaw.cron.models import CronJob
+from oxenclaw.cron.store import CronJobStore
 
 
 def _job(job_id: str = "j1") -> CronJob:

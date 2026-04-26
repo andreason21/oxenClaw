@@ -3,13 +3,13 @@ requires = ["hatchling>=1.25"]
 build-backend = "hatchling.build"
 
 [project]
-name = "sampyclaw"
+name = "oxenclaw"
 version = "0.1.0-rc.11"
 description = "Python port of openclaw — personal multi-channel AI assistant gateway"
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.11"
-authors = [{ name = "sampyClaw contributors" }]
+authors = [{ name = "oxenClaw contributors" }]
 keywords = [
     "ai", "agent", "assistant", "telegram", "slack",
     "anthropic", "claude", "ollama", "vllm", "llm",
@@ -67,21 +67,21 @@ browser = [
 ]
 
 [project.urls]
-Homepage      = "https://github.com/andreason21/sampyClaw"
-Documentation = "https://github.com/andreason21/sampyClaw/tree/main/docs"
-Repository    = "https://github.com/andreason21/sampyClaw"
-Issues        = "https://github.com/andreason21/sampyClaw/issues"
-Changelog     = "https://github.com/andreason21/sampyClaw/releases"
+Homepage      = "https://github.com/andreason21/oxenClaw"
+Documentation = "https://github.com/andreason21/oxenClaw/tree/main/docs"
+Repository    = "https://github.com/andreason21/oxenClaw"
+Issues        = "https://github.com/andreason21/oxenClaw/issues"
+Changelog     = "https://github.com/andreason21/oxenClaw/releases"
 
 [project.scripts]
-sampyclaw = "sampyclaw.cli.__main__:app"
+oxenclaw = "oxenclaw.cli.__main__:app"
 
-[project.entry-points."sampyclaw.plugins"]
-telegram = "sampyclaw.extensions.telegram.plugin_entry:TELEGRAM_PLUGIN"
-slack    = "sampyclaw.extensions.slack.plugin_entry:SLACK_PLUGIN"
+[project.entry-points."oxenclaw.plugins"]
+telegram = "oxenclaw.extensions.telegram.plugin_entry:TELEGRAM_PLUGIN"
+slack    = "oxenclaw.extensions.slack.plugin_entry:SLACK_PLUGIN"
 
 [tool.hatch.build.targets.wheel]
-packages = ["sampyclaw"]
+packages = ["oxenclaw"]
 
 [tool.ruff]
 line-length = 100
@@ -127,7 +127,7 @@ ignore = [
 [tool.pyright]
 pythonVersion = "3.11"
 typeCheckingMode = "strict"
-include = ["sampyclaw", "tests"]
+include = ["oxenclaw", "tests"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

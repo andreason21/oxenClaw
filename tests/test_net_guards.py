@@ -209,6 +209,18 @@ def test_loose_ipv4_literals_refused() -> None:
     assert not is_loose_ipv4_literal("127.0.0.1")
 
 
+def test_loose_ipv4_literal_does_not_match_real_hostnames() -> None:
+    """Regression: a real DNS hostname containing digits was classified as
+    a loose IPv4 literal because the segment-by-segment digit check fired
+    for any non-pure-digit segment. The fix delegates to `socket.inet_aton`,
+    which only accepts hostnames that actually parse as IPv4."""
+    assert not is_loose_ipv4_literal("query1.finance.yahoo.com")
+    assert not is_loose_ipv4_literal("api2.example.org")
+    assert not is_loose_ipv4_literal("s3-us-west-2.amazonaws.com")
+    assert not is_loose_ipv4_literal("ipv4.icanhazip.com")
+    assert not is_loose_ipv4_literal("8b.8b.8b.8b")  # all-hex but not 0x-prefixed
+
+
 def test_canonical_ipv4_detection() -> None:
     assert is_canonical_ipv4("1.2.3.4")
     assert is_canonical_ipv4("255.255.255.255")

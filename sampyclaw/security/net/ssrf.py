@@ -44,31 +44,35 @@ def is_canonical_ipv4(host: str) -> bool:
 def is_loose_ipv4_literal(host: str) -> bool:
     """Detect SSRF-bypass-style IPv4 literals.
 
-    Examples we want to refuse:
+    True only when `host` parses as IPv4 under the libc-permissive rules
+    (`socket.inet_aton` accepts hex/octal/short/trailing-dot forms) but is
+    NOT in canonical dotted-decimal form. Real hostnames like
+    `query1.finance.yahoo.com` never reach `inet_aton` success and so are
+    correctly classified as not-an-IP-literal.
+
+    Examples we want to refuse (return True):
     - `0x7f.0.0.1`     (hex octet)
     - `0177.0.0.1`     (octal octet)
     - `2130706433`     (single decimal)
     - `127.1`          (short form)
     - `127.0.0.1.`     (trailing dot)
     """
+    # Strip a single trailing dot — `127.0.0.1.` is a loose form even
+    # though `inet_aton` on glibc rejects it.
     h = host.rstrip(".")
-    if h != host:
+    if h != host and (is_canonical_ipv4(h) or _inet_aton_accepts(h)):
         return True
-    if "." not in h:
-        # Possibly a single integer — try parse.
-        if h.isdigit():
-            return True
-    parts = h.split(".")
-    if len(parts) != 4:
+    if is_canonical_ipv4(host):
+        return False
+    return _inet_aton_accepts(host)
+
+
+def _inet_aton_accepts(host: str) -> bool:
+    try:
+        socket.inet_aton(host)
         return True
-    for p in parts:
-        if not p.isdigit():
-            # Hex or octal token.
-            return True
-        if p != str(int(p)):
-            # Leading-zero octal-style (e.g. "0177").
-            return True
-    return False
+    except OSError:
+        return False
 
 
 def is_ipv4_in_ipv6(addr: ipaddress.IPv6Address) -> ipaddress.IPv4Address | None:
@@ -149,10 +153,11 @@ def assert_url_allowed(url: str, policy: NetPolicy) -> str:
     if parsed.port is not None and not policy.is_port_allowed(parsed.port):
         raise SsrFBlockedError(f"port {parsed.port} not allowed by policy")
 
-    # Refuse loose IPv4 literals before doing anything else.
-    if "." in host and not host.replace(".", "").isalpha() and not is_canonical_ipv4(host):
-        if is_loose_ipv4_literal(host):
-            raise SsrFBlockedError(f"loose IPv4 literal refused: {host!r}")
+    # Refuse loose IPv4 literals before doing anything else. The classifier
+    # itself only returns True for hosts that actually parse as IPv4 under
+    # libc-permissive rules, so passing real hostnames through is safe.
+    if is_loose_ipv4_literal(host):
+        raise SsrFBlockedError(f"loose IPv4 literal refused: {host!r}")
 
     # If the host is an IP literal (canonical IPv4 or any IPv6), classify
     # immediately so URLs like `http://10.0.0.1/` are caught at pre-flight

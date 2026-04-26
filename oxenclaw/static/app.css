@@ -134,6 +134,12 @@ a:hover { text-decoration: underline; }
 @keyframes pulse { 50% { opacity: 0.4; } }
 
 .content { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+
+/* Backdrop is mobile-only; at wide widths it must NOT participate in the
+   `#app` grid auto-flow or it eats the 1fr column and pushes `.content`
+   to row 2. The `position: fixed` inside the media query takes over when
+   the sidebar collapses. */
+.nav-backdrop { display: none; }
 .topbar {
   display: flex; align-items: center; justify-content: space-between;
   padding: 14px var(--sp-5);

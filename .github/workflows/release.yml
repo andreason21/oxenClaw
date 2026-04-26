@@ -435,6 +435,11 @@ jobs:
           prerelease: ${{ contains(github.ref_name, '-') }}
           # Hard-fail if no files match — silent empty-release was the
           # exact bug we hit on rc.4 (job green, GitHub Release page empty).
+          # `*.sig` is intentionally NOT listed: signature sidecars only
+          # exist when TAURI_SIGNING_PRIVATE_KEY is set in the env, and we
+          # don't want a missing-secret build to fail the release. When
+          # signing is wired up, add a separate softprops step with
+          # fail_on_unmatched_files: false to upload `release-assets/*.sig`.
           fail_on_unmatched_files: true
           files: |
             release-assets/*.whl
@@ -442,9 +447,20 @@ jobs:
             release-assets/*.msi
             release-assets/*.exe
             release-assets/*.deb
-            release-assets/*.sig
             release-assets/latest.json
             release-assets/SHA256SUMS.txt
+      - name: Upload signature sidecars (best-effort)
+        # Separate step so missing sigs (no TAURI_SIGNING_PRIVATE_KEY) don't
+        # fail the release. Runs only if any `.sig` was actually staged.
+        if: ${{ hashFiles('release-assets/*.sig') != '' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          fail_on_unmatched_files: false
+          files: |
+            release-assets/*.sig
 
   # ─── 7. Submit to winget-pkgs (one-click `winget install sampyclaw`) ──
   winget-submit:

@@ -31,14 +31,15 @@ def test_supported_providers_is_catalog_plus_echo() -> None:
 
 
 def test_catalog_providers_match_pi_registrations() -> None:
-    """Factory's CATALOG_PROVIDERS must equal what
-    `oxenclaw.pi.providers` registers via `register_provider_stream`.
-    Drift here would mean the CLI advertises a provider with no stream
-    wrapper or hides one that's actually wired up."""
+    """Every catalog provider id must have a registered stream wrapper.
+    The reverse — extra wrappers without a matching catalog id — is
+    legitimate (plugin / test stubs), so this is a one-way subset check
+    rather than equality."""
     import oxenclaw.pi.providers  # noqa: F401  registers wrappers
     from oxenclaw.pi.streaming import _PROVIDER_STREAMS  # type: ignore[attr-defined]
 
-    assert set(CATALOG_PROVIDERS) == set(_PROVIDER_STREAMS.keys())
+    missing = set(CATALOG_PROVIDERS) - set(_PROVIDER_STREAMS.keys())
+    assert not missing, f"advertised but not wired: {sorted(missing)}"
 
 
 def test_build_echo_returns_echo_agent() -> None:

@@ -11,6 +11,7 @@ import typer
 from oxenclaw.cli import (
     backup_cmd,
     config_cmd,
+    flows_cmd,
     gateway_cmd,
     memory_cmd,
     message_cmd,
@@ -28,6 +29,14 @@ app.add_typer(memory_cmd.app, name="memory", help="Manage long-term memory.")
 app.add_typer(sessions_cmd.app, name="session", help="Inspect and manage agent sessions.")
 app.add_typer(wiki_cmd.app, name="wiki", help="Browse and curate the durable knowledge wiki.")
 app.add_typer(backup_cmd.app, name="backup", help="Backup and restore the home directory.")
+app.add_typer(
+    flows_cmd.doctor_app, name="doctor", help="Aggregated health check across subsystems."
+)
+app.add_typer(
+    flows_cmd.setup_app,
+    name="setup",
+    help="Interactive setup wizards (model / provider / channel).",
+)
 
 
 @app.command()

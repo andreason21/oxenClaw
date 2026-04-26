@@ -344,6 +344,23 @@ async function safeRpc(method, params, { quiet = false } = {}) {
   }
 }
 
+// Friendly empty-state with icon + title + body + optional copyable example
+// + optional action buttons. `example` is rendered in a monospace box —
+// good for sample chat prompts the user can copy.
+function emptyState({ icon = "✨", title, body, example, actions }) {
+  const root = el("div", { class: "empty-state" });
+  if (icon) root.append(el("div", { class: "empty-state__icon" }, icon));
+  if (title) root.append(el("div", { class: "empty-state__title" }, title));
+  if (body) root.append(el("div", { class: "empty-state__body", html: body }));
+  if (example) root.append(el("div", { class: "empty-state__example" }, example));
+  if (actions && actions.length) {
+    const row = el("div", { class: "empty-state__actions" });
+    for (const a of actions) row.append(a);
+    root.append(row);
+  }
+  return root;
+}
+
 // ─────────────────────────────────────────────────────────────────────────
 // Router
 // ─────────────────────────────────────────────────────────────────────────
@@ -825,7 +842,14 @@ const CronView = {
       const jobs = await safeRpc("cron.list", {}, { quiet: true });
       list.innerHTML = "";
       if (!jobs || !jobs.length) {
-        list.append(el("div", { class: "empty" }, "no cron jobs"));
+        list.append(emptyState({
+          icon: "⏱",
+          title: "No scheduled jobs yet",
+          body: "Cron jobs let an agent run a prompt on a schedule. " +
+                "The easiest way to add one is to <strong>ask the agent</strong> from " +
+                "the Chat tab — the cron tool will register it for you.",
+          example: 'e.g. "Every weekday at 9am summarise overnight Slack DMs"',
+        }));
       } else {
         for (const j of jobs) {
           const row = el("div", { class: "cron-row" + (j.enabled ? "" : " disabled") });
@@ -919,12 +943,13 @@ const ApprovalsView = {
       const list = await safeRpc("exec-approvals.list", {}, { quiet: true });
       root.innerHTML = "";
       if (!list || !list.length) {
-        root.append(el("div", { class: "card" },
-          el("h3", { class: "card-title" }, "No pending approvals"),
-          el("div", { class: "card-meta" },
-            "Tools wrapped via gated_tool() raise an approval request that lands here. " +
-            "Approve or deny to unblock the agent."),
-        ));
+        root.append(emptyState({
+          icon: "✅",
+          title: "No pending approvals",
+          body: "Tools wrapped via <code>gated_tool()</code> pause and ask " +
+                "for human confirmation before running. Pending requests appear " +
+                "here — Approve or Deny to unblock the agent.",
+        }));
         return;
       }
       for (const a of list) {
@@ -1182,6 +1207,216 @@ const SkillsView = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────
+// Memory view — search the long-term knowledge index
+// ─────────────────────────────────────────────────────────────────────────
+const MemoryView = {
+  title: "Memory",
+  async render(root, actions) {
+    const card = el("div", { class: "card" });
+    const bar = el("div", { class: "search-bar" });
+    const input = el("input", {
+      type: "search",
+      placeholder: "Search memory… (sqlite-vec + FTS5 + MMR rerank)",
+    });
+    const kInput = el("input", { type: "number", value: "10", style: "max-width:80px" });
+    const goBtn = el("button", { class: "btn btn-primary" }, "Search");
+    bar.append(input, kInput, goBtn);
+    const results = el("div");
+    card.append(bar, results);
+    root.append(card);
+
+    async function search() {
+      const q = input.value.trim();
+      const k = Math.max(1, Math.min(50, parseInt(kInput.value, 10) || 10));
+      results.innerHTML = "";
+      if (!q) {
+        results.append(emptyState({
+          icon: "🧠",
+          title: "Search the long-term memory",
+          body: "Sessions, ingested docs, and explicit notes the agent saved " +
+                "are indexed here. Memory is enriched as you chat — empty for now " +
+                "is normal.",
+          example: 'try: "what did we decide about the Gerrit MCP plan?"',
+        }));
+        return;
+      }
+      let res;
+      try {
+        res = await Rpc.call("memory.search", { query: q, k });
+      } catch (e) {
+        results.append(el("div", { class: "empty" }, e.message));
+        return;
+      }
+      const hits = (res && res.hits) || [];
+      if (!hits.length) {
+        results.append(emptyState({
+          icon: "🔍",
+          title: "No matches",
+          body: `Nothing in memory matches <code>${q.replace(/[<>&]/g, "")}</code> right now.`,
+        }));
+        return;
+      }
+      const list = el("ul", { class: "list" });
+      for (const h of hits) {
+        const item = el("li", { class: "list-item" });
+        item.append(
+          el("div", { class: "title" }, h.path || h.id || "(untitled)"),
+          el("div", { class: "meta" },
+            (h.score != null ? `score=${Number(h.score).toFixed(3)} · ` : "") +
+            (h.source || "") +
+            (h.session_key ? ` · ${h.session_key}` : ""),
+          ),
+          el("div", {
+            style: "margin-top:6px;font-size:12px;color:var(--fg-2);" +
+                   "white-space:pre-wrap;word-break:break-word;",
+          }, h.text || h.content || ""),
+        );
+        list.append(item);
+      }
+      results.append(list);
+    }
+    goBtn.onclick = search;
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter") search(); });
+    search();
+  },
+};
+
+// ─────────────────────────────────────────────────────────────────────────
+// Sessions view — list / preview / reset / fork / archive / delete
+// (Phase 11–15 backend, sessions.* RPCs)
+// ─────────────────────────────────────────────────────────────────────────
+const SessionsView = {
+  title: "Sessions",
+  async render(root, actions) {
+    const refreshBtn = el("button", { class: "btn btn-ghost btn-sm",
+      onclick: () => refresh() }, "↻ Refresh");
+    actions.append(refreshBtn);
+
+    const filterBar = el("div", { class: "search-bar" });
+    const agentFilter = el("input", {
+      type: "text",
+      placeholder: "filter by agent_id (empty = all)",
+    });
+    filterBar.append(agentFilter);
+    root.append(filterBar);
+    const list = el("div");
+    root.append(list);
+
+    async function refresh() {
+      const params = {};
+      if (agentFilter.value.trim()) params.agent_id = agentFilter.value.trim();
+      let res;
+      try {
+        res = await Rpc.call("sessions.list", params);
+      } catch (e) {
+        list.innerHTML = "";
+        list.append(emptyState({
+          icon: "🗂",
+          title: "Sessions RPC unavailable",
+          body: `<code>sessions.*</code> isn't registered on this gateway. ` +
+                `That's only wired when the operator passes a SessionManager + LifecycleBus to the gateway. ` +
+                `Error: ${e.message}`,
+        }));
+        return;
+      }
+      const sessions = (res && (res.sessions || res)) || [];
+      list.innerHTML = "";
+      if (!sessions.length) {
+        list.append(emptyState({
+          icon: "🗂",
+          title: "No sessions yet",
+          body: "Sessions accumulate as channels deliver inbound messages " +
+                "to agents. Open the <strong>Chat</strong> tab and send a turn " +
+                "to seed one.",
+          actions: [
+            el("button", {
+              class: "btn btn-primary",
+              onclick: () => Router.go("chat"),
+            }, "Go to Chat"),
+          ],
+        }));
+        return;
+      }
+      const badge = $("nav-sessions-badge");
+      if (badge) { badge.hidden = false; badge.textContent = String(sessions.length); }
+      for (const s of sessions) {
+        const card = el("div", { class: "session-card" });
+        card.append(
+          el("div", {},
+            el("div", { class: "head" },
+              el("span", { class: "key" }, `${s.agent_id || "?"} · ${s.session_key}`),
+              el("span", { class: "tag" }, `${s.message_count ?? "?"} msgs`),
+              s.archived ? el("span", { class: "tag warn" }, "archived") : null,
+            ),
+            el("div", { class: "meta" },
+              `updated ${fmtTime(s.updated_at)} · created ${fmtTime(s.created_at)}`,
+            ),
+            (s.first_preview || s.last_preview) ? el("div", { class: "preview" },
+              [s.first_preview, s.last_preview].filter(Boolean).join(" · "),
+            ) : null,
+          ),
+          el("div", { class: "actions" },
+            el("button", { class: "btn btn-sm", onclick: () => preview(s) }, "Preview"),
+            el("button", { class: "btn btn-sm", onclick: () => reset(s) }, "Reset"),
+            el("button", { class: "btn btn-sm", onclick: () => fork(s) }, "Fork"),
+            el("button", { class: "btn btn-sm", onclick: () => archive(s) }, "Archive"),
+            el("button", { class: "btn btn-sm btn-danger", onclick: () => del(s) }, "Delete"),
+          ),
+        );
+        list.append(card);
+      }
+    }
+
+    async function preview(s) {
+      try {
+        const res = await safeRpc("sessions.preview", {
+          agent_id: s.agent_id, session_key: s.session_key,
+        });
+        const text = (res && res.preview) || JSON.stringify(res, null, 2);
+        Toast.info("preview", text.slice(0, 400));
+      } catch {}
+    }
+    async function reset(s) {
+      if (!confirm(`Reset session ${s.session_key}? Messages will be cleared.`)) return;
+      await safeRpc("sessions.reset", {
+        agent_id: s.agent_id, session_key: s.session_key,
+      });
+      Toast.success("session reset");
+      refresh();
+    }
+    async function fork(s) {
+      const newKey = window.prompt("New session_key for the fork:", s.session_key + "-fork");
+      if (!newKey) return;
+      await safeRpc("sessions.fork", {
+        agent_id: s.agent_id, source_session_key: s.session_key, new_session_key: newKey,
+      });
+      Toast.success(`forked → ${newKey}`);
+      refresh();
+    }
+    async function archive(s) {
+      await safeRpc("sessions.archive", {
+        agent_id: s.agent_id, session_key: s.session_key,
+      });
+      Toast.success("archived");
+      refresh();
+    }
+    async function del(s) {
+      if (!confirm(`Delete session ${s.session_key}? This cannot be undone.`)) return;
+      await safeRpc("sessions.delete", {
+        agent_id: s.agent_id, session_key: s.session_key,
+      });
+      Toast.warn("session deleted");
+      refresh();
+    }
+
+    agentFilter.addEventListener("change", refresh);
+    await refresh();
+    const interval = setInterval(refresh, 5000);
+    return () => clearInterval(interval);
+  },
+};
+
+// ─────────────────────────────────────────────────────────────────────────
 // RPC log view
 // ─────────────────────────────────────────────────────────────────────────
 const RpcLogView = {
@@ -1236,6 +1471,15 @@ async function refreshNavBadges() {
     if (n > 0) { badge.hidden = false; badge.textContent = String(n); }
     else badge.hidden = true;
   } catch {}
+  // Sessions badge: only updates when sessions.* RPCs are wired. Failure
+  // is silent so the dashboard works on gateways without that surface.
+  try {
+    const r = await Rpc.call("sessions.list", {});
+    const sessions = (r && (r.sessions || r)) || [];
+    const badge = $("nav-sessions-badge");
+    if (badge && sessions.length) { badge.hidden = false; badge.textContent = String(sessions.length); }
+    else if (badge) badge.hidden = true;
+  } catch {}
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -1246,11 +1490,20 @@ function bindShortcuts() {
   document.addEventListener("keydown", (e) => {
     const tag = (e.target && e.target.tagName) || "";
     const isInput = tag === "INPUT" || tag === "TEXTAREA" || (e.target && e.target.isContentEditable);
+    // Command palette opens regardless of input focus.
+    if ((e.ctrlKey || e.metaKey) && (e.key === "k" || e.key === "K")) {
+      e.preventDefault();
+      Palette.toggle();
+      return;
+    }
     if (e.ctrlKey && e.key === "/") { e.preventDefault(); toggleHelp(); return; }
-    if (e.key === "Escape") { hideHelp(); return; }
+    if (e.key === "Escape") { hideHelp(); Palette.hide(); return; }
     if (isInput) return;
     if (pendingG) {
-      const target = { c: "chat", a: "agents", k: "channels", r: "cron", p: "approvals", s: "skills", g: "config" }[e.key];
+      const target = {
+        c: "chat", a: "agents", k: "channels", x: "sessions", r: "cron",
+        p: "approvals", s: "skills", m: "memory", g: "config",
+      }[e.key];
       pendingG = null;
       if (target) Router.go(target);
       return;
@@ -1264,6 +1517,169 @@ function toggleHelp() {
 function hideHelp() { $("cmd-help").hidden = true; }
 
 // ─────────────────────────────────────────────────────────────────────────
+// Theme toggle (light / dark / system) — cycles on click; saved preference
+// is read by the boot script in app.html before paint.
+// ─────────────────────────────────────────────────────────────────────────
+const Theme = (() => {
+  const KEY = "sampyclaw_theme";
+  const ORDER = ["system", "light", "dark"];
+  function pref() {
+    return localStorage.getItem(KEY) || "system";
+  }
+  function resolved(p) {
+    if (p === "system") {
+      return window.matchMedia("(prefers-color-scheme: light)").matches
+        ? "light" : "dark";
+    }
+    return p;
+  }
+  function apply(p) {
+    document.documentElement.setAttribute("data-theme", resolved(p));
+    document.documentElement.setAttribute("data-theme-pref", p);
+    try { localStorage.setItem(KEY, p); } catch {}
+    const btn = $("theme-toggle");
+    if (btn) {
+      btn.textContent = p === "light" ? "☀" : p === "dark" ? "☾" : "🌓";
+      btn.title = `Theme: ${p} (click to cycle)`;
+    }
+  }
+  function cycle() {
+    const cur = pref();
+    const next = ORDER[(ORDER.indexOf(cur) + 1) % ORDER.length];
+    apply(next);
+    Toast.info("theme", `→ ${next}`);
+  }
+  function bind() {
+    apply(pref());
+    const btn = $("theme-toggle");
+    if (btn) btn.onclick = cycle;
+    // React to system theme changes when "system" is chosen.
+    const mq = window.matchMedia("(prefers-color-scheme: light)");
+    mq.addEventListener?.("change", () => {
+      if (pref() === "system") apply("system");
+    });
+  }
+  return { bind };
+})();
+
+// ─────────────────────────────────────────────────────────────────────────
+// Mobile nav drawer toggle
+// ─────────────────────────────────────────────────────────────────────────
+function bindNavToggle() {
+  const app = document.getElementById("app");
+  const btn = $("nav-toggle");
+  const back = $("nav-backdrop");
+  function open()  { app.classList.add("nav-open"); }
+  function close() { app.classList.remove("nav-open"); }
+  if (btn) btn.onclick = () => app.classList.toggle("nav-open");
+  if (back) back.onclick = close;
+  // Close drawer on route change.
+  window.addEventListener("hashchange", close);
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Command palette — Ctrl/Cmd+K opens; type to filter; Enter runs.
+// Items are pure-JS objects with id, title, hint, group, run().
+// ─────────────────────────────────────────────────────────────────────────
+const Palette = (() => {
+  const ITEMS = [
+    { id: "go-chat",       group: "Go to", icon: "💬", title: "Chat",       hint: "g c", run: () => Router.go("chat") },
+    { id: "go-agents",     group: "Go to", icon: "🤖", title: "Agents",     hint: "g a", run: () => Router.go("agents") },
+    { id: "go-channels",   group: "Go to", icon: "📡", title: "Channels",   hint: "g k", run: () => Router.go("channels") },
+    { id: "go-sessions",   group: "Go to", icon: "🗂", title: "Sessions",   hint: "g x", run: () => Router.go("sessions") },
+    { id: "go-cron",       group: "Go to", icon: "⏱",  title: "Cron",       hint: "g r", run: () => Router.go("cron") },
+    { id: "go-approvals",  group: "Go to", icon: "✅", title: "Approvals",  hint: "g p", run: () => Router.go("approvals") },
+    { id: "go-skills",     group: "Go to", icon: "🧰", title: "Skills",     hint: "g s", run: () => Router.go("skills") },
+    { id: "go-memory",     group: "Go to", icon: "🧠", title: "Memory",     hint: "g m", run: () => Router.go("memory") },
+    { id: "go-config",     group: "Go to", icon: "⚙",  title: "Config",     hint: "g g", run: () => Router.go("config") },
+    { id: "go-rpc",        group: "Go to", icon: "📜", title: "RPC log",    hint: "",     run: () => Router.go("rpc") },
+    { id: "theme-cycle",   group: "Action", icon: "🌓", title: "Cycle theme (system → light → dark)", hint: "",
+      run: () => { /* call inside Theme module */ document.getElementById("theme-toggle").click(); } },
+    { id: "config-reload", group: "Action", icon: "↻", title: "Reload config from disk", hint: "",
+      run: async () => {
+        try { const r = await Rpc.call("config.reload", {});
+          Toast.success("reloaded", `channels=${(r.channels || []).join(", ") || "—"}`);
+        } catch (e) { Toast.error("reload failed", e.message); }
+      } },
+    { id: "approvals-refresh", group: "Action", icon: "✅", title: "Open Approvals queue", hint: "",
+      run: () => Router.go("approvals") },
+    { id: "help",          group: "Action", icon: "?", title: "Show keyboard shortcuts", hint: "Ctrl+/",
+      run: () => toggleHelp() },
+  ];
+
+  let listEl, inputEl, paletteEl, activeIdx = 0, filtered = [];
+
+  function render() {
+    listEl.innerHTML = "";
+    if (!filtered.length) {
+      listEl.append(el("div", { class: "cmd-palette__empty" }, "No matches"));
+      return;
+    }
+    let lastGroup = null;
+    filtered.forEach((it, i) => {
+      if (it.group !== lastGroup) {
+        listEl.append(el("div", { class: "cmd-palette__group" }, it.group));
+        lastGroup = it.group;
+      }
+      const node = el("div", {
+        class: "cmd-palette__item" + (i === activeIdx ? " active" : ""),
+        onclick: () => choose(i),
+      },
+        el("span", { class: "cmd-palette__icon" }, it.icon || "•"),
+        el("span", { class: "cmd-palette__title" }, it.title),
+        it.hint ? el("span", { class: "cmd-palette__hint" }, it.hint) : null,
+      );
+      listEl.append(node);
+    });
+  }
+
+  function filter(q) {
+    q = q.trim().toLowerCase();
+    if (!q) filtered = ITEMS.slice();
+    else filtered = ITEMS.filter((it) =>
+      it.title.toLowerCase().includes(q) ||
+      (it.group || "").toLowerCase().includes(q));
+    activeIdx = 0;
+    render();
+  }
+
+  function choose(i) {
+    const it = filtered[i];
+    if (!it) return;
+    hide();
+    try { it.run(); } catch (e) { Toast.error("command failed", e.message); }
+  }
+
+  function show() {
+    paletteEl.hidden = false;
+    inputEl.value = "";
+    filter("");
+    requestAnimationFrame(() => inputEl.focus());
+  }
+  function hide() { paletteEl.hidden = true; }
+  function toggle() { paletteEl.hidden ? show() : hide(); }
+
+  function bind() {
+    paletteEl = $("cmd-palette");
+    inputEl = $("cmd-palette-input");
+    listEl = $("cmd-palette-list");
+    paletteEl.addEventListener("click", (e) => {
+      if (e.target === paletteEl) hide();
+    });
+    inputEl.addEventListener("input", () => filter(inputEl.value));
+    inputEl.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowDown") { e.preventDefault(); activeIdx = Math.min(activeIdx + 1, filtered.length - 1); render(); }
+      else if (e.key === "ArrowUp") { e.preventDefault(); activeIdx = Math.max(activeIdx - 1, 0); render(); }
+      else if (e.key === "Enter") { e.preventDefault(); choose(activeIdx); }
+      else if (e.key === "Escape") { e.preventDefault(); hide(); }
+    });
+    const btn = $("cmd-palette-btn");
+    if (btn) btn.onclick = toggle;
+  }
+  return { bind, show, hide, toggle };
+})();
+
+// ─────────────────────────────────────────────────────────────────────────
 // Bootstrap
 // ─────────────────────────────────────────────────────────────────────────
 function boot() {
@@ -1272,9 +1688,11 @@ function boot() {
   Router.register("chat", ChatView);
   Router.register("agents", AgentsView);
   Router.register("channels", ChannelsView);
+  Router.register("sessions", SessionsView);
   Router.register("cron", CronView);
   Router.register("approvals", ApprovalsView);
   Router.register("skills", SkillsView);
+  Router.register("memory", MemoryView);
   Router.register("config", ConfigView);
   Router.register("rpc", RpcLogView);
 
@@ -1282,6 +1700,9 @@ function boot() {
   $("reconnect-btn").onclick = () => Rpc.connect($("ws-url").value);
   $("cmd-help-close").onclick = hideHelp;
 
+  Theme.bind();
+  bindNavToggle();
+  Palette.bind();
   bindShortcuts();
   bindLoginGate();
   bindCanvasPanel();

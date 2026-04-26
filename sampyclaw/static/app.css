@@ -1,7 +1,11 @@
 /* ─────────────────────────────────────────────────────────────────────────
-   Design tokens
+   Design tokens — dark theme (default)
+   Light theme is opt-in via `<html data-theme="light">`. The boot script
+   in app.html resolves user preference (system/light/dark) before paint
+   so there's no flash of wrong theme.
    ───────────────────────────────────────────────────────────────────────── */
-:root {
+:root,
+:root[data-theme="dark"] {
   --bg-0: #0b0c0e;
   --bg-1: #131418;
   --bg-2: #1a1c21;
@@ -13,11 +17,37 @@
   --fg-3: #6e7280;
   --accent: #ffb84a;
   --accent-2: #ffce80;
+  --accent-fg: #1a1500;
   --good: #6abf69;
   --bad: #e15c5c;
   --info: #5da7ff;
   --warn: #f0c14a;
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.5), 0 4px 16px rgba(0, 0, 0, 0.3);
+  color-scheme: dark;
+}
 
+:root[data-theme="light"] {
+  --bg-0: #f5f6f8;
+  --bg-1: #ffffff;
+  --bg-2: #eef0f4;
+  --bg-3: #e2e5eb;
+  --line: #d6d9de;
+  --line-strong: #b9bdc5;
+  --fg: #1a1d22;
+  --fg-2: #44485a;
+  --fg-3: #7a7f8a;
+  --accent: #d97706;
+  --accent-2: #b45309;
+  --accent-fg: #ffffff;
+  --good: #2f7d3a;
+  --bad: #c1292e;
+  --info: #2563eb;
+  --warn: #b45309;
+  --shadow-1: 0 1px 2px rgba(20, 22, 30, 0.06), 0 4px 16px rgba(20, 22, 30, 0.08);
+  color-scheme: light;
+}
+
+:root {
   --r-1: 4px;
   --r-2: 6px;
   --r-3: 10px;
@@ -32,8 +62,6 @@
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
   --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
     sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
-
-  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.5), 0 4px 16px rgba(0, 0, 0, 0.3);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -91,7 +119,7 @@ a:hover { text-decoration: underline; }
 .nav-icon { width: 16px; text-align: center; }
 .badge {
   margin-left: auto;
-  background: var(--accent); color: #1a1500;
+  background: var(--accent); color: var(--accent-fg);
   font-size: 10px; font-weight: 700;
   padding: 1px 6px; border-radius: 999px;
   min-width: 18px; text-align: center;
@@ -135,7 +163,7 @@ a:hover { text-decoration: underline; }
 }
 .btn:hover { border-color: var(--accent); }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
-.btn-primary { background: var(--accent); color: #1a1500; border-color: var(--accent); font-weight: 600; }
+.btn-primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); font-weight: 600; }
 .btn-primary:hover { background: var(--accent-2); border-color: var(--accent-2); }
 .btn-good { color: var(--good); border-color: var(--line-strong); }
 .btn-danger { color: var(--bad); border-color: var(--line-strong); }
@@ -196,6 +224,37 @@ label { display: block; font-size: 11px; color: var(--fg-3); margin-bottom: 4px;
   font-size: 10px; background: var(--bg-3); color: var(--fg-2);
 }
 .empty { color: var(--fg-3); font-style: italic; padding: var(--sp-3); text-align: center; }
+
+/* Friendly empty-state used on Cron / Approvals / Memory / Sessions etc. */
+.empty-state {
+  display: flex; flex-direction: column; align-items: center;
+  text-align: center;
+  padding: 48px var(--sp-4);
+  color: var(--fg-2);
+  background: var(--bg-1);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--r-3);
+}
+.empty-state__icon {
+  font-size: 36px; line-height: 1; margin-bottom: var(--sp-3);
+  opacity: 0.85;
+}
+.empty-state__title {
+  font-size: 15px; font-weight: 600; color: var(--fg);
+  margin: 0 0 var(--sp-2);
+}
+.empty-state__body {
+  font-size: 13px; max-width: 540px; margin: 0 0 var(--sp-3);
+  line-height: 1.55;
+}
+.empty-state__example {
+  font: 12px/1.5 var(--mono);
+  background: var(--bg-2); border: 1px solid var(--line);
+  border-radius: var(--r-2);
+  padding: 10px 14px; color: var(--fg);
+  max-width: 480px;
+}
+.empty-state__actions { display: flex; gap: 8px; margin-top: var(--sp-3); }
 
 /* ─────────────────────────────────────────────────────────────────────────
    Chat view
@@ -542,6 +601,127 @@ kbd {
   font: 11px var(--mono);
   color: var(--fg-muted);
 }
+/* ─────────────────────────────────────────────────────────────────────────
+   Topbar theme toggle + nav-toggle (mobile)
+   ───────────────────────────────────────────────────────────────────────── */
+.icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px;
+  background: transparent; color: var(--fg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-2);
+  cursor: pointer;
+  font-size: 16px; line-height: 1;
+}
+.icon-btn:hover { color: var(--fg); border-color: var(--line-strong); }
+.nav-toggle { display: none; }   /* shown only at narrow widths */
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Command palette (Ctrl+K / Cmd+K)
+   ───────────────────────────────────────────────────────────────────────── */
+.cmd-palette {
+  position: fixed; inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex; align-items: flex-start; justify-content: center;
+  padding-top: 12vh;
+  z-index: 300;
+}
+.cmd-palette[hidden] { display: none; }
+.cmd-palette__card {
+  width: min(560px, 92vw);
+  background: var(--bg-1);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-3);
+  box-shadow: var(--shadow-1);
+  overflow: hidden;
+}
+.cmd-palette__input {
+  width: 100%;
+  padding: 14px 18px;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--fg);
+  font: 15px/1 var(--sans);
+}
+.cmd-palette__input:focus { outline: none; border-bottom-color: var(--accent); }
+.cmd-palette__list {
+  max-height: 50vh; overflow: auto; padding: 6px 0;
+}
+.cmd-palette__item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 18px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.cmd-palette__item:hover,
+.cmd-palette__item.active {
+  background: var(--bg-2);
+}
+.cmd-palette__icon { width: 18px; text-align: center; opacity: 0.85; }
+.cmd-palette__title { flex: 1; color: var(--fg); }
+.cmd-palette__hint { color: var(--fg-3); font-size: 11px; font-family: var(--mono); }
+.cmd-palette__group {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 1px;
+  color: var(--fg-3); padding: 10px 18px 4px;
+}
+.cmd-palette__empty {
+  padding: 20px; text-align: center; color: var(--fg-3); font-size: 13px;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Sessions view (Phase 2)
+   ───────────────────────────────────────────────────────────────────────── */
+.session-card {
+  border: 1px solid var(--line); border-radius: var(--r-3);
+  background: var(--bg-1); padding: var(--sp-3) var(--sp-4);
+  margin-bottom: var(--sp-2);
+  display: grid; grid-template-columns: 1fr auto;
+  gap: var(--sp-2) var(--sp-3); align-items: start;
+}
+.session-card .head {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.session-card .key {
+  font: 600 13px var(--mono); color: var(--accent);
+  word-break: break-all;
+}
+.session-card .meta { font-size: 11px; color: var(--fg-3); }
+.session-card .preview {
+  font-size: 12px; color: var(--fg-2);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.session-card .actions { display: flex; gap: 4px; align-self: center; }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Responsive layout — collapse sidebar below ~900px
+   ───────────────────────────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  #app {
+    grid-template-columns: 1fr;
+  }
+  .sidebar {
+    position: fixed; inset: 0 auto 0 0;
+    width: 240px; z-index: 60;
+    transform: translateX(-100%);
+    transition: transform 200ms ease;
+    box-shadow: var(--shadow-1);
+  }
+  #app.nav-open .sidebar { transform: translateX(0); }
+  .nav-toggle { display: inline-flex; }
+  .nav-backdrop {
+    display: none;
+    position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+    z-index: 55;
+  }
+  #app.nav-open .nav-backdrop { display: block; }
+  .chat-layout, .split { grid-template-columns: 1fr !important; }
+  .session-panel { max-height: 200px; }
+  .canvas-panel { width: 100vw; }
+  .topbar { padding: 10px 14px; }
+}
+
 .canvas-panel__frame {
   flex: 1;
   width: 100%; height: 100%;

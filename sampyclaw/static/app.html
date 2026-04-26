@@ -3,7 +3,26 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="color-scheme" content="dark light" />
   <title>sampyClaw</title>
+  <script>
+    // Resolve theme before paint so there's no flash of wrong theme.
+    // Saved choice ("light" | "dark" | "system") lives in localStorage.
+    (function () {
+      try {
+        var saved = localStorage.getItem("sampyclaw_theme") || "system";
+        var resolved = saved;
+        if (saved === "system") {
+          resolved = window.matchMedia("(prefers-color-scheme: light)").matches
+            ? "light" : "dark";
+        }
+        document.documentElement.setAttribute("data-theme", resolved);
+        document.documentElement.setAttribute("data-theme-pref", saved);
+      } catch (e) {
+        document.documentElement.setAttribute("data-theme", "dark");
+      }
+    })();
+  </script>
   <link rel="stylesheet" href="/static/app.css" />
 </head>
 <body>
@@ -22,6 +41,10 @@
         </a>
         <a class="nav-item" data-route="channels" href="#channels">
           <span class="nav-icon">📡</span><span>Channels</span>
+        </a>
+        <a class="nav-item" data-route="sessions" href="#sessions">
+          <span class="nav-icon">🗂</span><span>Sessions</span>
+          <span class="badge" id="nav-sessions-badge" hidden>0</span>
         </a>
         <a class="nav-item" data-route="cron" href="#cron">
           <span class="nav-icon">⏱</span><span>Cron</span>
@@ -55,15 +78,31 @@
       </div>
     </aside>
 
+    <div class="nav-backdrop" id="nav-backdrop"></div>
+
     <main class="content">
       <header class="topbar">
+        <button id="nav-toggle" class="icon-btn nav-toggle" type="button"
+                aria-label="Toggle navigation" title="Menu">☰</button>
         <h1 id="view-title">Chat</h1>
         <div class="topbar-actions" id="topbar-actions"></div>
+        <button id="cmd-palette-btn" class="icon-btn" type="button"
+                aria-label="Open command palette" title="Command palette (Ctrl+K)">⌘</button>
+        <button id="theme-toggle" class="icon-btn" type="button"
+                aria-label="Toggle theme" title="Theme">🌓</button>
       </header>
       <section class="view" id="view"></section>
     </main>
 
     <div class="toasts" id="toasts"></div>
+
+    <div class="cmd-palette" id="cmd-palette" hidden role="dialog" aria-label="Command palette">
+      <div class="cmd-palette__card">
+        <input id="cmd-palette-input" class="cmd-palette__input" type="text"
+               placeholder="Type a command or page name…" autocomplete="off" />
+        <div class="cmd-palette__list" id="cmd-palette-list"></div>
+      </div>
+    </div>
 
     <aside id="canvas-panel" class="canvas-panel" hidden aria-label="Canvas output">
       <header class="canvas-panel__header">
@@ -130,12 +169,14 @@
       <div class="cmd-help-card">
         <h3>Keyboard shortcuts</h3>
         <table>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>K</kbd></td><td>Open command palette</td></tr>
           <tr><td><kbd>Ctrl</kbd>+<kbd>/</kbd></td><td>Toggle this help</td></tr>
           <tr><td><kbd>Ctrl</kbd>+<kbd>Enter</kbd></td><td>Send chat message</td></tr>
           <tr><td><kbd>Esc</kbd></td><td>Close overlays</td></tr>
           <tr><td><kbd>g</kbd>+<kbd>c</kbd></td><td>Go to Chat</td></tr>
           <tr><td><kbd>g</kbd>+<kbd>a</kbd></td><td>Go to Agents</td></tr>
           <tr><td><kbd>g</kbd>+<kbd>k</kbd></td><td>Go to Channels</td></tr>
+          <tr><td><kbd>g</kbd>+<kbd>x</kbd></td><td>Go to Sessions</td></tr>
           <tr><td><kbd>g</kbd>+<kbd>r</kbd></td><td>Go to Cron</td></tr>
           <tr><td><kbd>g</kbd>+<kbd>p</kbd></td><td>Go to Approvals</td></tr>
           <tr><td><kbd>g</kbd>+<kbd>s</kbd></td><td>Go to Skills</td></tr>

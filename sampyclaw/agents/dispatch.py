@@ -75,9 +75,7 @@ class Dispatcher:
         outcome = await self.dispatch_with_outcome(envelope)
         return outcome.results
 
-    async def dispatch_with_outcome(
-        self, envelope: InboundEnvelope
-    ) -> DispatchOutcome:
+    async def dispatch_with_outcome(self, envelope: InboundEnvelope) -> DispatchOutcome:
         agent_id = self._resolve_agent_id(envelope)
         if agent_id is None:
             reason = self._explain_no_agent(envelope)
@@ -90,9 +88,7 @@ class Dispatcher:
 
         agent = self._agents.get(agent_id)
         if agent is None:
-            reason = (
-                f"agent {agent_id!r} is referenced by routing but not registered"
-            )
+            reason = f"agent {agent_id!r} is referenced by routing but not registered"
             logger.warning("%s — dropping", reason)
             return DispatchOutcome(agent_id=agent_id, drop_reason=reason)
 
@@ -176,9 +172,7 @@ class Dispatcher:
                     f"agent {agent_id!r} matches channel {channel!r} but the "
                     f"sender {envelope.sender_id!r} is not in allow_from"
                 )
-        if not any(
-            channel in cfg.channels for cfg in self._config.agents.values()
-        ):
+        if not any(channel in cfg.channels for cfg in self._config.agents.values()):
             return (
                 f"no agent declares channel {channel!r} in config.yaml. "
                 f"Add `agents.<id>.channels.{channel}: {{}}` or run with a "

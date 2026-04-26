@@ -40,10 +40,7 @@ Test inventory (one assertion per name; failures point at the cause):
 
 from __future__ import annotations
 
-import asyncio
-
 import pytest
-
 
 pytestmark = pytest.mark.asyncio
 
@@ -67,16 +64,16 @@ async def _view_title(page) -> str:
 
 
 ROUTES = [
-    ("chat",      "Chat"),
-    ("agents",    "Agents"),
-    ("channels",  "Channels"),
-    ("sessions",  "Sessions"),
-    ("cron",      "Cron"),
+    ("chat", "Chat"),
+    ("agents", "Agents"),
+    ("channels", "Channels"),
+    ("sessions", "Sessions"),
+    ("cron", "Cron"),
     ("approvals", "Approvals"),
-    ("skills",    "Skills"),
-    ("memory",    "Memory"),
-    ("config",    "Config"),
-    ("rpc",       "RPC log"),
+    ("skills", "Skills"),
+    ("memory", "Memory"),
+    ("config", "Config"),
+    ("rpc", "RPC log"),
 ]
 
 
@@ -98,9 +95,9 @@ async def test_route_change_updates_view_title(page) -> None:
 
 async def test_keyboard_chord_g_jumps_to_route(page) -> None:
     """The `g+<letter>` chord should move to the matching route."""
-    await page.locator("body").click()              # ensure focus is not in input
+    await page.locator("body").click()  # ensure focus is not in input
     await page.keyboard.press("g")
-    await page.keyboard.press("m")                  # → memory
+    await page.keyboard.press("m")  # → memory
     await page.wait_for_function(
         "document.getElementById('view-title').textContent === 'Memory'",
         timeout=3000,
@@ -114,9 +111,11 @@ async def test_theme_toggle_cycles_three_modes(page) -> None:
     """Clicking 🌓 cycles system → light → dark → system."""
     seen = []
     for _ in range(4):
-        seen.append(await page.evaluate(
-            "document.documentElement.getAttribute('data-theme-pref')",
-        ))
+        seen.append(
+            await page.evaluate(
+                "document.documentElement.getAttribute('data-theme-pref')",
+            )
+        )
         await page.locator("#theme-toggle").click()
         # Dismiss the toast overlay if it covers the button on the next iter.
         await page.wait_for_timeout(80)
@@ -210,24 +209,25 @@ async def test_chat_view_compose_present(page) -> None:
     await _click_nav(page, "chat")
     assert await page.locator(".chat-compose textarea").count() == 1
     assert await page.locator(".chat-compose .btn-primary").count() == 1
-    assert await page.locator(".chat-compose .btn-ghost").count() >= 1   # 📎 attach button
+    assert await page.locator(".chat-compose .btn-ghost").count() >= 1  # 📎 attach button
 
 
 async def test_chat_view_attach_button_renders_thumb(page) -> None:
     """Drop a 1×1 PNG into the file input → a thumb should appear."""
     await _click_nav(page, "chat")
     # Smallest valid PNG (1×1 transparent).
-    png_b64 = (
-        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
-    )
+    png_b64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
     import base64
+
     png_bytes = base64.b64decode(png_b64)
     # Use Playwright's set_input_files API with an in-memory buffer.
-    await page.locator('input[type="file"]').set_input_files({
-        "name": "tiny.png",
-        "mimeType": "image/png",
-        "buffer": png_bytes,
-    })
+    await page.locator('input[type="file"]').set_input_files(
+        {
+            "name": "tiny.png",
+            "mimeType": "image/png",
+            "buffer": png_bytes,
+        }
+    )
     await page.wait_for_selector(".chat-thumb img", timeout=3000)
     src = await page.locator(".chat-thumb img").first.get_attribute("src")
     assert src.startswith("data:image/png;base64,"), src[:32]
@@ -289,7 +289,7 @@ async def test_config_view_renders_yaml_preview(page) -> None:
     # `pre.code-block` carries the JSON dump of the current config.
     await page.wait_for_selector("pre.code-block", timeout=3000)
     text = await page.locator("pre.code-block").text_content()
-    assert "{" in text          # valid JSON dump
+    assert "{" in text  # valid JSON dump
 
 
 async def test_rpc_log_view_renders_after_calls(page) -> None:
@@ -318,13 +318,13 @@ async def test_narrow_viewport_collapses_sidebar(page) -> None:
         timeout=2000,
     )
     # Sidebar starts off-screen (transform: translateX(-100%)).
-    transform = await page.evaluate(
+    await page.evaluate(
         "getComputedStyle(document.querySelector('.sidebar')).transform",
     )
     # `none` means default, anything else is matrix(...) — we just want
     # the hamburger visible; CSS transform on auto-applied media query
     # is enough to confirm the breakpoint kicked in.
-    assert transform != "none" or True  # tolerant of computed-style quirks
+    assert True  # tolerant of computed-style quirks
 
 
 async def test_narrow_viewport_hamburger_opens_drawer(page) -> None:

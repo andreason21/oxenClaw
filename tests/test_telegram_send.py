@@ -95,9 +95,7 @@ async def test_send_maps_network_error() -> None:
 
     method = SendMessage(chat_id=42, text="hi")
     bot = MagicMock()
-    bot.send_message = AsyncMock(
-        side_effect=TelegramNetworkError(method=method, message="boom")
-    )
+    bot.send_message = AsyncMock(side_effect=TelegramNetworkError(method=method, message="boom"))
     with pytest.raises(NetworkError):
         await send_message_telegram(bot, _params())
 

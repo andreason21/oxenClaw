@@ -40,12 +40,12 @@ from sampyclaw.gateway import (
     GatewayServer,
     Router,
 )
+from sampyclaw.gateway.agents_methods import register_agents_methods
+from sampyclaw.gateway.approval_methods import register_approval_methods
 from sampyclaw.gateway.bind_policy import (
     RemoteBindRefused,
     validate_bind_host,
 )
-from sampyclaw.gateway.agents_methods import register_agents_methods
-from sampyclaw.gateway.approval_methods import register_approval_methods
 from sampyclaw.gateway.canvas_methods import register_canvas_methods
 from sampyclaw.gateway.channels_methods import register_channels_methods
 from sampyclaw.gateway.chat_methods import register_chat_methods
@@ -100,9 +100,7 @@ def start(
             "pi catalog), 'echo', or 'anthropic'."
         ),
     ),
-    model: str | None = typer.Option(
-        None, "--model", help="Model id (provider-specific)."
-    ),
+    model: str | None = typer.Option(None, "--model", help="Model id (provider-specific)."),
     base_url: str | None = typer.Option(
         None,
         "--base-url",
@@ -169,17 +167,14 @@ def start(
     logger.info("sampyClaw starting on %s", describe_platform())
     if is_wsl():
         logger.info(
-            "WSL2 detected — see docs/INSTALL_WSL.md for networking and "
-            "Ollama configuration tips"
+            "WSL2 detected — see docs/INSTALL_WSL.md for networking and Ollama configuration tips"
         )
     # Resolve / auto-generate the gateway token before the rest of the
     # boot. This way the operator sees the token (or its file location)
     # in the startup banner, which is the openclaw UX.
     resolved_token = resolve_or_generate_token(explicit=auth_token)
     auth_token = resolved_token.token
-    logger.info("\n%s", format_startup_banner(
-        resolved_token, host=host, port=port
-    ))
+    logger.info("\n%s", format_startup_banner(resolved_token, host=host, port=port))
     if not skip_preflight:
         from sampyclaw.config.preflight import run_preflight
 
@@ -346,9 +341,7 @@ async def _run_gateway(
         )
     )
 
-    dispatcher = Dispatcher(
-        agents=agents, config=config, send=channel_router.send
-    )
+    dispatcher = Dispatcher(agents=agents, config=config, send=channel_router.send)
 
     cron_scheduler = CronScheduler(store=cron_store, dispatcher=dispatcher)
 
@@ -391,9 +384,7 @@ async def _run_gateway(
         memory=memory_retriever,
     )
     parsed_origins = (
-        [o.strip() for o in allowed_origins.split(",") if o.strip()]
-        if allowed_origins
-        else None
+        [o.strip() for o in allowed_origins.split(",") if o.strip()] if allowed_origins else None
     )
     server = GatewayServer(
         router,
@@ -522,9 +513,7 @@ def install_signal_handlers(server: GatewayServer) -> None:
     def _handler(signame: str) -> None:
         nonlocal handled
         if handled:
-            logger.warning(
-                "received %s during shutdown — forcing exit", signame
-            )
+            logger.warning("received %s during shutdown — forcing exit", signame)
             # Second signal: bail hard so a stuck handler can't keep us up.
             loop.stop()
             return
@@ -598,10 +587,7 @@ def _build_router(
             )
         # Real drop: no agent ran. Surface why so dashboards can render
         # an informative error instead of a silent no-op.
-        reason = (
-            outcome.drop_reason
-            or "agent ran but produced no reply"
-        )
+        reason = outcome.drop_reason or "agent ran but produced no reply"
         return ChatSendResult(
             message_id="dropped",
             timestamp=0.0,
@@ -635,9 +621,7 @@ def _build_router(
 
 
 @contextlib.asynccontextmanager
-async def _supervise_monitors(
-    channel_router: ChannelRouter, dispatcher: Dispatcher
-):
+async def _supervise_monitors(channel_router: ChannelRouter, dispatcher: Dispatcher):
     """Spawn one ChannelRunner task per (channel, account) binding.
 
     Plugins that set `outbound_only = True` (e.g. Slack notification
@@ -657,9 +641,7 @@ async def _supervise_monitors(
             continue
         opts = MonitorOpts(account_id=account_id, on_inbound=dispatcher.dispatch)
         runner = ChannelRunner(plugin, opts)
-        task = asyncio.create_task(
-            runner.run_forever(), name=f"monitor:{channel_id}:{account_id}"
-        )
+        task = asyncio.create_task(runner.run_forever(), name=f"monitor:{channel_id}:{account_id}")
         runners.append(runner)
         tasks.append(task)
     try:

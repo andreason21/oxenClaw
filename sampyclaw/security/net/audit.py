@@ -22,7 +22,6 @@ import os
 import random
 import sqlite3
 import time
-from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -87,9 +86,7 @@ def should_audit_from_env(
     enabled = src.get("SAMPYCLAW_AUDIT_OUTBOUND", "").lower() in ("1", "true", "yes")
     if not enabled:
         return AuditConfig()
-    body = src.get("SAMPYCLAW_AUDIT_OUTBOUND_BODY", "").lower() in (
-        "1", "true", "yes"
-    )
+    body = src.get("SAMPYCLAW_AUDIT_OUTBOUND_BODY", "").lower() in ("1", "true", "yes")
     try:
         rate = float(src.get("SAMPYCLAW_AUDIT_OUTBOUND_SAMPLE", "1.0"))
     except ValueError:
@@ -101,9 +98,7 @@ def should_audit_from_env(
     else:
         base = home or Path.home() / ".sampyclaw"
         db_path = base / "outbound-audit.db"
-    return AuditConfig(
-        enabled=True, capture_body=body, sample_rate=rate, db_path=db_path
-    )
+    return AuditConfig(enabled=True, capture_body=body, sample_rate=rate, db_path=db_path)
 
 
 class OutboundAuditStore:
@@ -180,8 +175,10 @@ class OutboundAuditStore:
         rows = self._conn.execute(
             "SELECT * FROM outbound_events ORDER BY id DESC LIMIT ?", (limit,)
         ).fetchall()
-        cols = [c[0] for c in self._conn.execute("SELECT * FROM outbound_events LIMIT 0").description]
-        return [dict(zip(cols, r)) for r in rows]
+        cols = [
+            c[0] for c in self._conn.execute("SELECT * FROM outbound_events LIMIT 0").description
+        ]
+        return [dict(zip(cols, r, strict=False)) for r in rows]
 
     def count(self) -> int:
         row = self._conn.execute("SELECT COUNT(*) FROM outbound_events").fetchone()

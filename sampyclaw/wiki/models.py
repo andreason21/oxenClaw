@@ -9,21 +9,20 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
-from typing import Any, Literal
-
+from typing import Literal
 
 WIKI_PAGE_KINDS: tuple[str, ...] = (
-    "entity",     # a person, org, project, file
-    "concept",    # an idea / definition / pattern
-    "source",     # a citation: paper / URL / book
+    "entity",  # a person, org, project, file
+    "concept",  # an idea / definition / pattern
+    "source",  # a citation: paper / URL / book
     "synthesis",  # a derived claim that combines sources/concepts
-    "report",     # a one-shot output document (status reports, post-mortems)
+    "report",  # a one-shot output document (status reports, post-mortems)
 )
 
 
-class WikiPageKind(str, Enum):
+class WikiPageKind(StrEnum):
     ENTITY = "entity"
     CONCEPT = "concept"
     SOURCE = "source"
@@ -36,9 +35,7 @@ _VALID_KINDS = {k.value for k in WikiPageKind}
 
 def parse_wiki_page_kind(value: str) -> WikiPageKind:
     if value not in _VALID_KINDS:
-        raise ValueError(
-            f"unknown WikiPageKind {value!r}; allowed: {sorted(_VALID_KINDS)}"
-        )
+        raise ValueError(f"unknown WikiPageKind {value!r}; allowed: {sorted(_VALID_KINDS)}")
     return WikiPageKind(value)
 
 
@@ -47,10 +44,10 @@ class WikiEvidence:
     """A single citation backing a claim."""
 
     source_id: str | None = None  # slug of a `source` page
-    path: str | None = None       # external URL or local file
-    lines: str | None = None      # e.g. "L42-L58"
-    note: str | None = None       # short justification
-    weight: float | None = None   # 0.0..1.0 confidence
+    path: str | None = None  # external URL or local file
+    lines: str | None = None  # e.g. "L42-L58"
+    note: str | None = None  # short justification
+    weight: float | None = None  # 0.0..1.0 confidence
     updated_at: float | None = None
 
 
@@ -71,15 +68,15 @@ class WikiPage:
     """A single vault page."""
 
     kind: WikiPageKind
-    name: str                                 # human-readable title
-    slug: str                                 # filesystem-safe id
-    body: str = ""                            # markdown body (after frontmatter)
+    name: str  # human-readable title
+    slug: str  # filesystem-safe id
+    body: str = ""  # markdown body (after frontmatter)
     aliases: tuple[str, ...] = ()
     tags: tuple[str, ...] = ()
-    related: tuple[str, ...] = ()             # slugs of related pages
+    related: tuple[str, ...] = ()  # slugs of related pages
     claims: tuple[WikiClaim, ...] = ()
     summary: str | None = None
-    provenance_mode: str | None = None        # isolated/bridge/unsafe-local
+    provenance_mode: str | None = None  # isolated/bridge/unsafe-local
     created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
 

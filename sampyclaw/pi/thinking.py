@@ -12,10 +12,10 @@ Run loop converts level → provider-specific param at attempt-build time.
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 
-class ThinkingLevel(str, Enum):
+class ThinkingLevel(StrEnum):
     OFF = "off"
     LOW = "low"
     MEDIUM = "medium"

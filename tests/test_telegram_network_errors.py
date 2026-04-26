@@ -20,9 +20,7 @@ def _make_method():  # type: ignore[no-untyped-def]
 def test_classify_retry_after_is_rate_limited() -> None:
     from aiogram.exceptions import TelegramRetryAfter
 
-    err = classify(
-        TelegramRetryAfter(method=_make_method(), message="slow", retry_after=4)
-    )
+    err = classify(TelegramRetryAfter(method=_make_method(), message="slow", retry_after=4))
     assert isinstance(err, RateLimitedError)
     assert err.retry_after == 4.0
 
@@ -57,9 +55,7 @@ def test_is_retryable_network_and_retry_after() -> None:
     from aiogram.exceptions import TelegramNetworkError, TelegramRetryAfter
 
     assert is_retryable(TelegramNetworkError(method=_make_method(), message="x"))
-    assert is_retryable(
-        TelegramRetryAfter(method=_make_method(), message="x", retry_after=1)
-    )
+    assert is_retryable(TelegramRetryAfter(method=_make_method(), message="x", retry_after=1))
 
 
 def test_is_not_retryable_bad_request_or_forbidden() -> None:

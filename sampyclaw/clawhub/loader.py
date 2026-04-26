@@ -123,9 +123,4 @@ def format_skills_for_prompt(skills: list[InstalledSkill]) -> str:
 
 
 def _xml_escape(s: str) -> str:
-    return (
-        s.replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace('"', "&quot;")
-    )
+    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")

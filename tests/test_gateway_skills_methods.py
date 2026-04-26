@@ -14,7 +14,6 @@ from sampyclaw.config.paths import SampyclawPaths
 from sampyclaw.gateway.router import Router
 from sampyclaw.gateway.skills_methods import register_skills_methods
 
-
 SAMPLE_SKILL_MD = """---
 name: foo
 description: A test skill.
@@ -106,9 +105,7 @@ async def test_install_then_list_installed_then_uninstall(setup) -> None:  # typ
     assert resp.result["manifest"]["requires"]["bins"] == ["foo"]
     assert (paths.home / "skills" / "foo" / "SKILL.md").exists()
 
-    listed = await router.dispatch(
-        {"jsonrpc": "2.0", "id": 2, "method": "skills.list_installed"}
-    )
+    listed = await router.dispatch({"jsonrpc": "2.0", "id": 2, "method": "skills.list_installed"})
     assert listed.result["ok"] is True
     assert listed.result["skills"][0]["slug"] == "foo"
     assert listed.result["skills"][0]["version"] == "1.0.0"
@@ -118,9 +115,7 @@ async def test_install_then_list_installed_then_uninstall(setup) -> None:  # typ
     )
     assert removed.result == {"ok": True, "removed": True}
 
-    listed2 = await router.dispatch(
-        {"jsonrpc": "2.0", "id": 4, "method": "skills.list_installed"}
-    )
+    listed2 = await router.dispatch({"jsonrpc": "2.0", "id": 4, "method": "skills.list_installed"})
     assert listed2.result["skills"] == []
 
 

@@ -16,7 +16,6 @@ from sampyclaw.observability import (
     render_prometheus,
 )
 
-
 # ----------------------------------------------------------------- counters
 
 

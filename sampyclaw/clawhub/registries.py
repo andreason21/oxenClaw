@@ -42,7 +42,6 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from sampyclaw.clawhub.client import DEFAULT_BASE_URL, ClawHubClient
 
-
 TrustLevel = Literal["official", "mirror", "community"]
 
 
@@ -95,9 +94,7 @@ class ClawHubRegistries(BaseModel):
 
 def builtin_public_registry() -> RegistryConfig:
     """Fallback registry when config.yaml has none configured."""
-    return RegistryConfig(
-        name="public", url=DEFAULT_BASE_URL, trust="official"
-    )
+    return RegistryConfig(name="public", url=DEFAULT_BASE_URL, trust="official")
 
 
 def normalise(cfg: ClawHubRegistries | None) -> ClawHubRegistries:
@@ -105,9 +102,7 @@ def normalise(cfg: ClawHubRegistries | None) -> ClawHubRegistries:
     to a private mirror still need to declare it; we do not silently fall
     back to the public hub when they explicitly listed only mirrors."""
     if cfg is None or not cfg.registries:
-        return ClawHubRegistries(
-            default="public", registries=[builtin_public_registry()]
-        )
+        return ClawHubRegistries(default="public", registries=[builtin_public_registry()])
     return cfg
 
 
@@ -140,8 +135,7 @@ class MultiRegistryClient:
         entry = self._cfg.get(chosen)
         if entry is None:
             raise KeyError(
-                f"registry {chosen!r} not configured "
-                f"(known: {', '.join(self.names()) or 'none'})"
+                f"registry {chosen!r} not configured (known: {', '.join(self.names()) or 'none'})"
             )
         client = ClawHubClient(base_url=entry.url, token=entry.resolve_token())
         self._clients[chosen] = client

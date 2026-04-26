@@ -7,6 +7,7 @@ registers every enabled job. Each fire builds an InboundEnvelope via
 
 from __future__ import annotations
 
+import contextlib
 from typing import TYPE_CHECKING
 
 from sampyclaw.cron.models import CronJob, NewCronJob
@@ -16,6 +17,7 @@ from sampyclaw.plugin_sdk.runtime_env import get_logger
 
 if TYPE_CHECKING:
     from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
     from sampyclaw.agents.dispatch import Dispatcher
 
 logger = get_logger("cron.scheduler")
@@ -133,19 +135,15 @@ class CronScheduler:
     def _remove_from_scheduler(self, job_id: str) -> None:
         from apscheduler.jobstores.base import JobLookupError
 
-        try:
+        with contextlib.suppress(JobLookupError):
             self._scheduler.remove_job(job_id)
-        except JobLookupError:
-            pass
 
     async def _fire(self, job_id: str) -> None:
         job = self._store.get(job_id)
         if job is None or not job.enabled:
             return
         envelope = build_trigger_envelope(job)
-        logger.info(
-            "cron fire id=%s agent=%s channel=%s", job.id, job.agent_id, job.channel
-        )
+        logger.info("cron fire id=%s agent=%s channel=%s", job.id, job.agent_id, job.channel)
         try:
             await self._dispatcher.dispatch(envelope)
         except Exception:

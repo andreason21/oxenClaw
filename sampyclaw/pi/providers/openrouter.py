@@ -13,8 +13,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from sampyclaw.pi.streaming import register_provider_stream
 from sampyclaw.pi.providers._openai_shared import stream_openai_compatible
+from sampyclaw.pi.streaming import register_provider_stream
 
 
 def _openrouter_payload_patch(payload: dict[str, Any]) -> dict[str, Any]:
@@ -30,9 +30,7 @@ async def stream_openrouter(ctx, opts):  # type: ignore[no-untyped-def]
     # We can't mutate Api here without copying; rely on the underlying
     # wrapper to propagate `extra_headers` as-is. The `Api` is frozen but
     # additional headers can come through `opts.extra_params` if needed.
-    async for ev in stream_openai_compatible(
-        ctx, opts, payload_patch=_openrouter_payload_patch
-    ):
+    async for ev in stream_openai_compatible(ctx, opts, payload_patch=_openrouter_payload_patch):
         yield ev
 
 

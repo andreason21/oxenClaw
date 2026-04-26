@@ -95,16 +95,21 @@ async def test_gemma4_present_card_writes_to_store(
     sub = asyncio.create_task(collect())
 
     agent = _build_agent(
-        base_url=ollama_base_url, model=ollama_model,
-        paths=paths, store=store, bus=bus,
+        base_url=ollama_base_url,
+        model=ollama_model,
+        paths=paths,
+        store=store,
+        bus=bus,
     )
     ctx = AgentContext(agent_id="canvas-probe", session_key=uuid.uuid4().hex)
 
     try:
         await asyncio.wait_for(
-            _drain(agent, _envelope(
-                "Show me a centered welcome card that says 'Hello sampyClaw'."
-            ), ctx),
+            _drain(
+                agent,
+                _envelope("Show me a centered welcome card that says 'Hello sampyClaw'."),
+                ctx,
+            ),
             timeout=120.0,
         )
     finally:

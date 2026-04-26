@@ -38,9 +38,7 @@ def _ollama_reachable(base_url: str) -> bool:
 
 def pytest_collection_modifyitems(config, items):  # type: ignore[no-untyped-def]
     if not _truthy(os.environ.get("OLLAMA_INTEGRATION")):
-        skip_marker = pytest.mark.skip(
-            reason="set OLLAMA_INTEGRATION=1 to run live-LLM tests"
-        )
+        skip_marker = pytest.mark.skip(reason="set OLLAMA_INTEGRATION=1 to run live-LLM tests")
         for item in items:
             if "integration" in str(item.fspath):
                 item.add_marker(skip_marker)
@@ -48,9 +46,7 @@ def pytest_collection_modifyitems(config, items):  # type: ignore[no-untyped-def
 
     base_url = os.environ.get("SAMPYCLAW_OLLAMA_BASE_URL", DEFAULT_BASE_URL)
     if not _ollama_reachable(base_url):
-        skip_marker = pytest.mark.skip(
-            reason=f"Ollama not reachable at {base_url}"
-        )
+        skip_marker = pytest.mark.skip(reason=f"Ollama not reachable at {base_url}")
         for item in items:
             if "integration" in str(item.fspath):
                 item.add_marker(skip_marker)

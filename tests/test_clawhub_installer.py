@@ -18,7 +18,6 @@ from sampyclaw.clawhub.installer import InstallError, SkillInstaller
 from sampyclaw.clawhub.lockfile import Lockfile, OriginMetadata
 from sampyclaw.config.paths import SampyclawPaths
 
-
 SAMPLE_SKILL_MD = """---
 name: foo
 description: Sample skill for tests.

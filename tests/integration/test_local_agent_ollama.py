@@ -115,18 +115,14 @@ def _build_agent(
 
 
 @pytest.fixture()
-async def agent(
-    tmp_path, ollama_base_url: str, ollama_model: str
-) -> AsyncIterator[LocalAgent]:  # type: ignore[no-untyped-def]
+async def agent(tmp_path, ollama_base_url: str, ollama_model: str) -> AsyncIterator[LocalAgent]:  # type: ignore[no-untyped-def]
     paths = SampyclawPaths(home=tmp_path)
     paths.ensure_home()
 
     tools = ToolRegistry()
     tools.register_all(default_tools())
 
-    agent = _build_agent(
-        paths=paths, base_url=ollama_base_url, model=ollama_model, tools=tools
-    )
+    agent = _build_agent(paths=paths, base_url=ollama_base_url, model=ollama_model, tools=tools)
     try:
         yield agent
     finally:
@@ -141,9 +137,7 @@ async def agent(
 async def test_plain_text_reply(agent: LocalAgent) -> None:
     """Model returns something non-empty for a simple prompt."""
     ctx = AgentContext(agent_id=agent.id, session_key="plain")
-    out = await _collect(
-        agent, _envelope("Reply with exactly the word OK."), ctx
-    )
+    out = await _collect(agent, _envelope("Reply with exactly the word OK."), ctx)
     assert out.strip(), "expected non-empty plain-text reply"
 
 
@@ -152,9 +146,7 @@ async def test_history_persisted_to_disk(agent: LocalAgent) -> None:
     ctx = AgentContext(agent_id=agent.id, session_key="persist")
     await _collect(agent, _envelope("Hi."), ctx)
     await _collect(agent, _envelope("Bye."), ctx)
-    hist = ConversationHistory(
-        agent._paths.session_file(agent.id, "persist")  # noqa: SLF001
-    )
+    hist = ConversationHistory(agent._paths.session_file(agent.id, "persist"))
     assert len(hist) >= 5, f"history too short: {len(hist)}"
     assert hist.messages()[0]["role"] == "system"
 
@@ -167,12 +159,8 @@ async def test_history_persisted_to_disk(agent: LocalAgent) -> None:
 async def test_multi_turn_recall(agent: LocalAgent) -> None:
     """Two-turn fact recall."""
     ctx = AgentContext(agent_id=agent.id, session_key="recall")
-    await _collect(
-        agent, _envelope("My favourite colour is teal. Remember that."), ctx
-    )
-    out = await _collect(
-        agent, _envelope("What did I say my favourite colour was?"), ctx
-    )
+    await _collect(agent, _envelope("My favourite colour is teal. Remember that."), ctx)
+    out = await _collect(agent, _envelope("What did I say my favourite colour was?"), ctx)
     assert "teal" in out.lower(), f"model forgot 'teal'; got: {out!r}"
 
 
@@ -220,9 +208,7 @@ async def test_tool_use_returns_real_year(agent: LocalAgent) -> None:
         ),
         ctx,
     )
-    assert "2026" in out, (
-        f"expected '2026' (only available via tool) in reply; got: {out!r}"
-    )
+    assert "2026" in out, f"expected '2026' (only available via tool) in reply; got: {out!r}"
 
 
 async def test_secret_token_tool_was_invoked(
@@ -238,9 +224,7 @@ async def test_secret_token_tool_was_invoked(
     tools = ToolRegistry()
     tools.register(_secret_token_tool(secret))
 
-    agent = _build_agent(
-        paths=paths, base_url=ollama_base_url, model=ollama_model, tools=tools
-    )
+    agent = _build_agent(paths=paths, base_url=ollama_base_url, model=ollama_model, tools=tools)
     try:
         ctx = AgentContext(agent_id=agent.id, session_key="secret")
         out = await _collect(
@@ -252,9 +236,7 @@ async def test_secret_token_tool_was_invoked(
             ),
             ctx,
         )
-        assert secret in out, (
-            f"secret {secret!r} not in reply — tool was not invoked. Got: {out!r}"
-        )
+        assert secret in out, f"secret {secret!r} not in reply — tool was not invoked. Got: {out!r}"
     finally:
         await agent.aclose()
 
@@ -281,8 +263,7 @@ async def test_plan_respects_remembered_constraints(agent: LocalAgent) -> None:
     await _collect(
         agent,
         _envelope(
-            "Remember: I am also lactose intolerant — no milk, cheese, butter, "
-            "yogurt, or cream."
+            "Remember: I am also lactose intolerant — no milk, cheese, butter, yogurt, or cream."
         ),
         ctx,
     )
@@ -311,12 +292,24 @@ async def test_plan_respects_remembered_constraints(agent: LocalAgent) -> None:
 
     forbidden_patterns = [
         # meats
-        r"\bbeef\b", r"\bpork\b", r"\bchicken\b", r"\bham\b", r"\bbacon\b",
-        r"\bsausage\b", r"\bfish\b", r"\bsalmon\b", r"\btuna\b", r"\bshrimp\b",
+        r"\bbeef\b",
+        r"\bpork\b",
+        r"\bchicken\b",
+        r"\bham\b",
+        r"\bbacon\b",
+        r"\bsausage\b",
+        r"\bfish\b",
+        r"\bsalmon\b",
+        r"\btuna\b",
+        r"\bshrimp\b",
         # dairy — \b on `cream` so "creamy" (an adjective often used for plant
         # alternatives) doesn't match.
-        r"\bmilk\b", r"\bcheese\b", r"\bbutter\b", r"\byogurt\b",
-        r"\byoghurt\b", r"\bcream\b",
+        r"\bmilk\b",
+        r"\bcheese\b",
+        r"\bbutter\b",
+        r"\byogurt\b",
+        r"\byoghurt\b",
+        r"\bcream\b",
     ]
     hits = [p for p in forbidden_patterns if re.search(p, sanitized)]
     assert not hits, (
@@ -325,18 +318,33 @@ async def test_plan_respects_remembered_constraints(agent: LocalAgent) -> None:
     )
     # Plan must actually reference some food. Cheap shape check.
     food_signals = [
-        "toast", "oat", "bread", "fruit", "banana", "apple", "berries",
-        "tofu", "egg", "avocado", "nut", "smoothie", "cereal", "rice",
-        "pancake", "porridge", "granola", "tomato", "potato", "vegetable",
+        "toast",
+        "oat",
+        "bread",
+        "fruit",
+        "banana",
+        "apple",
+        "berries",
+        "tofu",
+        "egg",
+        "avocado",
+        "nut",
+        "smoothie",
+        "cereal",
+        "rice",
+        "pancake",
+        "porridge",
+        "granola",
+        "tomato",
+        "potato",
+        "vegetable",
     ]
     assert any(s in lowered for s in food_signals), (
         f"reply does not look like a food plan; got: {out!r}"
     )
 
 
-async def test_plan_with_tool_and_memory(
-    tmp_path, ollama_base_url: str, ollama_model: str
-) -> None:  # type: ignore[no-untyped-def]
+async def test_plan_with_tool_and_memory(tmp_path, ollama_base_url: str, ollama_model: str) -> None:  # type: ignore[no-untyped-def]
     """The model has to: (a) remember a fact from turn 1, (b) call a tool
     in turn 2, (c) combine both in turn 3.
 
@@ -369,25 +377,19 @@ async def test_plan_with_tool_and_memory(
     tools.register_all(default_tools())
     tools.register(deadline_tool)
 
-    agent = _build_agent(
-        paths=paths, base_url=ollama_base_url, model=ollama_model, tools=tools
-    )
+    agent = _build_agent(paths=paths, base_url=ollama_base_url, model=ollama_model, tools=tools)
     try:
         ctx = AgentContext(agent_id=agent.id, session_key="plan-tool")
         # Turn 1 — fact to remember.
         await _collect(
             agent,
-            _envelope(
-                "Remember: I prefer to work in the morning, between 9am and noon."
-            ),
+            _envelope("Remember: I prefer to work in the morning, between 9am and noon."),
             ctx,
         )
         # Turn 2 — explicit tool invocation request.
         await _collect(
             agent,
-            _envelope(
-                "Use the get_project_deadline tool to look up my deadline."
-            ),
+            _envelope("Use the get_project_deadline tool to look up my deadline."),
             ctx,
         )
         # Turn 3 — synthesis.
@@ -403,13 +405,9 @@ async def test_plan_with_tool_and_memory(
     finally:
         await agent.aclose()
 
-    assert deadline in out, (
-        f"plan missing tool-derived deadline {deadline!r}; got: {out!r}"
-    )
+    assert deadline in out, f"plan missing tool-derived deadline {deadline!r}; got: {out!r}"
     lowered = out.lower()
     has_morning_signal = any(
         kw in lowered for kw in ("morning", "9am", "9 am", "9:00", "noon", "9-noon", "9am-noon")
     )
-    assert has_morning_signal, (
-        f"plan does not reference remembered work hours; got: {out!r}"
-    )
+    assert has_morning_signal, f"plan does not reference remembered work hours; got: {out!r}"

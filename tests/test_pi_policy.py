@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from sampyclaw.pi import (
     AgentSession,
     CreateAgentSessionOptions,
@@ -25,7 +23,6 @@ from sampyclaw.pi.policy import (
     set_policy,
 )
 
-
 # ─── normalize / derive key ─────────────────────────────────────────
 
 
@@ -44,9 +41,7 @@ def test_normalize_truncates_with_hash_suffix() -> None:
 
 def test_derive_session_key_includes_thread() -> None:
     a = derive_session_key(channel="telegram", account_id="main", chat_id="42")
-    b = derive_session_key(
-        channel="telegram", account_id="main", chat_id="42", thread_id="9"
-    )
+    b = derive_session_key(channel="telegram", account_id="main", chat_id="42", thread_id="9")
     assert a != b
     assert "t:9" in b
 
@@ -75,29 +70,29 @@ def test_pairing_blocks_until_completed() -> None:
 
 def test_addressed_only_requires_mention_or_reply() -> None:
     p = SendPolicy(mode=SendMode.ADDRESSED_ONLY, addressed_handles=("@sampyclaw",))
-    assert p.should_reply(
-        chat_type=SessionChatType.GROUP, sender_id="u", text="@sampyclaw hi"
-    ) is True
-    assert p.should_reply(
-        chat_type=SessionChatType.GROUP, sender_id="u", text="random chatter"
-    ) is False
+    assert (
+        p.should_reply(chat_type=SessionChatType.GROUP, sender_id="u", text="@sampyclaw hi") is True
+    )
+    assert (
+        p.should_reply(chat_type=SessionChatType.GROUP, sender_id="u", text="random chatter")
+        is False
+    )
     # Reply-to-bot also triggers.
-    assert p.should_reply(
-        chat_type=SessionChatType.GROUP,
-        sender_id="u",
-        text="ok",
-        is_reply_to_bot=True,
-    ) is True
+    assert (
+        p.should_reply(
+            chat_type=SessionChatType.GROUP,
+            sender_id="u",
+            text="ok",
+            is_reply_to_bot=True,
+        )
+        is True
+    )
 
 
 def test_open_mode_blocked_only_by_deny() -> None:
     p = SendPolicy(mode=SendMode.OPEN, deny=("spammer",))
-    assert p.should_reply(
-        chat_type=SessionChatType.GROUP, sender_id="anyone", text="x"
-    ) is True
-    assert p.should_reply(
-        chat_type=SessionChatType.GROUP, sender_id="spammer", text="x"
-    ) is False
+    assert p.should_reply(chat_type=SessionChatType.GROUP, sender_id="anyone", text="x") is True
+    assert p.should_reply(chat_type=SessionChatType.GROUP, sender_id="spammer", text="x") is False
 
 
 # ─── overrides + provenance round-trip ──────────────────────────────

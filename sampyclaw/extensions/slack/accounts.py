@@ -50,14 +50,14 @@ class SlackAccountRegistry:
                 continue
             token = self._tokens.resolve(account_id)
             if token is None:
-                logger.warning(
-                    "slack account %r has no token; skipping", account_id
-                )
+                logger.warning("slack account %r has no token; skipping", account_id)
                 continue
             extra = getattr(acct, "model_extra", None) or {}
             base_url = extra.get("base_url") or global_base
             self._channels[account_id] = SlackChannel(
-                token=token, account_id=account_id, base_url=base_url,
+                token=token,
+                account_id=account_id,
+                base_url=base_url,
             )
             loaded.append(account_id)
         return loaded
@@ -65,9 +65,9 @@ class SlackAccountRegistry:
     def register(self, channel: SlackChannel) -> None:
         if channel.id != "slack":
             raise ValueError(f"expected slack channel, got {channel.id!r}")
-        if channel._account_id in self._channels:  # noqa: SLF001
+        if channel._account_id in self._channels:
             raise ValueError(f"account {channel._account_id!r} already registered")
-        self._channels[channel._account_id] = channel  # noqa: SLF001
+        self._channels[channel._account_id] = channel
 
     def get(self, account_id: str) -> SlackChannel | None:
         return self._channels.get(account_id)

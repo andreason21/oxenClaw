@@ -53,7 +53,7 @@ class InprocessBackend:
             out, err = await asyncio.wait_for(
                 proc.communicate(input=stdin), timeout=policy.timeout_seconds
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             timed_out = True
             proc.kill()
             try:

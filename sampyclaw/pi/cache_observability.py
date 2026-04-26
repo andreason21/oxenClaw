@@ -38,14 +38,12 @@ class CacheUsageSnapshot:
     at: float = field(default_factory=time.time)
 
     @classmethod
-    def from_usage_dict(cls, usage: dict | None) -> "CacheUsageSnapshot":
+    def from_usage_dict(cls, usage: dict | None) -> CacheUsageSnapshot:
         if not usage:
             return cls()
         return cls(
             cache_read_input_tokens=int(usage.get("cache_read_input_tokens", 0)),
-            cache_creation_input_tokens=int(
-                usage.get("cache_creation_input_tokens", 0)
-            ),
+            cache_creation_input_tokens=int(usage.get("cache_creation_input_tokens", 0)),
             input_tokens=int(usage.get("input_tokens", 0)),
             output_tokens=int(usage.get("output_tokens", 0)),
         )
@@ -123,8 +121,8 @@ def should_apply_cache_markers(
 
 
 __all__ = [
+    "DEFAULT_CACHE_TTL_SECONDS",
     "CacheObserver",
     "CacheUsageSnapshot",
-    "DEFAULT_CACHE_TTL_SECONDS",
     "should_apply_cache_markers",
 ]

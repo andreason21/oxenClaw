@@ -66,9 +66,7 @@ def registries() -> None:
     for r in rows:
         marker = "*" if r["default"] else " "
         token = "tok" if r["has_token"] else "   "
-        typer.echo(
-            f"  {marker} [{r['trust']:9s}] {token}  {r['name']:20s} {r['url']}"
-        )
+        typer.echo(f"  {marker} [{r['trust']:9s}] {token}  {r['name']:20s} {r['url']}")
 
 
 @app.command("search")
@@ -78,9 +76,7 @@ def search(
     base_url: str | None = typer.Option(
         None, "--base-url", help="Ad-hoc registry URL (overrides config)."
     ),
-    registry: str | None = typer.Option(
-        None, "--registry", help="Registry name from config.yaml."
-    ),
+    registry: str | None = typer.Option(None, "--registry", help="Registry name from config.yaml."),
     json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
 ) -> None:
     """Search ClawHub skills."""
@@ -116,9 +112,7 @@ def install(
     version: str | None = typer.Option(None, "--version", help="Pin a version."),
     force: bool = typer.Option(False, "--force", help="Overwrite existing install."),
     base_url: str | None = typer.Option(None, "--base-url", help="Ad-hoc registry URL."),
-    registry: str | None = typer.Option(
-        None, "--registry", help="Registry name from config.yaml."
-    ),
+    registry: str | None = typer.Option(None, "--registry", help="Registry name from config.yaml."),
     allow_critical: bool = typer.Option(
         False, "--allow-critical", help="Override skill-scanner refusal."
     ),
@@ -169,9 +163,7 @@ def list_installed() -> None:
         emoji = (s.manifest.openclaw.emoji or "·") + " "
         reg = (s.origin.registry_name if s.origin else None) or "?"
         trust = (s.origin.trust if s.origin else None) or "?"
-        typer.echo(
-            f"  {emoji}{s.slug:30s} v{ver:10s} [{reg}/{trust}]  {s.description[:60]}"
-        )
+        typer.echo(f"  {emoji}{s.slug:30s} v{ver:10s} [{reg}/{trust}]  {s.description[:60]}")
 
 
 @app.command("uninstall")

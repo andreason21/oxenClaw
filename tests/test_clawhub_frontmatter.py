@@ -10,7 +10,6 @@ from sampyclaw.clawhub.frontmatter import (
     parse_skill_text,
 )
 
-
 SAMPLE = """---
 name: gifgrep
 description: Search GIF providers, download stills, etc.
@@ -56,9 +55,7 @@ def test_parse_full_manifest_round_trip() -> None:
 
 
 def test_minimal_manifest() -> None:
-    m, body = parse_skill_text(
-        "---\nname: foo\ndescription: bar\n---\nbody here\n"
-    )
+    m, body = parse_skill_text("---\nname: foo\ndescription: bar\n---\nbody here\n")
     assert m.name == "foo"
     assert m.openclaw.requires.bins == []
     assert body == "body here\n"
@@ -90,9 +87,7 @@ def test_root_must_be_mapping() -> None:
 
 
 def test_unknown_top_level_field_preserved() -> None:
-    m, _ = parse_skill_text(
-        "---\nname: foo\ndescription: bar\nweird: 42\n---\n"
-    )
+    m, _ = parse_skill_text("---\nname: foo\ndescription: bar\nweird: 42\n---\n")
     assert m.model_dump().get("weird") == 42
 
 

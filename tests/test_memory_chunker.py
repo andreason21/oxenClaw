@@ -21,12 +21,7 @@ def test_single_paragraph_yields_one_chunk_covering_all_lines() -> None:
 
 def test_same_level_headings_split_into_distinct_chunks() -> None:
     """Same-level (or higher) sibling headings open new sections."""
-    text = (
-        "# Top A\n"
-        "body A\n"
-        "# Top B\n"
-        "body B\n"
-    )
+    text = "# Top A\nbody A\n# Top B\nbody B\n"
     result = chunk_markdown(text, max_chars=2000, min_chars=0)
     bodies = [b for _, _, b in result]
     a = next(b for b in bodies if "Top A" in b)
@@ -37,12 +32,7 @@ def test_same_level_headings_split_into_distinct_chunks() -> None:
 
 def test_lower_level_headings_stay_within_parent() -> None:
     """`##` under `#` is grouped with the parent until the next `#` (or eof)."""
-    text = (
-        "# Parent\n"
-        "intro\n"
-        "## Child\n"
-        "child body\n"
-    )
+    text = "# Parent\nintro\n## Child\nchild body\n"
     result = chunk_markdown(text, max_chars=2000, min_chars=0)
     assert len(result) == 1
     _, _, body = result[0]

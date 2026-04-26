@@ -201,11 +201,7 @@ def inline_api(model: Model) -> Api:
     Inline models don't need credentials, but if `extra["api_key"]` is set
     we propagate it (some local proxies require a token).
     """
-    base = (
-        model.extra.get("base_url")
-        if isinstance(model.extra.get("base_url"), str)
-        else None
-    )
+    base = model.extra.get("base_url") if isinstance(model.extra.get("base_url"), str) else None
     if base is None:
         base = _INLINE_DEFAULT_BASE_URL.get(model.provider)
     if base is None:

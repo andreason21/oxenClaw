@@ -90,6 +90,7 @@ def test_truncate_preserves_system_and_drops_oldest(tmp_path) -> None:  # type: 
     assert msgs[-1]["role"] == "assistant"
     # Total serialized size below cap (with small slack for the system msg).
     import json as _json
+
     total = sum(len(_json.dumps(m, ensure_ascii=False)) for m in msgs)
     assert total <= 2_000 or len(msgs) == 2  # system + last turn floor
 

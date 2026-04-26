@@ -12,6 +12,7 @@ returns False).
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import os
 import sys
 import time
@@ -32,48 +33,36 @@ def _make_preexec(policy: IsolationPolicy):  # type: ignore[no-untyped-def]
         # Address space (virtual memory) cap.
         if policy.max_memory_mb is not None:
             bytes_cap = policy.max_memory_mb * 1024 * 1024
-            try:
+            with contextlib.suppress(ValueError, OSError):
                 resource.setrlimit(resource.RLIMIT_AS, (bytes_cap, bytes_cap))
-            except (ValueError, OSError):
-                pass
         # CPU-seconds cap (SIGXCPU at soft, SIGKILL at hard).
         if policy.max_cpu_seconds is not None:
             secs = int(policy.max_cpu_seconds)
-            try:
+            with contextlib.suppress(ValueError, OSError):
                 resource.setrlimit(resource.RLIMIT_CPU, (secs, secs + 1))
-            except (ValueError, OSError):
-                pass
         # File-size cap.
         if policy.max_file_size_mb is not None:
             fs = policy.max_file_size_mb * 1024 * 1024
-            try:
+            with contextlib.suppress(ValueError, OSError):
                 resource.setrlimit(resource.RLIMIT_FSIZE, (fs, fs))
-            except (ValueError, OSError):
-                pass
         # Open-files cap.
         if policy.max_open_files is not None:
-            try:
+            with contextlib.suppress(ValueError, OSError):
                 resource.setrlimit(
                     resource.RLIMIT_NOFILE,
                     (policy.max_open_files, policy.max_open_files),
                 )
-            except (ValueError, OSError):
-                pass
         # Process/thread cap. Bwrap's pid-namespace already isolates this
         # somewhat; subprocess cannot, so cap matters here most.
         if policy.max_processes is not None:
-            try:
+            with contextlib.suppress(ValueError, OSError):
                 resource.setrlimit(
                     resource.RLIMIT_NPROC,
                     (policy.max_processes, policy.max_processes),
                 )
-            except (ValueError, OSError):
-                pass
         # Detach into its own process group so we can clean up reliably.
-        try:
+        with contextlib.suppress(OSError):
             os.setsid()
-        except OSError:
-            pass
 
     return _apply
 
@@ -180,7 +169,7 @@ class SubprocessBackend:
             out, err = await asyncio.wait_for(
                 proc.communicate(input=stdin), timeout=policy.timeout_seconds
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             timed_out = True
             try:
                 # Kill the entire process group (we used setsid).
@@ -197,11 +186,7 @@ class SubprocessBackend:
         # Detect OOM via signal (SIGKILL). Heuristic — kernel doesn't tell us
         # explicitly, but exit_code == -9 / 137 with empty stdout is telling.
         exit_code = proc.returncode if proc.returncode is not None else -1
-        oom = (
-            policy.max_memory_mb is not None
-            and exit_code in (-9, 137)
-            and not timed_out
-        )
+        oom = policy.max_memory_mb is not None and exit_code in (-9, 137) and not timed_out
 
         stdout, t_out = truncate(out or b"", policy.max_output_bytes)
         stderr, t_err = truncate(err or b"", policy.max_output_bytes)

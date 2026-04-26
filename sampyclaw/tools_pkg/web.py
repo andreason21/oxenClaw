@@ -13,12 +13,10 @@ shared net layer into the LLM-callable tools.
 
 from __future__ import annotations
 
-import asyncio
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass
 from html.parser import HTMLParser
-from typing import Any
 from urllib.parse import urlparse
 
 import aiohttp
@@ -63,8 +61,21 @@ class _TextExtractor(HTMLParser):
     preserves block boundaries with newlines."""
 
     _BLOCK = {
-        "p", "div", "br", "li", "h1", "h2", "h3", "h4", "h5", "h6",
-        "section", "article", "header", "footer", "main",
+        "p",
+        "div",
+        "br",
+        "li",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "section",
+        "article",
+        "header",
+        "footer",
+        "main",
     }
     _SKIP = {"script", "style", "noscript", "nav", "svg", "header", "footer"}
 
@@ -207,7 +218,9 @@ class BraveSearch(WebSearchProvider):
         }
         params = {"q": query, "count": min(20, max(1, k))}
         async with aiohttp.ClientSession() as s:
-            async with s.get(url, headers=headers, params=params, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+            async with s.get(
+                url, headers=headers, params=params, timeout=aiohttp.ClientTimeout(total=15)
+            ) as resp:
                 if resp.status >= 400:
                     return []
                 data = await resp.json()
@@ -229,15 +242,17 @@ class TavilySearch(WebSearchProvider):
 
     async def search(self, query: str, *, k: int) -> list[SearchHit]:
         url = "https://api.tavily.com/search"
-        async with aiohttp.ClientSession() as s:
-            async with s.post(
+        async with (
+            aiohttp.ClientSession() as s,
+            s.post(
                 url,
                 json={"api_key": self.api_key, "query": query, "max_results": k},
                 timeout=aiohttp.ClientTimeout(total=15),
-            ) as resp:
-                if resp.status >= 400:
-                    return []
-                data = await resp.json()
+            ) as resp,
+        ):
+            if resp.status >= 400:
+                return []
+            data = await resp.json()
         return [
             SearchHit(
                 title=r.get("title") or "",
@@ -255,16 +270,18 @@ class ExaSearch(WebSearchProvider):
 
     async def search(self, query: str, *, k: int) -> list[SearchHit]:
         url = "https://api.exa.ai/search"
-        async with aiohttp.ClientSession() as s:
-            async with s.post(
+        async with (
+            aiohttp.ClientSession() as s,
+            s.post(
                 url,
                 headers={"x-api-key": self.api_key},
                 json={"query": query, "numResults": k},
                 timeout=aiohttp.ClientTimeout(total=15),
-            ) as resp:
-                if resp.status >= 400:
-                    return []
-                data = await resp.json()
+            ) as resp,
+        ):
+            if resp.status >= 400:
+                return []
+            data = await resp.json()
         return [
             SearchHit(
                 title=r.get("title") or "",
@@ -292,9 +309,7 @@ class DuckDuckGoSearch(WebSearchProvider):
         out: list[SearchHit] = []
         for r in (data.get("RelatedTopics") or [])[:k]:
             if "Text" in r and "FirstURL" in r:
-                out.append(
-                    SearchHit(title=r["Text"][:120], url=r["FirstURL"], snippet=r["Text"])
-                )
+                out.append(SearchHit(title=r["Text"][:120], url=r["FirstURL"], snippet=r["Text"]))
         return out
 
 
@@ -371,12 +386,8 @@ async def search_with_fallback(
 
 class _FetchArgs(BaseModel):
     url: str = Field(..., description="HTTP(S) URL to fetch.")
-    readability: bool = Field(
-        True, description="Strip HTML to readable text when content is HTML."
-    )
-    max_bytes: int = Field(
-        DEFAULT_MAX_BYTES, description="Hard cap on response bytes read.", gt=0
-    )
+    readability: bool = Field(True, description="Strip HTML to readable text when content is HTML.")
+    max_bytes: int = Field(DEFAULT_MAX_BYTES, description="Hard cap on response bytes read.", gt=0)
 
 
 class _SearchArgs(BaseModel):
@@ -394,7 +405,7 @@ def web_fetch_tool() -> Tool:
             )
         except SSRFBlocked as exc:
             return f"web_fetch error: {exc}"
-        except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
+        except (TimeoutError, aiohttp.ClientError) as exc:
             return f"web_fetch network error: {exc}"
         body_preview = res.body[:8000]
         suffix = "\n[...truncated]" if res.truncated or len(res.body) > 8000 else ""

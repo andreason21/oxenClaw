@@ -71,7 +71,12 @@ async def test_list_returns_all_jobs(tmp_path) -> None:  # type: ignore[no-untyp
     router, _ = _setup(tmp_path)
     for i in range(2):
         await router.dispatch(
-            {"jsonrpc": "2.0", "id": 1, "method": "cron.create", "params": _create_params(prompt=f"p{i}")}
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "cron.create",
+                "params": _create_params(prompt=f"p{i}"),
+            }
         )
     resp = await router.dispatch({"jsonrpc": "2.0", "id": 1, "method": "cron.list"})
     assert len(resp.result) == 2
@@ -79,7 +84,7 @@ async def test_list_returns_all_jobs(tmp_path) -> None:  # type: ignore[no-untyp
 
 async def test_remove_returns_bool(tmp_path) -> None:  # type: ignore[no-untyped-def]
     router, scheduler = _setup(tmp_path)
-    job = scheduler.add_from_create_result = None  # noqa: we'll use scheduler directly
+    scheduler.add_from_create_result = None
     create_resp = await router.dispatch(
         {"jsonrpc": "2.0", "id": 1, "method": "cron.create", "params": _create_params()}
     )
@@ -113,9 +118,14 @@ async def test_toggle_updates_enabled(tmp_path) -> None:  # type: ignore[no-unty
 
 
 async def test_fire_dispatches_to_agent(tmp_path) -> None:  # type: ignore[no-untyped-def]
-    router, scheduler = _setup(tmp_path)
+    router, _scheduler = _setup(tmp_path)
     create_resp = await router.dispatch(
-        {"jsonrpc": "2.0", "id": 1, "method": "cron.create", "params": _create_params(prompt="fire-test")}
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "cron.create",
+            "params": _create_params(prompt="fire-test"),
+        }
     )
     jid = create_resp.result["id"]
     resp = await router.dispatch(
@@ -154,9 +164,7 @@ async def test_list_includes_next_run_at_field(tmp_path) -> None:  # type: ignor
 
     scheduler.start()
     try:
-        resp2 = await router.dispatch(
-            {"jsonrpc": "2.0", "id": 3, "method": "cron.list"}
-        )
+        resp2 = await router.dispatch({"jsonrpc": "2.0", "id": 3, "method": "cron.list"})
         next_run = resp2.result[0]["next_run_at"]
         assert next_run is None or isinstance(next_run, (int, float))
     finally:

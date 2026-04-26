@@ -28,7 +28,6 @@ from sampyclaw.security.isolation.subprocess_backend import (
     _scrub_env,
 )
 
-
 _UNSET = object()
 _BWRAP_PATH_CACHE: object | str | None = _UNSET
 
@@ -150,7 +149,7 @@ class BubblewrapBackend:
             out, err = await asyncio.wait_for(
                 proc.communicate(input=stdin), timeout=policy.timeout_seconds
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             timed_out = True
             try:
                 if proc.pid is not None:

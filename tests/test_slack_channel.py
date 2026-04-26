@@ -12,9 +12,6 @@ that:
 
 from __future__ import annotations
 
-import json
-from typing import Any
-
 import pytest
 
 from sampyclaw.config.credentials import CredentialStore
@@ -108,7 +105,9 @@ async def test_client_raises_slack_api_error_on_ok_false(monkeypatch) -> None:  
         # Real `_call` would convert this into SlackApiError; in this test
         # we hit the path *inside* _call by patching the HTTP layer instead
         # — but here we just assert SlackApiError surfaces correctly.
-        raise SlackApiError("channel_not_found", status=200, response={"ok": False, "error": "channel_not_found"})
+        raise SlackApiError(
+            "channel_not_found", status=200, response={"ok": False, "error": "channel_not_found"}
+        )
 
     monkeypatch.setattr(SlackWebClient, "_call", fake_call)
     c = SlackWebClient(token="xoxb-x")
@@ -131,7 +130,9 @@ async def test_send_message_slack_translates_params(monkeypatch) -> None:  # typ
     c = SlackWebClient(token="xoxb-x")
     params = SendParams(
         target=ChannelTarget(
-            channel="slack", account_id="alerts", chat_id="CALERTS",
+            channel="slack",
+            account_id="alerts",
+            chat_id="CALERTS",
             thread_id="1700000000.999",
         ),
         text="cron job ok",
@@ -264,7 +265,7 @@ def test_account_registry_loads_from_config(tmp_path) -> None:  # type: ignore[n
     loaded = reg.load_from_config(cfg)
     assert sorted(loaded) == ["alerts", "ops"]
     assert reg.require("alerts").id == "slack"
-    assert reg.require("ops")._client._base_url == DEFAULT_BASE_URL  # noqa: SLF001
+    assert reg.require("ops")._client._base_url == DEFAULT_BASE_URL
 
 
 def test_account_registry_uses_per_account_base_url_override(tmp_path) -> None:  # type: ignore[no-untyped-def]
@@ -287,7 +288,7 @@ def test_account_registry_uses_per_account_base_url_override(tmp_path) -> None: 
     reg = SlackAccountRegistry(paths=paths)
     reg.load_from_config(cfg)
     ch = reg.require("alerts")
-    assert ch._client._base_url == "https://slack-proxy.corp/api"  # noqa: SLF001
+    assert ch._client._base_url == "https://slack-proxy.corp/api"
 
 
 def test_account_registry_skips_account_with_no_token(tmp_path, caplog) -> None:  # type: ignore[no-untyped-def]

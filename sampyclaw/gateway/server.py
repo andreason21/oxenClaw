@@ -16,9 +16,12 @@ import contextlib
 import hmac
 import json
 import os
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from http import HTTPStatus
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from sampyclaw.observability import ReadinessChecker
 
 from websockets import ConnectionClosed
 from websockets.asyncio.server import ServerConnection, serve
@@ -41,11 +44,7 @@ DEFAULT_OUTBOUND_QUEUE_SIZE = 256
 DEFAULT_PER_CONN_CONCURRENCY = 16
 
 
-from collections.abc import Awaitable
-
-StaticHandler = Callable[
-    [ServerConnection, Request], "Response | Awaitable[Response]"
-]
+StaticHandler = Callable[[ServerConnection, Request], "Response | Awaitable[Response]"]
 
 
 _CONTENT_TYPES: dict[str, str] = {
@@ -63,9 +62,7 @@ def _is_websocket_upgrade(request: Request) -> bool:
     return "websocket" in upgrade.lower()
 
 
-def _typed_response(
-    connection: ServerConnection, body: str, content_type: str
-) -> Response:
+def _typed_response(connection: ServerConnection, body: str, content_type: str) -> Response:
     response = connection.respond(HTTPStatus.OK, body)
     # `Headers.__setitem__` appends, so we delete the default text/plain
     # entry first to avoid duplicate Content-Type lines on the wire.
@@ -83,7 +80,7 @@ def _content_type_for(path: str) -> str:
 
 
 def default_static_routes(
-    readiness: "ReadinessChecker | None" = None,
+    readiness: ReadinessChecker | None = None,
 ) -> dict[str, StaticHandler]:
     """Path → handler mapping served when a non-WS HTTP request arrives.
 
@@ -98,8 +95,6 @@ def default_static_routes(
     `/health` (legacy alias) maps to `/healthz` for back-compat.
     """
     from sampyclaw.observability import (
-        ReadinessChecker,
-        ReadinessStatus,
         render_prometheus,
     )
 
@@ -113,13 +108,9 @@ def default_static_routes(
         return _typed_response(connection, app_js(), _content_type_for(".js"))
 
     def serve_healthz(connection: ServerConnection, _: Request) -> Response:
-        return _typed_response(
-            connection, "ok\n", _content_type_for(".txt")
-        )
+        return _typed_response(connection, "ok\n", _content_type_for(".txt"))
 
-    async def serve_readyz(
-        connection: ServerConnection, _: Request
-    ) -> Response:
+    async def serve_readyz(connection: ServerConnection, _: Request) -> Response:
         if readiness is None:
             return _typed_response(
                 connection,
@@ -129,12 +120,8 @@ def default_static_routes(
         report = await readiness.evaluate()
         body = json.dumps(report.to_dict()) + "\n"
         if report.is_ready():
-            return _typed_response(
-                connection, body, _content_type_for(".json")
-            )
-        response = connection.respond(
-            HTTPStatus.SERVICE_UNAVAILABLE, body
-        )
+            return _typed_response(connection, body, _content_type_for(".json"))
+        response = connection.respond(HTTPStatus.SERVICE_UNAVAILABLE, body)
         del response.headers["Content-Type"]
         response.headers["Content-Type"] = _content_type_for(".json")
         response.headers["Cache-Control"] = "no-store"
@@ -207,9 +194,7 @@ def _resolve_allowed_origins(
 # Everything else under static_routes (the dashboard + its CSS/JS bundle
 # + any user-supplied custom route) requires the same token the WS
 # upgrade does.
-PUBLIC_HTTP_PATHS: frozenset[str] = frozenset(
-    {"/healthz", "/readyz", "/metrics", "/health"}
-)
+PUBLIC_HTTP_PATHS: frozenset[str] = frozenset({"/healthz", "/readyz", "/metrics", "/health"})
 
 
 def _query_token(request: Request) -> str | None:
@@ -241,7 +226,6 @@ def _set_token_cookie(response: Response, token: str | None) -> None:
     response.headers["Set-Cookie"] = cookie
 
 
-
 # Cookie used by the dashboard to remember a token resolved from the
 # initial `?token=...` URL so reloads / bookmarks Just Work without
 # leaving the secret in the address bar.
@@ -253,11 +237,7 @@ TOKEN_COOKIE_MAX_AGE_SECONDS = 12 * 3600  # 12h — short enough to limit
 def _bearer_from_request(request: Request) -> str | None:
     """Extract a bearer token from `Authorization`, `?token=`, or the
     `sampyclaw_token` cookie."""
-    auth = (
-        request.headers.get("Authorization")
-        or request.headers.get("authorization")
-        or ""
-    )
+    auth = request.headers.get("Authorization") or request.headers.get("authorization") or ""
     if auth.lower().startswith("bearer "):
         return auth[7:].strip() or None
     # Browsers can't set Authorization on a WS upgrade or a top-level
@@ -272,9 +252,7 @@ def _bearer_from_request(request: Request) -> str | None:
             return token
     # And finally a cookie set by the dashboard after the first
     # `?token=` load — keeps reloads from re-prompting.
-    cookie_header = (
-        request.headers.get("Cookie") or request.headers.get("cookie") or ""
-    )
+    cookie_header = request.headers.get("Cookie") or request.headers.get("cookie") or ""
     if cookie_header:
         for pair in cookie_header.split(";"):
             name, _, value = pair.strip().partition("=")
@@ -292,9 +270,7 @@ class ConnectionContext:
         outbound_queue_size: int = DEFAULT_OUTBOUND_QUEUE_SIZE,
         max_concurrency: int = DEFAULT_PER_CONN_CONCURRENCY,
     ) -> None:
-        self.events: asyncio.Queue[EventFrame] = asyncio.Queue(
-            maxsize=outbound_queue_size
-        )
+        self.events: asyncio.Queue[EventFrame] = asyncio.Queue(maxsize=outbound_queue_size)
         self.in_flight: asyncio.Semaphore = asyncio.Semaphore(max_concurrency)
 
     async def push_event(self, event: EventFrame) -> bool:
@@ -415,15 +391,11 @@ class GatewayServer:
             return
         try:
             await asyncio.wait_for(
-                asyncio.gather(
-                    *self._in_flight_tasks, return_exceptions=True
-                ),
+                asyncio.gather(*self._in_flight_tasks, return_exceptions=True),
                 timeout=self._shutdown_drain_seconds,
             )
-        except asyncio.TimeoutError:
-            still_running = sum(
-                1 for t in self._in_flight_tasks if not t.done()
-            )
+        except TimeoutError:
+            still_running = sum(1 for t in self._in_flight_tasks if not t.done())
             logger.warning(
                 "drain timeout: cancelling %d in-flight RPC task(s)",
                 still_running,
@@ -439,11 +411,7 @@ class GatewayServer:
         # reject before the handshake completes.
         if _is_websocket_upgrade(request):
             if not self._origin_ok(request):
-                origin = (
-                    request.headers.get("Origin")
-                    or request.headers.get("origin")
-                    or "(none)"
-                )
+                origin = request.headers.get("Origin") or request.headers.get("origin") or "(none)"
                 logger.warning("rejecting WS upgrade: Origin %r not allowed", origin)
                 return connection.respond(HTTPStatus.FORBIDDEN, "origin not allowed\n")
             if not self._auth_ok(request):
@@ -562,11 +530,7 @@ class GatewayServer:
             if not isinstance(payload, dict):
                 logger.warning("ignoring non-object frame")
                 return
-            method = (
-                payload.get("method")
-                if isinstance(payload.get("method"), str)
-                else "unknown"
-            )
+            method = payload.get("method") if isinstance(payload.get("method"), str) else "unknown"
             label = {"method": method}
             trace_id = new_correlation_id()
             with correlation_scope(trace_id=trace_id, rpc=method):
@@ -579,10 +543,8 @@ class GatewayServer:
                 payload_dict = response.model_dump(exclude_none=True)
                 if "error" in payload_dict:
                     METRICS.ws_rpc_errors_total.inc(labels=label)
-                try:
+                with contextlib.suppress(ConnectionClosed):
                     await ws.send(response.model_dump_json(exclude_none=True))
-                except ConnectionClosed:
-                    pass
 
     async def _pump_events(self, ws: ServerConnection, ctx: ConnectionContext) -> None:
         try:

@@ -9,9 +9,7 @@ from sampyclaw.gateway.router import Router
 async def test_backends_reports_available_and_strongest() -> None:
     router = Router()
     register_isolation_methods(router)
-    resp = await router.dispatch(
-        {"jsonrpc": "2.0", "id": 1, "method": "isolation.backends"}
-    )
+    resp = await router.dispatch({"jsonrpc": "2.0", "id": 1, "method": "isolation.backends"})
     assert resp.error is None
     assert "available" in resp.result
     assert "strongest" in resp.result

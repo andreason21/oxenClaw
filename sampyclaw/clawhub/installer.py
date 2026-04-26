@@ -63,9 +63,7 @@ def _resolve_safe_target(skills_root: Path, slug: str) -> Path:
     try:
         target.relative_to(skills_root_abs)
     except ValueError as exc:
-        raise InstallError(
-            f"refusing to install outside skills root: {target}"
-        ) from exc
+        raise InstallError(f"refusing to install outside skills root: {target}") from exc
     return target
 
 
@@ -123,9 +121,7 @@ class SkillInstaller:
         self._multi: MultiRegistryClient | None = (
             client if isinstance(client, MultiRegistryClient) else None
         )
-        self._single: ClawHubClient | None = (
-            client if isinstance(client, ClawHubClient) else None
-        )
+        self._single: ClawHubClient | None = client if isinstance(client, ClawHubClient) else None
         self._paths = paths or default_paths()
         self._skills_root, self._lock_path = _skill_dirs(self._paths)
         self._scanner = scanner or SkillScanner()
@@ -134,9 +130,7 @@ class SkillInstaller:
     def multi(self) -> MultiRegistryClient | None:
         return self._multi
 
-    def _resolve_client(
-        self, registry: str | None
-    ) -> tuple[ClawHubClient, str | None, str | None]:
+    def _resolve_client(self, registry: str | None) -> tuple[ClawHubClient, str | None, str | None]:
         """Return (client, registry_name_or_None, trust_or_None)."""
         if self._multi is not None:
             name = registry or self._multi.config.resolved_default()
@@ -198,9 +192,7 @@ class SkillInstaller:
         # Belt-and-suspenders: re-hash and confirm we agree.
         verify = sha256_integrity(archive_bytes)
         if verify != integrity:
-            raise InstallError(
-                "internal integrity check inconsistent — refusing install"
-            )
+            raise InstallError("internal integrity check inconsistent — refusing install")
 
         # Extract to a fresh temp dir under the skills root so we never
         # leak files into /tmp on failure.

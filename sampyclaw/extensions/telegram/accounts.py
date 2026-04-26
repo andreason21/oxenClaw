@@ -48,20 +48,16 @@ class TelegramAccountRegistry:
                 continue
             token = self._tokens.resolve(account_id)
             if token is None:
-                logger.warning(
-                    "telegram account %r has no token; skipping", account_id
-                )
+                logger.warning("telegram account %r has no token; skipping", account_id)
                 continue
-            self._channels[account_id] = TelegramChannel(
-                token=token, account_id=account_id
-            )
+            self._channels[account_id] = TelegramChannel(token=token, account_id=account_id)
             loaded.append(account_id)
         return loaded
 
     def register(self, channel: TelegramChannel) -> None:
         if channel.id != "telegram":
             raise ValueError(f"expected telegram channel, got {channel.id!r}")
-        account = channel._account_id  # noqa: SLF001 - registry owns its children
+        account = channel._account_id
         if account in self._channels:
             raise ValueError(f"account {account!r} already registered")
         self._channels[account] = channel

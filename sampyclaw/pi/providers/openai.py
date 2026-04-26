@@ -9,18 +9,16 @@ from __future__ import annotations
 
 from typing import Any
 
-from sampyclaw.pi.streaming import register_provider_stream
 from sampyclaw.pi.providers._openai_shared import (
     PayloadPatch,
     stream_openai_compatible,
 )
+from sampyclaw.pi.streaming import register_provider_stream
 
 
 def _make_streamfn(payload_patch: PayloadPatch | None = None):  # type: ignore[no-untyped-def]
     async def _fn(ctx, opts):  # type: ignore[no-untyped-def]
-        async for ev in stream_openai_compatible(
-            ctx, opts, payload_patch=payload_patch
-        ):
+        async for ev in stream_openai_compatible(ctx, opts, payload_patch=payload_patch):
             yield ev
 
     return _fn

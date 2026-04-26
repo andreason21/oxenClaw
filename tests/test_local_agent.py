@@ -78,9 +78,7 @@ def _inbound(text: str = "hello") -> InboundEnvelope:
     )
 
 
-def _make_agent_with_responses(
-    responses: list[dict[str, Any]], tmp_path, **kwargs
-):  # type: ignore[no-untyped-def]
+def _make_agent_with_responses(responses: list[dict[str, Any]], tmp_path, **kwargs):  # type: ignore[no-untyped-def]
     # `_chat_complete` is monkey-patched, so streaming defaults off in tests
     # that don't opt into it. `warmup` defaults off too unless the test wants
     # to assert warmup behavior.
@@ -161,9 +159,7 @@ async def test_tools_parameter_uses_openai_format(tmp_path) -> None:  # type: ig
 
     tools = ToolRegistry()
     tools.register(FunctionTool(name="ping", description="d", input_model=_A, handler=_h))
-    agent, mock = _make_agent_with_responses(
-        [_response_text("ok")], tmp_path, tools=tools
-    )
+    agent, mock = _make_agent_with_responses([_response_text("ok")], tmp_path, tools=tools)
     await _collect(agent, _inbound("go"))
     call = mock.await_args_list[0].kwargs
     t = call["tools"][0]
@@ -221,11 +217,7 @@ async def test_tool_call_roundtrip(tmp_path) -> None:  # type: ignore[no-untyped
         return "2026-04-25T00:00:00+00:00"
 
     tools = ToolRegistry()
-    tools.register(
-        FunctionTool(
-            name="get_time", description="d", input_model=_A, handler=_h
-        )
-    )
+    tools.register(FunctionTool(name="get_time", description="d", input_model=_A, handler=_h))
 
     agent, mock = _make_agent_with_responses(
         [
@@ -265,9 +257,7 @@ async def test_missing_tool_reports_error(tmp_path) -> None:  # type: ignore[no-
 async def test_bad_json_arguments_reports_error(tmp_path) -> None:  # type: ignore[no-untyped-def]
     agent, mock = _make_agent_with_responses(
         [
-            _response_tool_call(
-                call_id="c1", name="get_time", arguments="not json{"
-            ),
+            _response_tool_call(call_id="c1", name="get_time", arguments="not json{"),
             _response_text("sorry"),
         ],
         tmp_path,
@@ -286,9 +276,7 @@ async def test_tool_raises_surface_as_error(tmp_path) -> None:  # type: ignore[n
         raise RuntimeError("boom")
 
     tools = ToolRegistry()
-    tools.register(
-        FunctionTool(name="boom", description="d", input_model=_A, handler=_boom)
-    )
+    tools.register(FunctionTool(name="boom", description="d", input_model=_A, handler=_boom))
     agent, mock = _make_agent_with_responses(
         [
             _response_tool_call(call_id="c1", name="boom", arguments={}),
@@ -306,9 +294,7 @@ async def test_tool_raises_surface_as_error(tmp_path) -> None:  # type: ignore[n
 
 async def test_long_reply_is_chunked(tmp_path) -> None:  # type: ignore[no-untyped-def]
     body = "a" * 10_000
-    agent, _ = _make_agent_with_responses(
-        [_response_text(body)], tmp_path, chunk_limit=4000
-    )
+    agent, _ = _make_agent_with_responses([_response_text(body)], tmp_path, chunk_limit=4000)
     outs = await _collect(agent, _inbound("x"))
     assert len(outs) >= 3
     assert all(len(o.text or "") <= 4000 for o in outs)
@@ -335,7 +321,6 @@ async def test_api_key_sent_as_bearer(tmp_path) -> None:  # type: ignore[no-unty
 
     We inspect a real `_chat_complete` call via an aiohttp session mock.
     """
-    import aiohttp
 
     class _FakeResponse:
         status = 200
@@ -391,13 +376,8 @@ async def test_max_iterations_bail(tmp_path) -> None:  # type: ignore[no-untyped
     tools = ToolRegistry()
     tools.register(FunctionTool(name="x", description="d", input_model=_A, handler=_h))
 
-    responses = [
-        _response_tool_call(call_id=f"c{i}", name="x", arguments={})
-        for i in range(10)
-    ]
-    agent, _ = _make_agent_with_responses(
-        responses, tmp_path, tools=tools, max_tool_iterations=3
-    )
+    responses = [_response_tool_call(call_id=f"c{i}", name="x", arguments={}) for i in range(10)]
+    agent, _ = _make_agent_with_responses(responses, tmp_path, tools=tools, max_tool_iterations=3)
     outs = await _collect(agent, _inbound("do it"))
     assert outs and "max tool iterations" in (outs[0].text or "")
 
@@ -456,8 +436,16 @@ async def test_parallel_tool_calls_run_concurrently(tmp_path) -> None:  # type: 
                     "role": "assistant",
                     "content": None,
                     "tool_calls": [
-                        {"id": "c1", "type": "function", "function": {"name": "slow", "arguments": '{"i":1}'}},
-                        {"id": "c2", "type": "function", "function": {"name": "slow", "arguments": '{"i":2}'}},
+                        {
+                            "id": "c1",
+                            "type": "function",
+                            "function": {"name": "slow", "arguments": '{"i":1}'},
+                        },
+                        {
+                            "id": "c2",
+                            "type": "function",
+                            "function": {"name": "slow", "arguments": '{"i":2}'},
+                        },
                     ],
                 },
                 "finish_reason": "tool_calls",
@@ -491,7 +479,11 @@ async def test_bad_json_args_self_correct(tmp_path) -> None:  # type: ignore[no-
                     "role": "assistant",
                     "content": None,
                     "tool_calls": [
-                        {"id": "c1", "type": "function", "function": {"name": "t", "arguments": "{not json"}},
+                        {
+                            "id": "c1",
+                            "type": "function",
+                            "function": {"name": "t", "arguments": "{not json"},
+                        },
                     ],
                 },
                 "finish_reason": "tool_calls",
@@ -599,11 +591,10 @@ async def test_payload_includes_num_predict_alias(tmp_path) -> None:  # type: ig
 
 async def test_usage_logged(tmp_path, caplog) -> None:  # type: ignore[no-untyped-def]
     import logging as _logging
+
     caplog.set_level(_logging.INFO, logger="sampyclaw.agents.local")
     response = {
-        "choices": [
-            {"message": {"role": "assistant", "content": "hi"}, "finish_reason": "stop"}
-        ],
+        "choices": [{"message": {"role": "assistant", "content": "hi"}, "finish_reason": "stop"}],
         "usage": {"prompt_tokens": 12, "completion_tokens": 3, "total_tokens": 15},
     }
     agent, _ = _make_agent_with_responses([response], tmp_path)
@@ -613,7 +604,9 @@ async def test_usage_logged(tmp_path, caplog) -> None:  # type: ignore[no-untype
 
 async def test_truncation_drops_old_turns(tmp_path) -> None:  # type: ignore[no-untyped-def]
     """Pre-existing huge history is trimmed before the next request goes out."""
-    agent, mock = _make_agent_with_responses([_response_text("ok")], tmp_path, max_history_chars=400)
+    agent, mock = _make_agent_with_responses(
+        [_response_text("ok")], tmp_path, max_history_chars=400
+    )
     # Pre-load a long history file.
     hist = ConversationHistory(agent._paths.session_file(agent.id, "s1"))
     hist.append({"role": "system", "content": "S"})
@@ -627,8 +620,7 @@ async def test_truncation_drops_old_turns(tmp_path) -> None:  # type: ignore[no-
     assert sent_messages[0]["role"] == "system"
     # Very first user/asst pair should have been dropped.
     contents = " ".join(
-        m.get("content", "") if isinstance(m.get("content"), str) else ""
-        for m in sent_messages
+        m.get("content", "") if isinstance(m.get("content"), str) else "" for m in sent_messages
     )
     assert "user-0-" not in contents
 
@@ -667,7 +659,9 @@ async def test_retry_recovers_from_503(tmp_path) -> None:  # type: ignore[no-unt
         def raise_for_status(self) -> None:
             if self.status >= 400:
                 raise _aiohttp.ClientResponseError(
-                    request_info=None, history=(), status=self.status  # type: ignore[arg-type]
+                    request_info=None,
+                    history=(),
+                    status=self.status,  # type: ignore[arg-type]
                 )
 
         async def json(self) -> dict:

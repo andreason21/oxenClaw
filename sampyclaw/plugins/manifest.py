@@ -23,12 +23,8 @@ class Manifest(BaseModel):
     id: str
     name: str | None = None
     channels: list[str] = Field(default_factory=list)
-    channel_env_vars: dict[str, list[str]] = Field(
-        default_factory=dict, alias="channelEnvVars"
-    )
-    config_schema: dict[str, Any] = Field(
-        default_factory=dict, alias="configSchema"
-    )
+    channel_env_vars: dict[str, list[str]] = Field(default_factory=dict, alias="channelEnvVars")
+    config_schema: dict[str, Any] = Field(default_factory=dict, alias="configSchema")
 
     @classmethod
     def from_path(cls, path: str | Path) -> Manifest:

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import pytest
@@ -10,7 +9,6 @@ import pytest
 from sampyclaw.clawhub.frontmatter import parse_skill_text
 from sampyclaw.clawhub.loader import InstalledSkill
 from sampyclaw.clawhub.runtime import (
-    WorkspaceConfig,
     prepare_skill_runtime,
     resolve_env_overrides,
 )
@@ -51,9 +49,7 @@ def test_resolve_expands_dollar_var() -> None:
 
 
 def test_resolve_expands_braced_form() -> None:
-    out = resolve_env_overrides(
-        {"K": "prefix-${X}-suffix"}, host_env={"X": "MID"}
-    )
+    out = resolve_env_overrides({"K": "prefix-${X}-suffix"}, host_env={"X": "MID"})
     assert out == {"K": "prefix-MID-suffix"}
 
 
@@ -93,9 +89,7 @@ def test_workspace_ephemeral_created_and_removed(tmp_path: Path) -> None:
 
 
 def test_workspace_persistent_kind_persists(tmp_path: Path) -> None:
-    skill = _skill(
-        "openclaw:\n  workspace:\n    kind: persistent\n"
-    )
+    skill = _skill("openclaw:\n  workspace:\n    kind: persistent\n")
     paths = _paths(tmp_path)
     with prepare_skill_runtime(skill, paths=paths) as rt:
         assert rt.config.kind == "persistent"
@@ -107,18 +101,12 @@ def test_workspace_persistent_kind_persists(tmp_path: Path) -> None:
 
 
 def test_workspace_retains_on_error_when_configured(tmp_path: Path) -> None:
-    skill = _skill(
-        "openclaw:\n"
-        "  workspace:\n"
-        "    kind: ephemeral\n"
-        "    retain_on_error: true\n"
-    )
+    skill = _skill("openclaw:\n  workspace:\n    kind: ephemeral\n    retain_on_error: true\n")
     paths = _paths(tmp_path)
     captured: list[Path] = []
-    with pytest.raises(RuntimeError):
-        with prepare_skill_runtime(skill, paths=paths) as rt:
-            captured.append(rt.workspace_dir)
-            raise RuntimeError("boom")
+    with pytest.raises(RuntimeError), prepare_skill_runtime(skill, paths=paths) as rt:
+        captured.append(rt.workspace_dir)
+        raise RuntimeError("boom")
     # Retained because the config asked for it.
     assert captured[0].exists()
 
@@ -127,25 +115,19 @@ def test_workspace_removed_on_error_when_not_retained(tmp_path: Path) -> None:
     skill = _skill()  # default: retain_on_error=False
     paths = _paths(tmp_path)
     captured: list[Path] = []
-    with pytest.raises(RuntimeError):
-        with prepare_skill_runtime(skill, paths=paths) as rt:
-            captured.append(rt.workspace_dir)
-            raise RuntimeError("nope")
+    with pytest.raises(RuntimeError), prepare_skill_runtime(skill, paths=paths) as rt:
+        captured.append(rt.workspace_dir)
+        raise RuntimeError("nope")
     assert not captured[0].exists()
 
 
 # ─── env on the runtime ─────────────────────────────────────────────
 
 
-def test_runtime_env_includes_skill_overrides(
-    tmp_path: Path, monkeypatch
-) -> None:  # type: ignore[no-untyped-def]
+def test_runtime_env_includes_skill_overrides(tmp_path: Path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
     monkeypatch.setenv("VAULT_TOKEN", "secret-xyz")
     skill = _skill(
-        "openclaw:\n"
-        "  env_overrides:\n"
-        "    MY_TOKEN: \"$VAULT_TOKEN\"\n"
-        "    LOG_LEVEL: \"debug\"\n"
+        'openclaw:\n  env_overrides:\n    MY_TOKEN: "$VAULT_TOKEN"\n    LOG_LEVEL: "debug"\n'
     )
     paths = _paths(tmp_path)
     with prepare_skill_runtime(skill, paths=paths) as rt:
@@ -157,15 +139,9 @@ def test_runtime_env_includes_skill_overrides(
 
 
 def test_runtime_extra_env_overrides_skill_env(tmp_path: Path) -> None:
-    skill = _skill(
-        "openclaw:\n"
-        "  env_overrides:\n"
-        "    X: \"from-skill\"\n"
-    )
+    skill = _skill('openclaw:\n  env_overrides:\n    X: "from-skill"\n')
     paths = _paths(tmp_path)
-    with prepare_skill_runtime(
-        skill, paths=paths, extra_env={"X": "from-caller"}
-    ) as rt:
+    with prepare_skill_runtime(skill, paths=paths, extra_env={"X": "from-caller"}) as rt:
         assert rt.env["X"] == "from-caller"
 
 

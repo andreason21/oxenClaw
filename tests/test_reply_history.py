@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import pytest
-
 from sampyclaw.channels.reply_history import (
     CURRENT_MESSAGE_MARKER,
     DEFAULT_GROUP_HISTORY_LIMIT,
     HISTORY_CONTEXT_MARKER,
-    HistoryEntry,
     MAX_HISTORY_KEYS,
+    HistoryEntry,
     build_history_context,
     build_history_context_from_entries,
     build_history_context_from_map,
@@ -22,16 +20,13 @@ from sampyclaw.channels.reply_history import (
     record_pending_history_entry_if_enabled,
 )
 
-
 # ─── append + limit ─────────────────────────────────────────────────
 
 
 def test_record_appends_and_caps_per_key_list() -> None:
     m: dict[str, list[HistoryEntry]] = {}
     for i in range(5):
-        record_pending_history_entry(
-            m, "k1", HistoryEntry(sender="u", body=f"msg{i}"), limit=3
-        )
+        record_pending_history_entry(m, "k1", HistoryEntry(sender="u", body=f"msg{i}"), limit=3)
     assert [e.body for e in m["k1"]] == ["msg2", "msg3", "msg4"]
 
 
@@ -130,21 +125,15 @@ def test_build_from_entries_chains_format_and_wrap() -> None:
 
 def test_build_from_map_uses_key_lookup() -> None:
     m = {"k1": [HistoryEntry(sender="alice", body="hi")]}
-    out = build_history_context_from_map(
-        history_map=m, key="k1", current_message="@bot ?"
-    )
+    out = build_history_context_from_map(history_map=m, key="k1", current_message="@bot ?")
     assert "alice: hi" in out
 
 
 def test_build_from_map_missing_key_returns_just_current() -> None:
-    out = build_history_context_from_map(
-        history_map={}, key="absent", current_message="hi"
-    )
+    out = build_history_context_from_map(history_map={}, key="absent", current_message="hi")
     assert out == "hi"
 
 
 def test_build_pending_from_none_map_short_circuits() -> None:
-    out = build_pending_history_context_from_map(
-        history_map=None, key="any", current_message="hi"
-    )
+    out = build_pending_history_context_from_map(history_map=None, key="any", current_message="hi")
     assert out == "hi"

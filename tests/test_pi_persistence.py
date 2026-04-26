@@ -32,9 +32,7 @@ async def test_create_get_save_round_trip(tmp_path: Path) -> None:
             ],
             stop_reason="tool_use",
         ),
-        ToolResultMessage(
-            results=[ToolResultBlock(tool_use_id="t1", content="x=1")]
-        ),
+        ToolResultMessage(results=[ToolResultBlock(tool_use_id="t1", content="x=1")]),
     ]
     s.compactions.append(
         CompactionEntry(

@@ -22,7 +22,6 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 import sampyclaw.pi.providers  # noqa: F401  registers stream wrappers
-
 from sampyclaw.agents.base import AgentContext
 from sampyclaw.agents.tools import ToolRegistry
 from sampyclaw.clawhub.loader import format_skills_for_prompt, load_installed_skills
@@ -167,9 +166,7 @@ class PiAgent:
         dropped_notes: list[str] = []
         if inbound.media:
             if model_supports_images(self._model.id):
-                images, dropped_notes = await normalize_inbound_images(
-                    inbound.media
-                )
+                images, dropped_notes = await normalize_inbound_images(inbound.media)
             else:
                 photo_count = sum(1 for m in inbound.media if m.kind == "photo")
                 if photo_count:
@@ -202,9 +199,7 @@ class PiAgent:
 
         observer = self._observers.setdefault(session.id, CacheObserver())
         breakpoints = (
-            self._runtime.cache_control_breakpoints
-            if should_apply_cache_markers(observer)
-            else 0
+            self._runtime.cache_control_breakpoints if should_apply_cache_markers(observer) else 0
         )
 
         # Per-turn config snapshot — cache breakpoints adapted from observer.

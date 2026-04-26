@@ -58,8 +58,11 @@ class CanvasStore:
             existing = self._states.get(agent_id)
             version = (existing.version + 1) if existing else 1
             state = CanvasState(
-                html=html, title=title, version=version,
-                updated_at=time.time(), hidden=False,
+                html=html,
+                title=title,
+                version=version,
+                updated_at=time.time(),
+                hidden=False,
             )
             self._states[agent_id] = state
             self._states.move_to_end(agent_id)

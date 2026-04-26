@@ -121,9 +121,7 @@ async def test_list_sessions_returns_metadata_sorted_recent_first(tmp_path) -> N
     sessions_dir = paths.agent_dir("a") / "sessions"
     sessions_dir.mkdir(parents=True, exist_ok=True)
     (sessions_dir / "old.json").write_text('{"messages": []}')
-    (sessions_dir / "new.json").write_text(
-        '{"messages": [{"role":"user","content":"x"}]}'
-    )
+    (sessions_dir / "new.json").write_text('{"messages": [{"role":"user","content":"x"}]}')
     os.utime(sessions_dir / "old.json", (time.time() - 1000, time.time() - 1000))
 
     resp = await router.dispatch(
@@ -136,6 +134,4 @@ async def test_list_sessions_returns_metadata_sorted_recent_first(tmp_path) -> N
     )
     keys = [s["session_key"] for s in resp.result["sessions"]]
     assert keys == ["new", "old"]
-    assert all(
-        "size" in s and "modified_at" in s for s in resp.result["sessions"]
-    )
+    assert all("size" in s and "modified_at" in s for s in resp.result["sessions"])

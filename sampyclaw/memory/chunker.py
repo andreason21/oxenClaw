@@ -72,9 +72,7 @@ def _split_by_headings(lines: list[str]) -> list[tuple[int, int, str]]:
     return sections
 
 
-def _split_oversize(
-    body: str, start_line: int, max_chars: int
-) -> list[tuple[int, int, str]]:
+def _split_oversize(body: str, start_line: int, max_chars: int) -> list[tuple[int, int, str]]:
     """Subdivide an oversize section by blank-line paragraphs.
 
     Hard-splits a paragraph that is still over the limit at character
@@ -108,9 +106,7 @@ def _split_oversize(
     return out
 
 
-def _hard_split(
-    text: str, start_line: int, max_chars: int
-) -> list[tuple[int, int, str]]:
+def _hard_split(text: str, start_line: int, max_chars: int) -> list[tuple[int, int, str]]:
     """Split a single oversize blob at character boundaries.
 
     Lines are tracked through the slice so each output piece carries

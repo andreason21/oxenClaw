@@ -4,6 +4,7 @@ plus a regression check that WS upgrade still works on the same port."""
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import socket
 from urllib.request import Request, urlopen
@@ -45,9 +46,13 @@ def _http_get(url: str) -> tuple[int, dict, bytes]:
             return resp.status, dict(resp.headers), resp.read()
     except Exception as exc:  # urllib raises HTTPError on non-2xx
         if hasattr(exc, "code"):
-            return exc.code, dict(getattr(exc, "headers", {}) or {}), getattr(  # type: ignore[union-attr]
-                exc, "read", lambda: b""
-            )()
+            return (
+                exc.code,
+                dict(getattr(exc, "headers", {}) or {}),
+                getattr(  # type: ignore[union-attr]
+                    exc, "read", lambda: b""
+                )(),
+            )
         raise
 
 
@@ -60,17 +65,13 @@ async def _run_with_server(router: Router, fn) -> None:  # type: ignore[no-untyp
         await fn(port, server)
     finally:
         task.cancel()
-        try:
+        with contextlib.suppress(asyncio.CancelledError):
             await task
-        except asyncio.CancelledError:
-            pass
 
 
 async def test_dashboard_root_serves_html(router: Router) -> None:
     async def _check(port: int, _server: GatewayServer) -> None:
-        status, headers, body = await asyncio.to_thread(
-            _http_get, f"http://127.0.0.1:{port}/"
-        )
+        status, headers, body = await asyncio.to_thread(_http_get, f"http://127.0.0.1:{port}/")
         assert status == 200
         assert "text/html" in headers.get("Content-Type", "")
         assert b"<!DOCTYPE html>" in body[:64]
@@ -82,9 +83,7 @@ async def test_dashboard_root_serves_html(router: Router) -> None:
 async def test_dashboard_alias_paths(router: Router) -> None:
     async def _check(port: int, _server: GatewayServer) -> None:
         for path in ("/dashboard", "/dashboard.html", "/app.html"):
-            status, _, body = await asyncio.to_thread(
-                _http_get, f"http://127.0.0.1:{port}{path}"
-            )
+            status, _, body = await asyncio.to_thread(_http_get, f"http://127.0.0.1:{port}{path}")
             assert status == 200, path
             assert b"<!DOCTYPE html>" in body[:64], path
 
@@ -113,16 +112,12 @@ async def test_static_css_and_js(router: Router) -> None:
 async def test_health_endpoint(router: Router) -> None:
     async def _check(port: int, _server: GatewayServer) -> None:
         # `/health` is a legacy alias.
-        status, _, body = await asyncio.to_thread(
-            _http_get, f"http://127.0.0.1:{port}/health"
-        )
+        status, _, body = await asyncio.to_thread(_http_get, f"http://127.0.0.1:{port}/health")
         assert status == 200
         assert b"ok" in body
 
         # `/healthz` is the canonical liveness endpoint.
-        status, _, body = await asyncio.to_thread(
-            _http_get, f"http://127.0.0.1:{port}/healthz"
-        )
+        status, _, body = await asyncio.to_thread(_http_get, f"http://127.0.0.1:{port}/healthz")
         assert status == 200
         assert b"ok" in body
 
@@ -160,7 +155,7 @@ async def test_readyz_returns_503_when_critical_probe_fails(
     task = asyncio.create_task(server.serve(host="127.0.0.1", port=port))
     try:
         await asyncio.sleep(0.1)
-        status, headers, body = await asyncio.to_thread(
+        status, _headers, body = await asyncio.to_thread(
             _http_get, f"http://127.0.0.1:{port}/readyz"
         )
         assert status == 503
@@ -169,10 +164,8 @@ async def test_readyz_returns_503_when_critical_probe_fails(
         assert decoded["probes"][0]["name"] == "db"
     finally:
         task.cancel()
-        try:
+        with contextlib.suppress(asyncio.CancelledError):
             await task
-        except asyncio.CancelledError:
-            pass
 
 
 async def test_metrics_endpoint_returns_prometheus_text(router: Router) -> None:
@@ -187,7 +180,6 @@ async def test_metrics_endpoint_returns_prometheus_text(router: Router) -> None:
         # The registry exposes our standard counters even at zero.
         assert "TYPE sampyclaw_ws_rpc_total counter" in text
         assert "TYPE sampyclaw_ws_connections_active gauge" in text
-
 
     await _run_with_server(router, _check)
 
@@ -218,9 +210,7 @@ async def test_metrics_increments_after_ws_rpc(router: Router) -> None:
             await asyncio.wait_for(ws.recv(), timeout=2.0)
 
         await asyncio.sleep(0.05)
-        status, _, body = await asyncio.to_thread(
-            _http_get, f"http://127.0.0.1:{port}/metrics"
-        )
+        status, _, body = await asyncio.to_thread(_http_get, f"http://127.0.0.1:{port}/metrics")
         assert status == 200
         text = body.decode("utf-8")
         assert 'sampyclaw_ws_rpc_total{method="chat.send"} 1.0' in text
@@ -230,9 +220,7 @@ async def test_metrics_increments_after_ws_rpc(router: Router) -> None:
 
 async def test_unknown_path_404(router: Router) -> None:
     async def _check(port: int, _server: GatewayServer) -> None:
-        status, _, _ = await asyncio.to_thread(
-            _http_get, f"http://127.0.0.1:{port}/no-such-thing"
-        )
+        status, _, _ = await asyncio.to_thread(_http_get, f"http://127.0.0.1:{port}/no-such-thing")
         assert status == 404
 
     await _run_with_server(router, _check)
@@ -276,22 +264,16 @@ async def test_custom_static_routes(router: Router) -> None:
     task = asyncio.create_task(server.serve(host="127.0.0.1", port=port))
     try:
         await asyncio.sleep(0.1)
-        status, _, body = await asyncio.to_thread(
-            _http_get, f"http://127.0.0.1:{port}/custom"
-        )
+        status, _, body = await asyncio.to_thread(_http_get, f"http://127.0.0.1:{port}/custom")
         assert status == 200
         assert b"custom!" in body
         # Default routes are NOT inherited when caller supplies their own.
-        status404, _, _ = await asyncio.to_thread(
-            _http_get, f"http://127.0.0.1:{port}/"
-        )
+        status404, _, _ = await asyncio.to_thread(_http_get, f"http://127.0.0.1:{port}/")
         assert status404 == 404
     finally:
         task.cancel()
-        try:
+        with contextlib.suppress(asyncio.CancelledError):
             await task
-        except asyncio.CancelledError:
-            pass
 
 
 def test_static_assets_loadable_from_package() -> None:
@@ -337,17 +319,13 @@ async def test_dashboard_html_loads_unauthenticated(
     task = asyncio.create_task(server.serve(host="127.0.0.1", port=port))
     try:
         await asyncio.sleep(0.1)
-        status, _, body = await asyncio.to_thread(
-            _http_get, f"http://127.0.0.1:{port}/"
-        )
+        status, _, body = await asyncio.to_thread(_http_get, f"http://127.0.0.1:{port}/")
         assert status == 200
         assert b"<!DOCTYPE html>" in body[:64]
     finally:
         task.cancel()
-        try:
+        with contextlib.suppress(asyncio.CancelledError):
             await task
-        except asyncio.CancelledError:
-            pass
 
 
 async def test_dashboard_accepts_query_token_and_sets_cookie(
@@ -371,10 +349,8 @@ async def test_dashboard_accepts_query_token_and_sets_cookie(
         assert "SameSite=Strict" in cookie
     finally:
         task.cancel()
-        try:
+        with contextlib.suppress(asyncio.CancelledError):
             await task
-        except asyncio.CancelledError:
-            pass
 
 
 async def test_dashboard_query_with_wrong_token_does_not_set_cookie(
@@ -395,10 +371,8 @@ async def test_dashboard_query_with_wrong_token_does_not_set_cookie(
         assert "Set-Cookie" not in headers and "set-cookie" not in headers
     finally:
         task.cancel()
-        try:
+        with contextlib.suppress(asyncio.CancelledError):
             await task
-        except asyncio.CancelledError:
-            pass
 
 
 async def test_static_assets_load_anonymously(router: Router) -> None:
@@ -417,10 +391,8 @@ async def test_static_assets_load_anonymously(router: Router) -> None:
             assert len(body) > 0
     finally:
         task.cancel()
-        try:
+        with contextlib.suppress(asyncio.CancelledError):
             await task
-        except asyncio.CancelledError:
-            pass
 
 
 async def test_health_metrics_remain_unauthenticated(router: Router) -> None:
@@ -432,16 +404,12 @@ async def test_health_metrics_remain_unauthenticated(router: Router) -> None:
     try:
         await asyncio.sleep(0.1)
         for path in ("/healthz", "/readyz", "/metrics", "/health"):
-            status, _, _ = await asyncio.to_thread(
-                _http_get_full, f"http://127.0.0.1:{port}{path}"
-            )
+            status, _, _ = await asyncio.to_thread(_http_get_full, f"http://127.0.0.1:{port}{path}")
             assert status == 200, f"{path} should not require token"
     finally:
         task.cancel()
-        try:
+        with contextlib.suppress(asyncio.CancelledError):
             await task
-        except asyncio.CancelledError:
-            pass
 
 
 async def test_ws_upgrade_still_requires_token_when_auth_configured(
@@ -462,9 +430,7 @@ async def test_ws_upgrade_still_requires_token_when_auth_configured(
             async with ws_connect(f"ws://127.0.0.1:{port}/"):
                 pass
         # With the right token in the WS URL → upgrade succeeds.
-        async with ws_connect(
-            f"ws://127.0.0.1:{port}/?token=secret123"
-        ) as ws:
+        async with ws_connect(f"ws://127.0.0.1:{port}/?token=secret123") as ws:
             await ws.send(
                 json.dumps(
                     {
@@ -483,10 +449,8 @@ async def test_ws_upgrade_still_requires_token_when_auth_configured(
             await asyncio.wait_for(ws.recv(), timeout=2.0)
     finally:
         task.cancel()
-        try:
+        with contextlib.suppress(asyncio.CancelledError):
             await task
-        except asyncio.CancelledError:
-            pass
 
 
 # ─── Origin allowlist (CSRF defence on WS upgrade) ────────────────────
@@ -523,10 +487,14 @@ async def test_ws_upgrade_rejected_for_unlisted_origin(router: Router) -> None:
             await ws.send(
                 json.dumps(
                     {
-                        "jsonrpc": "2.0", "id": 1, "method": "chat.send",
+                        "jsonrpc": "2.0",
+                        "id": 1,
+                        "method": "chat.send",
                         "params": {
-                            "channel": "telegram", "account_id": "main",
-                            "chat_id": "1", "text": "hi",
+                            "channel": "telegram",
+                            "account_id": "main",
+                            "chat_id": "1",
+                            "text": "hi",
                         },
                     }
                 )
@@ -534,8 +502,8 @@ async def test_ws_upgrade_rejected_for_unlisted_origin(router: Router) -> None:
             await asyncio.wait_for(ws.recv(), timeout=2.0)
     finally:
         task.cancel()
-        try: await task
-        except asyncio.CancelledError: pass
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
 
 
 async def test_ws_upgrade_without_origin_passes_when_allowlist_set(router: Router) -> None:
@@ -555,13 +523,21 @@ async def test_ws_upgrade_without_origin_passes_when_allowlist_set(router: Route
         await asyncio.sleep(0.1)
         # No Origin header at all + valid token → upgrade succeeds.
         async with ws_connect(f"ws://127.0.0.1:{port}/?token=secret123") as ws:
-            await ws.send(json.dumps({"jsonrpc": "2.0", "id": 1, "method": "chat.send",
-                "params": {"channel": "t", "account_id": "m", "chat_id": "1", "text": "x"}}))
+            await ws.send(
+                json.dumps(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": 1,
+                        "method": "chat.send",
+                        "params": {"channel": "t", "account_id": "m", "chat_id": "1", "text": "x"},
+                    }
+                )
+            )
             await asyncio.wait_for(ws.recv(), timeout=2.0)
     finally:
         task.cancel()
-        try: await task
-        except asyncio.CancelledError: pass
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
 
 
 async def test_allowed_origins_normalise_trailing_slash(router: Router) -> None:
@@ -572,7 +548,7 @@ async def test_allowed_origins_normalise_trailing_slash(router: Router) -> None:
     server = GatewayServer(
         router,
         auth_token="secret123",
-        allowed_origins=["http://localhost:7331/  "],   # space + slash, both stripped
+        allowed_origins=["http://localhost:7331/  "],  # space + slash, both stripped
     )
     port = _pick_port()
     task = asyncio.create_task(server.serve(host="127.0.0.1", port=port))
@@ -582,13 +558,21 @@ async def test_allowed_origins_normalise_trailing_slash(router: Router) -> None:
             f"ws://127.0.0.1:{port}/?token=secret123",
             additional_headers=[("Origin", "http://localhost:7331")],
         ) as ws:
-            await ws.send(json.dumps({"jsonrpc": "2.0", "id": 1, "method": "chat.send",
-                "params": {"channel": "t", "account_id": "m", "chat_id": "1", "text": "x"}}))
+            await ws.send(
+                json.dumps(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": 1,
+                        "method": "chat.send",
+                        "params": {"channel": "t", "account_id": "m", "chat_id": "1", "text": "x"},
+                    }
+                )
+            )
             await asyncio.wait_for(ws.recv(), timeout=2.0)
     finally:
         task.cancel()
-        try: await task
-        except asyncio.CancelledError: pass
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
 
 
 def test_allowed_origins_resolved_from_env(monkeypatch) -> None:  # type: ignore[no-untyped-def]
@@ -596,6 +580,7 @@ def test_allowed_origins_resolved_from_env(monkeypatch) -> None:  # type: ignore
     isn't passed."""
     monkeypatch.setenv("SAMPYCLAW_ALLOWED_ORIGINS", "tauri://localhost, http://localhost:7331")
     from sampyclaw.gateway.server import _resolve_allowed_origins
+
     out = _resolve_allowed_origins(None)
     assert out == frozenset({"tauri://localhost", "http://localhost:7331"})
 
@@ -603,12 +588,14 @@ def test_allowed_origins_resolved_from_env(monkeypatch) -> None:  # type: ignore
 def test_allowed_origins_explicit_kwarg_overrides_env(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     monkeypatch.setenv("SAMPYCLAW_ALLOWED_ORIGINS", "ignored://from-env")
     from sampyclaw.gateway.server import _resolve_allowed_origins
+
     out = _resolve_allowed_origins(["only://this"])
     assert out == frozenset({"only://this"})
 
 
 def test_allowed_origins_empty_means_no_check() -> None:
     from sampyclaw.gateway.server import _resolve_allowed_origins
+
     assert _resolve_allowed_origins(None) is None
     assert _resolve_allowed_origins([]) is None
     assert _resolve_allowed_origins(["", "   "]) is None

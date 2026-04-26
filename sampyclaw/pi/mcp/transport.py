@@ -95,28 +95,20 @@ class StdioTransport:
 
     async def send(self, message: dict[str, Any]) -> None:
         if self._closed or self._proc is None or self._proc.stdin is None:
-            raise TransportClosed(
-                f"stdio transport for '{self.server_name}' is closed"
-            )
+            raise TransportClosed(f"stdio transport for '{self.server_name}' is closed")
         payload = json.dumps(message, separators=(",", ":")) + "\n"
         try:
             self._proc.stdin.write(payload.encode("utf-8"))
             await self._proc.stdin.drain()
         except (BrokenPipeError, ConnectionResetError) as exc:
-            raise TransportClosed(
-                f"stdio transport for '{self.server_name}' broke: {exc}"
-            ) from exc
+            raise TransportClosed(f"stdio transport for '{self.server_name}' broke: {exc}") from exc
 
     async def receive(self) -> dict[str, Any]:
         if self._proc is None or self._proc.stdout is None:
-            raise TransportClosed(
-                f"stdio transport for '{self.server_name}' is closed"
-            )
+            raise TransportClosed(f"stdio transport for '{self.server_name}' is closed")
         line = await self._proc.stdout.readline()
         if not line:
-            raise TransportClosed(
-                f"stdio transport for '{self.server_name}' closed by peer"
-            )
+            raise TransportClosed(f"stdio transport for '{self.server_name}' closed by peer")
         try:
             decoded = line.decode("utf-8")
             return json.loads(decoded)
@@ -139,7 +131,7 @@ class StdioTransport:
                     proc.terminate()
                     try:
                         await asyncio.wait_for(proc.wait(), timeout=2.0)
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         with suppress(ProcessLookupError):
                             proc.kill()
                             await proc.wait()
@@ -190,9 +182,7 @@ class HttpSseTransport:
         if self._config.headers:
             headers.update(self._config.headers)
         try:
-            async with self._session.get(
-                self._config.url, headers=headers
-            ) as resp:
+            async with self._session.get(self._config.url, headers=headers) as resp:
                 if resp.status >= 400:
                     body = await resp.text()
                     logger.warning(
@@ -211,9 +201,7 @@ class HttpSseTransport:
                     return
                 buffer: list[str] = []
                 async for raw_line in resp.content:
-                    line = raw_line.decode("utf-8", errors="replace").rstrip(
-                        "\r\n"
-                    )
+                    line = raw_line.decode("utf-8", errors="replace").rstrip("\r\n")
                     if line == "":
                         if buffer:
                             await self._dispatch_sse_event(buffer)
@@ -225,13 +213,9 @@ class HttpSseTransport:
         except asyncio.CancelledError:
             return
         except Exception as exc:
-            logger.warning(
-                "mcp:%s SSE loop crashed: %s", self.server_name, exc
-            )
+            logger.warning("mcp:%s SSE loop crashed: %s", self.server_name, exc)
             with suppress(asyncio.QueueFull):
-                await self._inbox.put(
-                    {"_transport_error": True, "reason": str(exc)}
-                )
+                await self._inbox.put({"_transport_error": True, "reason": str(exc)})
 
     async def _dispatch_sse_event(self, lines: list[str]) -> None:
         data_parts: list[str] = []
@@ -259,23 +243,17 @@ class HttpSseTransport:
 
     async def send(self, message: dict[str, Any]) -> None:
         if self._closed or self._session is None:
-            raise TransportClosed(
-                f"http transport for '{self.server_name}' is closed"
-            )
+            raise TransportClosed(f"http transport for '{self.server_name}' is closed")
         headers = {
             "Content-Type": "application/json",
             "Accept": "application/json, text/event-stream",
         }
         if self._config.headers:
             headers.update(self._config.headers)
-        async with self._session.post(
-            self._config.url, json=message, headers=headers
-        ) as resp:
+        async with self._session.post(self._config.url, json=message, headers=headers) as resp:
             if resp.status >= 400:
                 body = await resp.text()
-                raise TransportClosed(
-                    f"http POST {resp.status}: {body[:500]}"
-                )
+                raise TransportClosed(f"http POST {resp.status}: {body[:500]}")
             ctype = resp.headers.get("Content-Type", "")
             if "application/json" in ctype:
                 payload = await resp.json()
@@ -284,14 +262,11 @@ class HttpSseTransport:
 
     async def receive(self) -> dict[str, Any]:
         if self._closed and self._inbox.empty():
-            raise TransportClosed(
-                f"http transport for '{self.server_name}' is closed"
-            )
+            raise TransportClosed(f"http transport for '{self.server_name}' is closed")
         msg = await self._inbox.get()
         if msg.get("_transport_error"):
             raise TransportClosed(
-                f"http transport for '{self.server_name}': "
-                f"{msg.get('reason') or 'transport error'}"
+                f"http transport for '{self.server_name}': {msg.get('reason') or 'transport error'}"
             )
         return msg
 

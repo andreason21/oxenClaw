@@ -34,7 +34,6 @@ from sampyclaw.pi.session import (
     SessionEntry,
 )
 
-
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS sessions (
   id TEXT PRIMARY KEY,
@@ -173,9 +172,7 @@ class SQLiteSessionManager:
         return s
 
     async def get(self, session_id: str) -> AgentSession | None:
-        row = self._conn.execute(
-            "SELECT * FROM sessions WHERE id = ?", (session_id,)
-        ).fetchone()
+        row = self._conn.execute("SELECT * FROM sessions WHERE id = ?", (session_id,)).fetchone()
         if row is None:
             return None
         msgs_rows = self._conn.execute(
@@ -252,20 +249,16 @@ class SQLiteSessionManager:
             c.execute("DELETE FROM messages WHERE session_id = ?", (session.id,))
             if session.messages:
                 c.executemany(
-                    "INSERT INTO messages (session_id, idx, payload_json) "
-                    "VALUES (?, ?, ?)",
+                    "INSERT INTO messages (session_id, idx, payload_json) VALUES (?, ?, ?)",
                     [
                         (session.id, i, _serialize_message(m))
                         for i, m in enumerate(session.messages)
                     ],
                 )
-            c.execute(
-                "DELETE FROM compactions WHERE session_id = ?", (session.id,)
-            )
+            c.execute("DELETE FROM compactions WHERE session_id = ?", (session.id,))
             if session.compactions:
                 c.executemany(
-                    "INSERT INTO compactions (session_id, idx, entry_json) "
-                    "VALUES (?, ?, ?)",
+                    "INSERT INTO compactions (session_id, idx, entry_json) VALUES (?, ?, ?)",
                     [
                         (session.id, i, _serialize_compaction(e))
                         for i, e in enumerate(session.compactions)
@@ -309,16 +302,12 @@ class SQLiteAuthStorage:
         self._conn.commit()
 
     async def delete(self, provider: ProviderId) -> bool:
-        cur = self._conn.execute(
-            "DELETE FROM credentials WHERE provider = ?", (provider,)
-        )
+        cur = self._conn.execute("DELETE FROM credentials WHERE provider = ?", (provider,))
         self._conn.commit()
         return cur.rowcount > 0
 
     async def list_providers(self) -> list[ProviderId]:
-        rows = self._conn.execute(
-            "SELECT provider FROM credentials ORDER BY provider"
-        ).fetchall()
+        rows = self._conn.execute("SELECT provider FROM credentials ORDER BY provider").fetchall()
         return [r["provider"] for r in rows]
 
 

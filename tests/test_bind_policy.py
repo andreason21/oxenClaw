@@ -18,23 +18,40 @@ from sampyclaw.gateway.bind_policy import (
     validate_bind_host,
 )
 
-
 # ─── classifiers ──────────────────────────────────────────────────────
 
 
-@pytest.mark.parametrize("host", [
-    "127.0.0.1", "127.0.0.2", "127.255.255.255",
-    "::1", "localhost", "Localhost", "  localhost  ",
-    "ip6-localhost", "ip6-loopback",
-])
+@pytest.mark.parametrize(
+    "host",
+    [
+        "127.0.0.1",
+        "127.0.0.2",
+        "127.255.255.255",
+        "::1",
+        "localhost",
+        "Localhost",
+        "  localhost  ",
+        "ip6-localhost",
+        "ip6-loopback",
+    ],
+)
 def test_loopback_hosts_are_classified(host: str) -> None:
     assert is_loopback_host(host)
 
 
-@pytest.mark.parametrize("host", [
-    "0.0.0.0", "::", "192.168.1.5", "10.0.0.1", "203.0.113.7",
-    "internal-vllm.lan", "example.com", "",
-])
+@pytest.mark.parametrize(
+    "host",
+    [
+        "0.0.0.0",
+        "::",
+        "192.168.1.5",
+        "10.0.0.1",
+        "203.0.113.7",
+        "internal-vllm.lan",
+        "example.com",
+        "",
+    ],
+)
 def test_non_loopback_hosts_are_not_classified_as_loopback(host: str) -> None:
     assert not is_loopback_host(host)
 
@@ -86,6 +103,7 @@ def test_hostname_refused_without_opt_in_even_if_resolves_to_loopback(monkeypatc
 
 def test_explicit_flag_allows_non_loopback(monkeypatch, caplog) -> None:  # type: ignore[no-untyped-def]
     import logging
+
     caplog.set_level(logging.WARNING, logger="sampyclaw.gateway.bind_policy")
     monkeypatch.delenv(ENV_OPT_IN, raising=False)
     validate_bind_host("0.0.0.0", allow_non_loopback=True)
@@ -94,6 +112,7 @@ def test_explicit_flag_allows_non_loopback(monkeypatch, caplog) -> None:  # type
 
 def test_env_opt_in_allows_non_loopback(monkeypatch, caplog) -> None:  # type: ignore[no-untyped-def]
     import logging
+
     caplog.set_level(logging.WARNING, logger="sampyclaw.gateway.bind_policy")
     monkeypatch.setenv(ENV_OPT_IN, "1")
     validate_bind_host("192.168.1.10")

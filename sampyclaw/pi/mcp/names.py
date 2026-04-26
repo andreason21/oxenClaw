@@ -66,18 +66,14 @@ def build_safe_tool_name(
     in `reserved_names`. Mutation-free with respect to `reserved_names`.
     """
     cleaned_tool = sanitize_tool_name(tool_name)
-    max_tool_chars = max(
-        1, TOOL_NAME_MAX_TOTAL - len(server_name) - len(TOOL_NAME_SEPARATOR)
-    )
+    max_tool_chars = max(1, TOOL_NAME_MAX_TOTAL - len(server_name) - len(TOOL_NAME_SEPARATOR))
     truncated_tool = cleaned_tool[:max_tool_chars] or "tool"
     candidate_tool = truncated_tool
     candidate = f"{server_name}{TOOL_NAME_SEPARATOR}{candidate_tool}"
     n = 2
     while candidate.lower() in reserved_names:
         suffix = f"-{n}"
-        head = (truncated_tool or "tool")[
-            : max(1, max_tool_chars - len(suffix))
-        ]
+        head = (truncated_tool or "tool")[: max(1, max_tool_chars - len(suffix))]
         candidate_tool = f"{head}{suffix}"
         candidate = f"{server_name}{TOOL_NAME_SEPARATOR}{candidate_tool}"
         n += 1

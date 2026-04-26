@@ -29,11 +29,11 @@ from sampyclaw.observability.readiness import (
 )
 
 __all__ = [
+    "METRICS",
     "Counter",
     "Gauge",
     "Histogram",
     "JsonFormatter",
-    "METRICS",
     "Metrics",
     "ReadinessChecker",
     "ReadinessProbe",

@@ -18,18 +18,17 @@ which is OpenAI-shape compatible.
 
 from __future__ import annotations
 
-import asyncio
 import json
 from collections.abc import AsyncIterator
 
 import aiohttp
 
 from sampyclaw.pi.models import Context
+from sampyclaw.pi.providers._openai_shared import stream_openai_compatible
 from sampyclaw.pi.providers.anthropic import (
     RETRYABLE_STATUS,
     build_anthropic_payload,
 )
-from sampyclaw.pi.providers._openai_shared import stream_openai_compatible
 from sampyclaw.pi.streaming import (
     AssistantMessageEvent,
     ErrorEvent,
@@ -75,9 +74,7 @@ async def stream_bedrock(
         if isinstance(ctx.model.extra.get("presigned_url"), str)
         else None
     )
-    url = presigned or (
-        f"{base}/model/{ctx.model.id}/invoke-with-response-stream"
-    )
+    url = presigned or (f"{base}/model/{ctx.model.id}/invoke-with-response-stream")
     headers = {"Content-Type": "application/json", "Accept": "application/json"}
     headers.update(ctx.api.extra_headers)
 
@@ -130,9 +127,7 @@ async def stream_bedrock(
                         if dt == "text_delta":
                             yield TextDeltaEvent(delta=delta.get("text", ""))
                         elif dt == "thinking_delta":
-                            yield ThinkingDeltaEvent(
-                                delta=delta.get("thinking", "")
-                            )
+                            yield ThinkingDeltaEvent(delta=delta.get("thinking", ""))
                         elif dt == "input_json_delta":
                             tid = tool_meta.get(idx, {}).get("id", "")
                             yield ToolUseInputDeltaEvent(
@@ -156,10 +151,8 @@ async def stream_bedrock(
                             stop_emitted = True
                 if not stop_emitted:
                     yield StopEvent(reason="end_turn")
-        except (aiohttp.ClientConnectionError, asyncio.TimeoutError) as exc:
-            yield ErrorEvent(
-                message=f"connection error: {exc}", retryable=True, error=exc
-            )
+        except (TimeoutError, aiohttp.ClientConnectionError) as exc:
+            yield ErrorEvent(message=f"connection error: {exc}", retryable=True, error=exc)
 
 
 register_provider_stream("bedrock", stream_bedrock)

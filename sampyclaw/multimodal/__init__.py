@@ -32,8 +32,8 @@ from sampyclaw.multimodal.inbound import (
 )
 
 __all__ = [
-    "InboundImage",
     "KNOWN_IMAGE_MODELS",
+    "InboundImage",
     "MediaNormalizationError",
     "anthropic_image_block",
     "google_image_part",

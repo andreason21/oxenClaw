@@ -83,9 +83,7 @@ async def test_envelope_from_caption_only() -> None:
 
 
 async def test_envelope_without_text_returns_none() -> None:
-    env = await envelope_from_message(
-        _make_message(text=None, caption=None), account_id="main"
-    )
+    env = await envelope_from_message(_make_message(text=None, caption=None), account_id="main")
     assert env is None
 
 
@@ -125,7 +123,13 @@ def _make_message_with_photo(
             "from": user.model_dump(),
             "caption": caption,
             "photo": [
-                {"file_id": "small", "file_unique_id": "u1", "width": 90, "height": 90, "file_size": 100},
+                {
+                    "file_id": "small",
+                    "file_unique_id": "u1",
+                    "width": 90,
+                    "height": 90,
+                    "file_size": 100,
+                },
                 {
                     "file_id": "large",
                     "file_unique_id": "u2",
@@ -193,7 +197,9 @@ async def test_envelope_drops_oversized_photo_silently() -> None:
         photo_size=50 * 1024 * 1024  # 50 MB — over the 10 MiB cap
     )
     env = await envelope_from_message(
-        msg, account_id="main", bot=bot  # type: ignore[arg-type]
+        msg,
+        account_id="main",
+        bot=bot,  # type: ignore[arg-type]
     )
     # No text, no usable photo → envelope is None (no consumable content).
     assert env is None
@@ -216,9 +222,7 @@ async def test_envelope_drops_unrecognized_format() -> None:
 
 async def test_envelope_skips_photos_when_bot_omitted() -> None:
     """Legacy callers passing no `bot` get text-only behaviour back."""
-    env = await envelope_from_message(
-        _make_message_with_photo(caption="hi"), account_id="main"
-    )
+    env = await envelope_from_message(_make_message_with_photo(caption="hi"), account_id="main")
     assert env is not None
     assert env.text == "hi"
     assert env.media == []

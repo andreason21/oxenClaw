@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import json
-
 import pytest
 from aiohttp import web
 
@@ -32,9 +30,7 @@ async def fake_clawhub(aiohttp_server):  # type: ignore[no-untyped-def]
     @routes.get("/api/v1/skills/{slug}")
     async def _detail(request: web.Request) -> web.Response:
         slug = request.match_info["slug"]
-        return web.json_response(
-            {"skill": {"slug": slug}, "latestVersion": {"version": "9.9.9"}}
-        )
+        return web.json_response({"skill": {"slug": slug}, "latestVersion": {"version": "9.9.9"}})
 
     @routes.get("/api/v1/download")
     async def _download(_: web.Request) -> web.Response:

@@ -20,9 +20,7 @@ def _mock_channel(channel_id: str = "telegram") -> MagicMock:
     ch = MagicMock()
     ch.id = channel_id
     ch.send = AsyncMock(return_value=SendResult(message_id="m1", timestamp=1.0))
-    ch.probe = AsyncMock(
-        return_value=ProbeResult(ok=True, account_id="main", display_name="bot")
-    )
+    ch.probe = AsyncMock(return_value=ProbeResult(ok=True, account_id="main", display_name="bot"))
     ch.aclose = AsyncMock()
     return ch
 

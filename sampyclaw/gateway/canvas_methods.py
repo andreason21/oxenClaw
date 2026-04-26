@@ -99,11 +99,13 @@ def register_canvas_methods(
                 "error": f"html exceeds canvas cap of {ABSOLUTE_MAX_HTML_BYTES} bytes",
             }
         state = store.present(p.agent_id, html=p.html, title=p.title)
-        bus.publish(CanvasEvent(
-            kind="present",
-            agent_id=p.agent_id,
-            payload={"html": p.html, "title": p.title, "version": state.version},
-        ))
+        bus.publish(
+            CanvasEvent(
+                kind="present",
+                agent_id=p.agent_id,
+                payload={"html": p.html, "title": p.title, "version": state.version},
+            )
+        )
         return {"ok": True, "version": state.version, "subscribers": bus.subscriber_count}
 
     @router.method("canvas.navigate", _NavigateParams)
@@ -131,19 +133,18 @@ def register_canvas_methods(
         if state is None or state.hidden:
             return {
                 "ok": False,
-                "error": (
-                    f"no visible canvas for agent {p.agent_id!r}; "
-                    f"call canvas.present first"
-                ),
+                "error": (f"no visible canvas for agent {p.agent_id!r}; call canvas.present first"),
             }
         request_id = bus.new_eval_request_id()
         fut = bus.register_eval_waiter(request_id)
-        bus.publish(CanvasEvent(
-            kind="eval",
-            agent_id=p.agent_id,
-            request_id=request_id,
-            payload={"expression": p.expression},
-        ))
+        bus.publish(
+            CanvasEvent(
+                kind="eval",
+                agent_id=p.agent_id,
+                request_id=request_id,
+                payload={"expression": p.expression},
+            )
+        )
         try:
             value = await asyncio.wait_for(fut, timeout=p.timeout_seconds)
         except TimeoutError:
@@ -151,8 +152,7 @@ def register_canvas_methods(
             return {
                 "ok": False,
                 "error": (
-                    f"canvas.eval timed out after {p.timeout_seconds}s "
-                    f"(no dashboard responded)"
+                    f"canvas.eval timed out after {p.timeout_seconds}s (no dashboard responded)"
                 ),
             }
         except CanvasEvalError as exc:

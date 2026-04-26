@@ -8,11 +8,9 @@ import base64
 from pathlib import Path
 
 import pytest
-from pydantic import BaseModel, Field
 
 from sampyclaw.agents.base import AgentContext
 from sampyclaw.agents.local_agent import LocalAgent
-from sampyclaw.agents.tools import FunctionTool, ToolRegistry
 from sampyclaw.config.paths import SampyclawPaths
 from sampyclaw.plugin_sdk.channel_contract import (
     ChannelTarget,
@@ -85,9 +83,8 @@ async def test_local_agent_with_image_capable_model_sends_image_url_block(
             ]
         }
 
-    monkeypatch.setattr(
-        LocalAgent, "_chat_complete", fake_chat_completion, raising=True
-    )
+    monkeypatch.setattr(LocalAgent, "_chat_complete", fake_chat_completion, raising=True)
+
     async def _noop(self):  # type: ignore[no-untyped-def]
         return None
 
@@ -117,9 +114,7 @@ async def test_local_agent_with_image_capable_model_sends_image_url_block(
 
 
 @pytest.mark.asyncio
-async def test_local_agent_with_text_only_model_drops_image_with_note(
-    tmp_path, monkeypatch
-):  # type: ignore[no-untyped-def]
+async def test_local_agent_with_text_only_model_drops_image_with_note(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
     captured: list[dict] = []
 
     async def fake_chat_completion(self, *, messages, tools):  # type: ignore[no-untyped-def]
@@ -137,9 +132,8 @@ async def test_local_agent_with_text_only_model_drops_image_with_note(
             ]
         }
 
-    monkeypatch.setattr(
-        LocalAgent, "_chat_complete", fake_chat_completion, raising=True
-    )
+    monkeypatch.setattr(LocalAgent, "_chat_complete", fake_chat_completion, raising=True)
+
     async def _noop(self):  # type: ignore[no-untyped-def]
         return None
 
@@ -165,9 +159,7 @@ async def test_local_agent_with_text_only_model_drops_image_with_note(
 
 
 @pytest.mark.asyncio
-async def test_local_agent_image_only_no_text_still_dispatches(
-    tmp_path, monkeypatch
-):  # type: ignore[no-untyped-def]
+async def test_local_agent_image_only_no_text_still_dispatches(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
     """A photo without caption should still trigger a turn."""
     captured: list[dict] = []
 
@@ -186,9 +178,8 @@ async def test_local_agent_image_only_no_text_still_dispatches(
             ]
         }
 
-    monkeypatch.setattr(
-        LocalAgent, "_chat_complete", fake_chat_completion, raising=True
-    )
+    monkeypatch.setattr(LocalAgent, "_chat_complete", fake_chat_completion, raising=True)
+
     async def _noop(self):  # type: ignore[no-untyped-def]
         return None
 
@@ -215,9 +206,7 @@ async def test_local_agent_image_only_no_text_still_dispatches(
 
 
 @pytest.mark.asyncio
-async def test_pi_agent_with_image_capable_model_appends_image_block(
-    tmp_path, monkeypatch
-):  # type: ignore[no-untyped-def]
+async def test_pi_agent_with_image_capable_model_appends_image_block(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
     """PiAgent UserMessage should carry a list[ImageContent, TextContent]
     when the model supports images. Drives the path without going to
     the network — we just inspect `session.messages` after handle()."""
@@ -231,9 +220,7 @@ async def test_pi_agent_with_image_capable_model_appends_image_block(
         from types import SimpleNamespace
 
         return SimpleNamespace(
-            final_message=type(
-                "M", (), {"content": [TextContent(text="ok")]}
-            )(),
+            final_message=type("M", (), {"content": [TextContent(text="ok")]})(),
             appended_messages=[],
             new_messages=[],
             iterations=1,
@@ -248,7 +235,7 @@ async def test_pi_agent_with_image_capable_model_appends_image_block(
     [_ async for _ in agent.handle(env, _ctx())]
 
     # Locate the session and verify the last user message shape.
-    session = list(agent._sessions._sessions.values())[0]  # type: ignore[attr-defined]
+    session = next(iter(agent._sessions._sessions.values()))  # type: ignore[attr-defined]
     user_msgs = [m for m in session.messages if isinstance(m, UserMessage)]
     assert user_msgs, "no user message was appended"
     last = user_msgs[-1]

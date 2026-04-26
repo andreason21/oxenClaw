@@ -157,9 +157,7 @@ def register_memory_methods(router: Router, retriever: MemoryRetriever) -> None:
                 source=p.source,
                 hybrid=p.hybrid.to_config() if p.hybrid else None,
                 mmr=p.mmr.to_config() if p.mmr else None,
-                temporal_decay=(
-                    p.temporal_decay.to_config() if p.temporal_decay else None
-                ),
+                temporal_decay=(p.temporal_decay.to_config() if p.temporal_decay else None),
             )
         except EmbeddingError as exc:
             return {"ok": False, "error": str(exc)}

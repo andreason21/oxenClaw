@@ -6,7 +6,6 @@ Mirrors openclaw `skills/weather`. The tool accepts either a city name
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 
 import aiohttp
@@ -23,7 +22,7 @@ class _WeatherArgs(BaseModel):
     units: str = Field("metric", description="'metric' or 'imperial'.")
 
     @model_validator(mode="after")
-    def _one_of(self) -> "_WeatherArgs":
+    def _one_of(self) -> _WeatherArgs:
         has_city = bool(self.city and self.city.strip())
         has_coords = self.lat is not None and self.lon is not None
         if not (has_city or has_coords):
@@ -45,7 +44,7 @@ async def _wttr(city: str, units: str) -> str | None:
                     return None
                 text = (await resp.text()).strip()
                 return text or None
-        except (aiohttp.ClientError, asyncio.TimeoutError):
+        except (TimeoutError, aiohttp.ClientError):
             return None
 
 
@@ -66,7 +65,7 @@ async def _open_meteo(lat: float, lon: float, units: str) -> str | None:
                 if resp.status >= 400:
                     return None
                 data: dict[str, Any] = await resp.json()
-        except (aiohttp.ClientError, asyncio.TimeoutError):
+        except (TimeoutError, aiohttp.ClientError):
             return None
     cw = data.get("current_weather") or {}
     if not cw:

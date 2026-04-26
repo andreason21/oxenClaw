@@ -57,9 +57,7 @@ def test_config_validate_fails_on_bad_yaml(sampy_home) -> None:  # type: ignore[
 
 def test_config_show_reads_written_file(sampy_home) -> None:  # type: ignore[no-untyped-def]
     cfg_file = sampy_home / "config.yaml"
-    cfg_file.write_text(
-        "channels:\n  telegram:\n    dm_policy: open\n    allow_from: [u1]\n"
-    )
+    cfg_file.write_text("channels:\n  telegram:\n    dm_policy: open\n    allow_from: [u1]\n")
     result = runner.invoke(app, ["config", "show"])
     assert result.exit_code == 0
     data = json.loads(result.stdout)

@@ -49,13 +49,9 @@ class TelegramPollingSession:
 
     async def _handle_message(self, message: Message) -> None:
         if self._dedup.seen(message.message_id):
-            logger.debug(
-                "dropping duplicate telegram message_id=%s", message.message_id
-            )
+            logger.debug("dropping duplicate telegram message_id=%s", message.message_id)
             return
-        envelope = await envelope_from_message(
-            message, account_id=self._account_id, bot=self._bot
-        )
+        envelope = await envelope_from_message(message, account_id=self._account_id, bot=self._bot)
         if envelope is None:
             return
         try:
@@ -69,12 +65,8 @@ class TelegramPollingSession:
 
     async def start(self) -> None:
         """Block on `getUpdates` polling until stop() is called."""
-        logger.info(
-            "telegram polling start for account=%s", self._account_id
-        )
-        await self._dispatcher.start_polling(
-            self._bot, handle_signals=False
-        )
+        logger.info("telegram polling start for account=%s", self._account_id)
+        await self._dispatcher.start_polling(self._bot, handle_signals=False)
 
     async def stop(self) -> None:
         await self._dispatcher.stop_polling()

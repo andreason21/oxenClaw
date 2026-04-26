@@ -86,12 +86,8 @@ def register_skills_methods(
     resolved_paths = paths or default_paths()
     resolved_installer = installer or SkillInstaller(client, paths=resolved_paths)
 
-    multi: MultiRegistryClient | None = (
-        client if isinstance(client, MultiRegistryClient) else None
-    )
-    single: ClawHubClient | None = (
-        client if isinstance(client, ClawHubClient) else None
-    )
+    multi: MultiRegistryClient | None = client if isinstance(client, MultiRegistryClient) else None
+    single: ClawHubClient | None = client if isinstance(client, ClawHubClient) else None
 
     def _client_for(registry: str | None) -> ClawHubClient:
         if multi is not None:
@@ -126,9 +122,7 @@ def register_skills_methods(
     @router.method("skills.search", _SearchParams)
     async def _search(p: _SearchParams) -> dict[str, Any]:  # type: ignore[type-arg]
         try:
-            results = await _client_for(p.registry).search_skills(
-                p.query, limit=p.limit
-            )
+            results = await _client_for(p.registry).search_skills(p.query, limit=p.limit)
         except (ClawHubError, KeyError) as exc:
             return _wrap(exc)
         return {"ok": True, "registry": p.registry, "results": results}
@@ -191,9 +185,7 @@ def register_skills_methods(
                 "homepage": result.manifest.homepage,
                 "emoji": result.manifest.openclaw.emoji,
                 "requires": result.manifest.openclaw.requires.model_dump(by_alias=True),
-                "install_specs": serialise_install_specs(
-                    result.manifest.openclaw.install
-                ),
+                "install_specs": serialise_install_specs(result.manifest.openclaw.install),
             },
         }
 
@@ -203,10 +195,11 @@ def register_skills_methods(
         try:
             c = _client_for(p.registry)
             detail = await c.fetch_skill_detail(p.slug)
-            from sampyclaw.clawhub.installer import _resolve_target_version, _extract_zip_to
-            from sampyclaw.clawhub.frontmatter import parse_skill_file
-            from sampyclaw.security import SkillScanner
             import shutil
+
+            from sampyclaw.clawhub.frontmatter import parse_skill_file
+            from sampyclaw.clawhub.installer import _extract_zip_to, _resolve_target_version
+            from sampyclaw.security import SkillScanner
 
             version = _resolve_target_version(detail, None)
             archive, _ = await c.download_skill_archive(p.slug, version=version)

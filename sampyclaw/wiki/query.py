@@ -21,15 +21,11 @@ class WikiSearchHit:
     matched_in: str  # "name" | "alias" | "tag" | "body" | "summary"
 
 
-def get_wiki_page(
-    vault: WikiVault, *, kind: WikiPageKind, slug: str
-) -> WikiPage | None:
+def get_wiki_page(vault: WikiVault, *, kind: WikiPageKind, slug: str) -> WikiPage | None:
     return vault.read_page(kind, slug)
 
 
-def list_wiki_pages(
-    vault: WikiVault, *, kind: WikiPageKind | None = None
-) -> list[WikiPage]:
+def list_wiki_pages(vault: WikiVault, *, kind: WikiPageKind | None = None) -> list[WikiPage]:
     return list(vault.iter_pages(kind=kind))
 
 

@@ -13,7 +13,6 @@ import sys
 import pytest
 
 from sampyclaw.security.isolation import (
-    BackendRegistry,
     BubblewrapBackend,
     ContainerBackend,
     InprocessBackend,
@@ -89,9 +88,7 @@ async def test_stdout_truncation(backend_name: str) -> None:
 
 async def test_missing_executable(backend_name: str) -> None:
     b = await _make_backend(backend_name)
-    r = await b.run(
-        ["does-not-exist-xyz"], policy=_open_policy(timeout_seconds=2)
-    )
+    r = await b.run(["does-not-exist-xyz"], policy=_open_policy(timeout_seconds=2))
     # inprocess returns error string + exit -1; subprocess too.
     assert not r.ok
 
@@ -116,11 +113,7 @@ async def test_subprocess_filesize_cap() -> None:
     if sys.platform == "win32":
         pytest.skip("POSIX-only")
     b = SubprocessBackend()
-    code = (
-        "f = open('/tmp/__sampy_big','wb'); "
-        "f.write(b'x'*100_000_000); "
-        "print('wrote ok')"
-    )
+    code = "f = open('/tmp/__sampy_big','wb'); f.write(b'x'*100_000_000); print('wrote ok')"
     r = await b.run(
         ["python3", "-c", code],
         policy=_open_policy(max_file_size_mb=10, timeout_seconds=5),
@@ -165,9 +158,7 @@ async def test_subprocess_env_passthrough_allowlist() -> None:
         b = SubprocessBackend()
         r = await b.run(
             ["sh", "-c", "echo TOKEN=$SAMPY_TEST_TOKEN"],
-            policy=_open_policy(
-                env_passthrough=("SAMPY_TEST_TOKEN",), timeout_seconds=2
-            ),
+            policy=_open_policy(env_passthrough=("SAMPY_TEST_TOKEN",), timeout_seconds=2),
         )
         assert "TOKEN=abc-123" in r.stdout
     finally:
@@ -215,9 +206,7 @@ async def test_bwrap_availability_matches_which() -> None:
 async def test_container_availability_matches_which() -> None:
     import shutil
 
-    expected = (shutil.which("docker") is not None) or (
-        shutil.which("podman") is not None
-    )
+    expected = (shutil.which("docker") is not None) or (shutil.which("podman") is not None)
     assert (await ContainerBackend().is_available()) is expected
 
 

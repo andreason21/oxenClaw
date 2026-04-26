@@ -8,10 +8,7 @@ behaves on at least the happy + error paths.
 from __future__ import annotations
 
 import asyncio
-import json
-import os
 from pathlib import Path
-from typing import Any
 
 import pytest
 
@@ -31,11 +28,7 @@ _BUNDLED = [
 
 
 def _skills_root() -> Path:
-    return (
-        Path(__file__).resolve().parent.parent
-        / "sampyclaw"
-        / "skills"
-    )
+    return Path(__file__).resolve().parent.parent / "sampyclaw" / "skills"
 
 
 @pytest.mark.parametrize("slug", _BUNDLED)
@@ -73,7 +66,9 @@ async def test_summarize_tool_calls_sub_llm() -> None:
 
     register_provider_stream("sum_p", fake)
     model = Model(
-        id="m-sum_p", provider="sum_p", max_output_tokens=64,
+        id="m-sum_p",
+        provider="sum_p",
+        max_output_tokens=64,
         extra={"base_url": "http://x"},
     )
     auth = InMemoryAuthStorage({"sum_p": "k"})  # type: ignore[dict-item]
@@ -94,14 +89,14 @@ async def test_summarize_tool_focus_appears_in_prompt() -> None:
 
     register_provider_stream("sum_p2", fake)
     model = Model(
-        id="m-sum_p2", provider="sum_p2", max_output_tokens=64,
+        id="m-sum_p2",
+        provider="sum_p2",
+        max_output_tokens=64,
         extra={"base_url": "http://x"},
     )
     auth = InMemoryAuthStorage({"sum_p2": "k"})  # type: ignore[dict-item]
     tool = summarize_tool(model=model, auth=auth)
-    await tool.execute(
-        {"input_text": "doc", "length": "medium", "focus": "risks only"}
-    )
+    await tool.execute({"input_text": "doc", "length": "medium", "focus": "risks only"})
     assert "Focus on: risks only" in seen[0]
 
 
@@ -279,9 +274,7 @@ async def test_skill_creator_refuses_overwrite_unless_flagged(
 async def test_skill_creator_writes_optional_tool_stub(tmp_path: Path) -> None:
     paths = _paths(tmp_path)
     tool = skill_creator_tool(paths=paths)
-    await tool.execute(
-        {"name": "stubby", "description": "d", "write_tool_stub": True}
-    )
+    await tool.execute({"name": "stubby", "description": "d", "write_tool_stub": True})
     stub = tmp_path / "skills" / "stubby" / "stubby.py"
     assert stub.exists()
     text = stub.read_text()

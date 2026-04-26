@@ -10,8 +10,8 @@ from __future__ import annotations
 from pydantic import BaseModel, ConfigDict
 
 from sampyclaw.agents import (
-    AgentRegistry,
     SUPPORTED_PROVIDERS,
+    AgentRegistry,
     UnknownProvider,
     build_agent,
 )
@@ -98,5 +98,5 @@ def register_agents_methods(router: Router, registry: AgentRegistry) -> None:
     async def _delete(p: _IdParam) -> dict:  # type: ignore[type-arg]
         existed = registry.get(p.id) is not None
         if existed:
-            registry._agents.pop(p.id, None)  # noqa: SLF001 — RPC owns registry lifecycle
+            registry._agents.pop(p.id, None)
         return {"deleted": existed}

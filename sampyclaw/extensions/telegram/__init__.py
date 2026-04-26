@@ -16,8 +16,8 @@ from sampyclaw.extensions.telegram.thread_bindings import ThreadBinding, ThreadB
 from sampyclaw.extensions.telegram.token import TokenResolver
 
 __all__ = [
-    "PollingRunner",
     "TELEGRAM_CHANNEL_ID",
+    "PollingRunner",
     "TelegramAccountRegistry",
     "TelegramChannel",
     "TelegramPollingSession",

@@ -23,9 +23,7 @@ def _patch_bot(monkeypatch, channel: TelegramChannel) -> MagicMock:  # type: ign
     bot = MagicMock()
     bot.session = MagicMock()
     bot.session.close = AsyncMock()
-    monkeypatch.setattr(
-        "sampyclaw.extensions.telegram.channel.create_bot", lambda token: bot
-    )
+    monkeypatch.setattr("sampyclaw.extensions.telegram.channel.create_bot", lambda token: bot)
     return bot
 
 
@@ -65,9 +63,7 @@ async def test_send_rejects_wrong_channel(monkeypatch) -> None:  # type: ignore[
     with pytest.raises(UserVisibleError):
         await ch.send(
             SendParams(
-                target=ChannelTarget(
-                    channel="discord", account_id="main", chat_id="42"
-                ),
+                target=ChannelTarget(channel="discord", account_id="main", chat_id="42"),
                 text="hi",
             )
         )

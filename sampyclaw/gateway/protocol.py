@@ -7,7 +7,7 @@ Telegram B-phase flow is defined here; expand in phase A.
 
 from __future__ import annotations
 
-from typing import Annotated, Any, Literal, Union
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, RootModel
 
@@ -79,7 +79,7 @@ class CanvasEventFrame(BaseModel):
 
 
 EventBody = Annotated[
-    Union[ChatEvent, AgentEvent, CanvasEventFrame],
+    ChatEvent | AgentEvent | CanvasEventFrame,
     Field(discriminator="kind"),
 ]
 

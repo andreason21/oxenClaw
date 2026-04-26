@@ -12,7 +12,6 @@ from __future__ import annotations
 from sampyclaw.wiki.models import WikiPage, WikiPageKind
 from sampyclaw.wiki.vault import WikiVault
 
-
 _PALACE_KIND_ORDER: tuple[WikiPageKind, ...] = (
     WikiPageKind.SYNTHESIS,
     WikiPageKind.ENTITY,

@@ -18,16 +18,13 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from pathlib import Path
 
 from sampyclaw.config import ConfigError, load_config
 from sampyclaw.config.paths import SampyclawPaths, default_paths
 from sampyclaw.pi.mcp.loader import load_mcp_configs
 
 # Same shape `config/env_subst.py` consumes.
-_ENV_REF_RE = re.compile(
-    r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)"
-)
+_ENV_REF_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)")
 
 
 @dataclass
@@ -57,9 +54,7 @@ class PreflightReport:
         return not self.errors
 
     def add(self, severity: str, source: str, message: str) -> None:
-        self.findings.append(
-            PreflightFinding(severity=severity, source=source, message=message)
-        )
+        self.findings.append(PreflightFinding(severity=severity, source=source, message=message))
 
 
 def _collect_env_refs(value: object) -> set[str]:
@@ -77,9 +72,7 @@ def _collect_env_refs(value: object) -> set[str]:
     return refs
 
 
-def _check_config_yaml(
-    paths: SampyclawPaths, report: PreflightReport
-) -> object | None:
+def _check_config_yaml(paths: SampyclawPaths, report: PreflightReport) -> object | None:
     src = str(paths.config_file)
     try:
         cfg = load_config(paths)
@@ -106,9 +99,7 @@ def _check_mcp_json(paths: SampyclawPaths, report: PreflightReport) -> None:
         )
 
 
-def _check_credentials_dir(
-    paths: SampyclawPaths, report: PreflightReport
-) -> None:
+def _check_credentials_dir(paths: SampyclawPaths, report: PreflightReport) -> None:
     cred_dir = paths.credentials_dir
     if not cred_dir.exists():
         return  # no credentials yet — fine for fresh installs
@@ -129,9 +120,7 @@ def _check_credentials_dir(
             report.add("error", str(entry), f"malformed JSON: {exc}")
 
 
-def _check_env_refs_in_files(
-    paths: SampyclawPaths, report: PreflightReport
-) -> None:
+def _check_env_refs_in_files(paths: SampyclawPaths, report: PreflightReport) -> None:
     """Surface env-var references that won't expand (var not set).
 
     Currently checks `mcp.json` (the most likely place to embed

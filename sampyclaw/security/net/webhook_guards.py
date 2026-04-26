@@ -21,8 +21,8 @@ import hashlib
 import hmac
 import time
 from collections.abc import AsyncIterator
-from dataclasses import dataclass, field
-from enum import Enum
+from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any
 
 
@@ -55,18 +55,14 @@ class BodySizeLimiter:
     def max_bytes(self) -> int:
         return self._max
 
-    async def read_streaming(
-        self, stream: AsyncIterator[bytes]
-    ) -> bytes:
+    async def read_streaming(self, stream: AsyncIterator[bytes]) -> bytes:
         """Aggregate `stream` into one bytes blob, raising if cap exceeded."""
         chunks: list[bytes] = []
         total = 0
         async for chunk in stream:
             total += len(chunk)
             if total > self._max:
-                raise BodyTooLargeError(
-                    f"body exceeded {self._max} bytes (got at least {total})"
-                )
+                raise BodyTooLargeError(f"body exceeded {self._max} bytes (got at least {total})")
             chunks.append(chunk)
         return b"".join(chunks)
 
@@ -127,9 +123,7 @@ class FixedWindowRateLimiter:
         if not self.check(key):
             bucket = self._buckets.get(key)
             window_left = (
-                bucket.window_start + self._window - self._clock()
-                if bucket
-                else self._window
+                bucket.window_start + self._window - self._clock() if bucket else self._window
             )
             raise RateLimited(key, max(0.0, window_left))
 
@@ -175,7 +169,7 @@ def verify_hmac_signature(
 # ─── Profile bundle ─────────────────────────────────────────────────
 
 
-class WebhookProfile(str, Enum):
+class WebhookProfile(StrEnum):
     PRE_AUTH = "pre_auth"
     POST_AUTH = "post_auth"
 
@@ -198,9 +192,7 @@ class WebhookGuards:
         sig = headers.get(self.hmac_header) or headers.get(self.hmac_header.lower())
         if not sig:
             return False
-        return verify_hmac_signature(
-            self.hmac_secret, body, sig, prefix=self.hmac_prefix
-        )
+        return verify_hmac_signature(self.hmac_secret, body, sig, prefix=self.hmac_prefix)
 
 
 def default_guards(profile: WebhookProfile) -> WebhookGuards:
@@ -208,15 +200,11 @@ def default_guards(profile: WebhookProfile) -> WebhookGuards:
     if profile is WebhookProfile.PRE_AUTH:
         return WebhookGuards(
             body_limiter=BodySizeLimiter(max_bytes=64 * 1024),  # 64 KiB
-            rate_limiter=FixedWindowRateLimiter(
-                max_requests=30, window_seconds=60
-            ),
+            rate_limiter=FixedWindowRateLimiter(max_requests=30, window_seconds=60),
         )
     return WebhookGuards(
         body_limiter=BodySizeLimiter(max_bytes=4 * 1024 * 1024),  # 4 MiB
-        rate_limiter=FixedWindowRateLimiter(
-            max_requests=600, window_seconds=60
-        ),
+        rate_limiter=FixedWindowRateLimiter(max_requests=600, window_seconds=60),
     )
 
 

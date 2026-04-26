@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import shutil
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
@@ -21,7 +21,7 @@ from pydantic import BaseModel, Field
 
 from sampyclaw.agents.tools import FunctionTool, Tool
 from sampyclaw.clawhub.loader import InstalledSkill
-from sampyclaw.clawhub.runtime import SkillRuntime, prepare_skill_runtime
+from sampyclaw.clawhub.runtime import prepare_skill_runtime
 from sampyclaw.config.paths import SampyclawPaths, default_paths
 from sampyclaw.plugin_sdk.runtime_env import get_logger
 
@@ -34,7 +34,7 @@ CliName = Literal["claude", "codex", "opencode", "pi", "auto"]
 class CliAdapter:
     name: str
     bin: str
-    build_argv: "BuildArgvFn"
+    build_argv: BuildArgvFn
 
 
 # `(prompt, workspace) -> argv` — keeps adapter authoring trivial.
@@ -122,17 +122,17 @@ async def _run_in_workspace(
     except FileNotFoundError as exc:
         return _RunOutcome(adapter.name, -1, "", f"missing binary: {exc}", False)
     try:
-        out, err = await asyncio.wait_for(
-            proc.communicate(), timeout=timeout_seconds
-        )
-    except asyncio.TimeoutError:
+        out, err = await asyncio.wait_for(proc.communicate(), timeout=timeout_seconds)
+    except TimeoutError:
         proc.kill()
         out, err = await proc.communicate()
     stdout = (out or b"").decode("utf-8", errors="replace")
     stderr = (err or b"").decode("utf-8", errors="replace")
     truncated = len(stdout) > max_stdout_chars
     if truncated:
-        stdout = stdout[:max_stdout_chars] + f"\n[...truncated {len(stdout) - max_stdout_chars} chars]"
+        stdout = (
+            stdout[:max_stdout_chars] + f"\n[...truncated {len(stdout) - max_stdout_chars} chars]"
+        )
     return _RunOutcome(
         cli=adapter.name,
         exit_code=proc.returncode or 0,
@@ -144,15 +144,9 @@ async def _run_in_workspace(
 
 class _CodingArgs(BaseModel):
     task: str = Field(..., description="The coding task in plain language.")
-    cli: CliName = Field(
-        "auto", description="Which CLI to use; 'auto' picks the first available."
-    )
-    timeout_seconds: float = Field(
-        300.0, description="Hard cap on the CLI run.", gt=0
-    )
-    max_stdout_chars: int = Field(
-        16_000, description="Char budget for the captured stdout.", gt=0
-    )
+    cli: CliName = Field("auto", description="Which CLI to use; 'auto' picks the first available.")
+    timeout_seconds: float = Field(300.0, description="Hard cap on the CLI run.", gt=0)
+    max_stdout_chars: int = Field(16_000, description="Char budget for the captured stdout.", gt=0)
 
 
 def coding_agent_tool(
@@ -173,8 +167,7 @@ def coding_agent_tool(
         if adapter is None:
             available = detect_available_clis() or "(none)"
             return (
-                f"coding_agent error: no CLI available; "
-                f"requested={args.cli!r}, on PATH={available}"
+                f"coding_agent error: no CLI available; requested={args.cli!r}, on PATH={available}"
             )
 
         # Pick a runtime: real skill if provided, else synthetic minimal one.

@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 from sampyclaw.clawhub.loader import (
-    InstalledSkill,
     format_skills_for_prompt,
     load_installed_skills,
 )
 from sampyclaw.clawhub.lockfile import OriginMetadata
 from sampyclaw.config.paths import SampyclawPaths
-
 
 SAMPLE_SKILL = """---
 name: hello
@@ -113,9 +111,7 @@ def test_xml_escape_in_description(tmp_path) -> None:  # type: ignore[no-untyped
     paths = _setup_skill(tmp_path)
     bad = tmp_path / "skills" / "esc"
     bad.mkdir()
-    (bad / "SKILL.md").write_text(
-        "---\nname: esc\ndescription: a < b & c > d\n---\nbody\n"
-    )
+    (bad / "SKILL.md").write_text("---\nname: esc\ndescription: a < b & c > d\n---\nbody\n")
     skills = load_installed_skills(paths)
     block = format_skills_for_prompt(skills)
     assert "&lt; b &amp; c &gt;" in block

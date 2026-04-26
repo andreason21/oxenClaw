@@ -31,9 +31,7 @@ def _factory(**kwargs: Any) -> ChannelPlugin:
     return TelegramChannel(token=token, account_id=account_id)
 
 
-def _loader(
-    config: RootConfig, paths: SampyclawPaths
-) -> dict[str, ChannelPlugin]:
+def _loader(config: RootConfig, paths: SampyclawPaths) -> dict[str, ChannelPlugin]:
     """Bulk-load every Telegram account declared in config using the credential store."""
     registry = TelegramAccountRegistry(paths=paths)
     registry.load_from_config(config)

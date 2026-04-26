@@ -2,11 +2,7 @@
 
 from __future__ import annotations
 
-import os
-import shutil
 from pathlib import Path
-
-import pytest
 
 from sampyclaw.clawhub.frontmatter import parse_skill_text
 from sampyclaw.clawhub.loader import InstalledSkill
@@ -28,11 +24,7 @@ def _fake_cli(tmp_path: Path, name: str, *, exit_code: int = 0, stdout: str = "o
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir(parents=True, exist_ok=True)
     script = bin_dir / name
-    script.write_text(
-        "#!/usr/bin/env bash\n"
-        f"printf '%s' \"{stdout}\"\n"
-        f"exit {exit_code}\n"
-    )
+    script.write_text(f"#!/usr/bin/env bash\nprintf '%s' \"{stdout}\"\nexit {exit_code}\n")
     script.chmod(0o755)
     return bin_dir
 
@@ -86,9 +78,7 @@ async def test_tool_truncates_huge_stdout(tmp_path: Path, monkeypatch) -> None:
     bd = _fake_cli(tmp_path, "codex", stdout=big)
     monkeypatch.setenv("PATH", f"{bd}:/usr/bin:/bin")
     tool = coding_agent_tool(paths=_paths(tmp_path))
-    out = await tool.execute(
-        {"task": "x", "max_stdout_chars": 1000}
-    )
+    out = await tool.execute({"task": "x", "max_stdout_chars": 1000})
     assert "[...truncated" in out
 
 
@@ -120,13 +110,13 @@ async def test_tool_uses_supplied_skill_for_env(tmp_path: Path, monkeypatch) -> 
     bd = tmp_path / "bin"
     bd.mkdir(parents=True, exist_ok=True)
     script = bd / "codex"
-    script.write_text("#!/usr/bin/env bash\necho \"X=$X\"\n")
+    script.write_text('#!/usr/bin/env bash\necho "X=$X"\n')
     script.chmod(0o755)
     monkeypatch.setenv("PATH", f"{bd}:/usr/bin:/bin")
 
     md = (
         "---\nname: coding-agent\ndescription: t\n"
-        "openclaw:\n  env_overrides:\n    X: \"injected-value\"\n---\n"
+        'openclaw:\n  env_overrides:\n    X: "injected-value"\n---\n'
     )
     manifest, body = parse_skill_text(md)
     skill = InstalledSkill(

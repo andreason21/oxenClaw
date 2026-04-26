@@ -8,14 +8,12 @@ new skill on next `load_installed_skills()` call.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 from pydantic import BaseModel, Field
 
 from sampyclaw.agents.tools import FunctionTool, Tool
 from sampyclaw.clawhub.frontmatter import is_valid_slug, parse_skill_text
 from sampyclaw.config.paths import SampyclawPaths, default_paths
-
 
 _SLUG_RE = re.compile(r"[^a-z0-9-]+")
 
@@ -119,8 +117,7 @@ def skill_creator_tool(*, paths: SampyclawPaths | None = None) -> Tool:
         target_dir = paths.home / "skills" / slug
         if target_dir.exists() and not args.overwrite:
             return (
-                f"skill_creator error: {target_dir} already exists "
-                "(pass overwrite=true to replace)"
+                f"skill_creator error: {target_dir} already exists (pass overwrite=true to replace)"
             )
         target_dir.mkdir(parents=True, exist_ok=True)
         skill_md = target_dir / "SKILL.md"
@@ -144,13 +141,10 @@ def skill_creator_tool(*, paths: SampyclawPaths | None = None) -> Tool:
         if args.write_tool_stub:
             fn_name = slug.replace("-", "_")
             stub_path = target_dir / f"{fn_name}.py"
-            stub_path.write_text(
-                _TOOL_STUB.format(slug=slug, fn_name=fn_name), encoding="utf-8"
-            )
+            stub_path.write_text(_TOOL_STUB.format(slug=slug, fn_name=fn_name), encoding="utf-8")
             files_written.append(str(stub_path))
-        return (
-            f"skill_creator ok: wrote {len(files_written)} file(s)\n"
-            + "\n".join(f"  {f}" for f in files_written)
+        return f"skill_creator ok: wrote {len(files_written)} file(s)\n" + "\n".join(
+            f"  {f}" for f in files_written
         )
 
     return FunctionTool(

@@ -15,9 +15,8 @@ invalidate the cache prefix.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Literal
-
 
 PromptMode = Literal["chat", "code", "qa", "structured", "tool"]
 
@@ -97,9 +96,7 @@ def memory_contribution(*, memory_block: str) -> SystemPromptContribution:
     )
 
 
-def embedded_context_contribution(
-    *, files_block: str
-) -> SystemPromptContribution:
+def embedded_context_contribution(*, files_block: str) -> SystemPromptContribution:
     return SystemPromptContribution(
         name="embedded_context",
         body=files_block,

@@ -37,11 +37,13 @@ def _maybe_canvas_tools(agent_id: str) -> list[Tool]:
         )
         from sampyclaw.tools_pkg.canvas import default_canvas_tools
 
-        return list(default_canvas_tools(
-            agent_id=agent_id,
-            store=get_default_canvas_store(),
-            bus=get_default_canvas_bus(),
-        ))
+        return list(
+            default_canvas_tools(
+                agent_id=agent_id,
+                store=get_default_canvas_store(),
+                bus=get_default_canvas_bus(),
+            )
+        )
     except Exception:
         return []
 
@@ -148,8 +150,7 @@ def build_agent(
             kwargs["api_key"] = api_key
         return LocalAgent(**kwargs)
     raise UnknownProvider(
-        f"unknown agent provider: {provider!r} "
-        f"(supported: {', '.join(SUPPORTED_PROVIDERS)})"
+        f"unknown agent provider: {provider!r} (supported: {', '.join(SUPPORTED_PROVIDERS)})"
     )
 
 

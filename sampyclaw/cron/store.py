@@ -57,9 +57,7 @@ class CronJobStore:
         self._path.parent.mkdir(parents=True, exist_ok=True)
         tmp = self._path.with_suffix(self._path.suffix + ".tmp")
         payload = {"jobs": [j.model_dump() for j in self.list()]}
-        tmp.write_text(
-            json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8"
-        )
+        tmp.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
         os.replace(tmp, self._path)
 
     def __len__(self) -> int:

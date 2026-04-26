@@ -38,9 +38,7 @@ async def test_create_echo_agent() -> None:
 async def test_create_duplicate_returns_error() -> None:
     router, _ = _setup()
     params = {"id": "a1", "provider": "echo"}
-    await router.dispatch(
-        {"jsonrpc": "2.0", "id": 1, "method": "agents.create", "params": params}
-    )
+    await router.dispatch({"jsonrpc": "2.0", "id": 1, "method": "agents.create", "params": params})
     resp = await router.dispatch(
         {"jsonrpc": "2.0", "id": 2, "method": "agents.create", "params": params}
     )

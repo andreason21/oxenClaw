@@ -11,9 +11,7 @@ from typing import Final
 
 # Per https://core.telegram.org/bots/api#markdownv2-style — every one of these
 # must be backslash-escaped outside of formatting entities.
-MDV2_SPECIAL: Final[frozenset[str]] = frozenset(
-    "_*[]()~`>#+-=|{}.!\\"
-)
+MDV2_SPECIAL: Final[frozenset[str]] = frozenset("_*[]()~`>#+-=|{}.!\\")
 
 
 def escape_markdown_v2(text: str) -> str:
@@ -23,11 +21,7 @@ def escape_markdown_v2(text: str) -> str:
 
 def escape_html(text: str) -> str:
     """Minimal HTML escape for Telegram parse_mode=HTML."""
-    return (
-        text.replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-    )
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 def code_block(body: str, language: str | None = None) -> str:
@@ -38,4 +32,5 @@ def code_block(body: str, language: str | None = None) -> str:
 
 def inline_code(body: str) -> str:
     """MarkdownV2 inline code span. Only backticks inside need escaping."""
-    return f"`{body.replace('`', '\\`')}`"
+    escaped = body.replace("`", "\\`")
+    return f"`{escaped}`"

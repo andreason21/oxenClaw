@@ -90,10 +90,7 @@ def session_logs_tool(sessions: SessionManager) -> Tool:
                 for i, m in enumerate(s.messages):
                     preview = _msg_preview(m, max_chars=120).lower()
                     if needle in preview:
-                        matches.append(
-                            f"{entry.id[:8]}#{i}  "
-                            f"{_msg_preview(m, max_chars=200)}"
-                        )
+                        matches.append(f"{entry.id[:8]}#{i}  {_msg_preview(m, max_chars=200)}")
                         if len(matches) >= args.limit:
                             break
             if not matches:

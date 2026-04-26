@@ -24,7 +24,6 @@ from sampyclaw.pi import (
 from sampyclaw.pi.auth import resolve_api
 from sampyclaw.pi.run import RuntimeConfig, run_agent_turn
 
-
 _LENGTH_INSTR = {
     "short": "Reply in 1-2 sentences.",
     "medium": "Reply in a single paragraph (3-5 sentences).",
@@ -38,9 +37,7 @@ class _SummariseArgs(BaseModel):
     length: Literal["short", "medium", "long", "bullets"] = Field(
         "medium", description="Target summary length / format."
     )
-    focus: str | None = Field(
-        None, description="Optional aspect to emphasise (e.g. 'risks only')."
-    )
+    focus: str | None = Field(None, description="Optional aspect to emphasise (e.g. 'risks only').")
 
 
 def summarize_tool(
@@ -56,10 +53,7 @@ def summarize_tool(
         instr = _LENGTH_INSTR[args.length]
         if args.focus:
             instr = f"{instr} Focus on: {args.focus}."
-        prompt = (
-            f"Summarise the following text. {instr}\n\n"
-            f"---\n{args.input_text}\n---"
-        )
+        prompt = f"Summarise the following text. {instr}\n\n---\n{args.input_text}\n---"
         api = await resolve_api(model, auth)
         result = await run_agent_turn(
             model=model,

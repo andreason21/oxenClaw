@@ -99,10 +99,7 @@ class ChannelRunner:
                 # Long-stable run before failure — reset the backoff so the
                 # next restart is fast, not stuck at the previous max.
                 backoff = self._initial
-            if (
-                self._max_restarts is not None
-                and self.restart_count >= self._max_restarts
-            ):
+            if self._max_restarts is not None and self.restart_count >= self._max_restarts:
                 logger.error(
                     "monitor %s:%s reached max_restarts=%d; giving up",
                     self.channel_id,

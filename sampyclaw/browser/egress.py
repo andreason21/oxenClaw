@@ -138,7 +138,6 @@ def build_route_handler(
             # or the page navigated away; benign in practice.
             logger.debug("route.continue_ failed for %s: %s", url, exc)
 
-
     return _handler
 
 

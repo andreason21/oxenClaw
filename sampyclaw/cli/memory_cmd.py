@@ -53,11 +53,7 @@ def search(
         else None
     )
     mmr_cfg = MMRConfig(enabled=True, lambda_=mmr_lambda) if mmr else None
-    decay_cfg = (
-        TemporalDecayConfig(enabled=True, half_life_days=half_life_days)
-        if decay
-        else None
-    )
+    decay_cfg = TemporalDecayConfig(enabled=True, half_life_days=half_life_days) if decay else None
 
     async def _run() -> None:
         retriever = _retriever(model, base_url)
@@ -186,7 +182,7 @@ def get(
 @app.command("save")
 def save(
     text: str = typer.Argument(..., help="The fact to remember."),
-    tag: list[str] | None = typer.Option(None, "--tag"),  # noqa: B008
+    tag: list[str] | None = typer.Option(None, "--tag"),
     model: str | None = typer.Option(None, "--model"),
     base_url: str | None = typer.Option(None, "--base-url"),
 ) -> None:
@@ -222,9 +218,7 @@ def rebuild(
         try:
             retriever.store.clear_all()
             report = await retriever.sync()
-            typer.echo(
-                f"rebuilt; added={report.added} embedded={report.chunks_embedded}"
-            )
+            typer.echo(f"rebuilt; added={report.added} embedded={report.chunks_embedded}")
         finally:
             await retriever.aclose()
 

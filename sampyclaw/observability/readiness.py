@@ -17,10 +17,10 @@ import asyncio
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 
 
-class ReadinessStatus(str, Enum):
+class ReadinessStatus(StrEnum):
     OK = "ok"
     DEGRADED = "degraded"
     DOWN = "down"
@@ -117,22 +117,15 @@ class ReadinessChecker:
                 r.status == ReadinessStatus.DOWN
                 and not r.critical
                 and overall == ReadinessStatus.OK
-            ):
-                overall = ReadinessStatus.DEGRADED
-            elif (
-                r.status == ReadinessStatus.DEGRADED
-                and overall == ReadinessStatus.OK
-            ):
+            ) or (r.status == ReadinessStatus.DEGRADED and overall == ReadinessStatus.OK):
                 overall = ReadinessStatus.DEGRADED
         return ReadinessReport(overall=overall, probes=tuple(results))
 
     async def _run_probe(self, probe: ReadinessProbe) -> _ProbeResult:
         start = time.monotonic()
         try:
-            status, reason = await asyncio.wait_for(
-                probe.check(), timeout=probe.timeout_seconds
-            )
-        except asyncio.TimeoutError:
+            status, reason = await asyncio.wait_for(probe.check(), timeout=probe.timeout_seconds)
+        except TimeoutError:
             return _ProbeResult(
                 name=probe.name,
                 status=ReadinessStatus.DEGRADED,

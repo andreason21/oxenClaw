@@ -26,10 +26,9 @@ union, and the loop assembles a final `AssistantMessage` from the events.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol, Union
-
 
 # ─── Event types ──────────────────────────────────────────────────────
 
@@ -172,7 +171,7 @@ def create_assistant_message_event_stream() -> AssistantMessageEventStream:
 
 # Lazy registry so providers can register themselves at import time without
 # pulling them all in unconditionally.
-_PROVIDER_STREAMS: dict[str, "StreamFnImpl"] = {}
+_PROVIDER_STREAMS: dict[str, StreamFnImpl] = {}
 
 StreamFnImpl = Callable[[Any, SimpleStreamOptions], AsyncIterator[AssistantMessageEvent]]
 
@@ -190,9 +189,7 @@ def get_provider_stream(provider_id: str) -> StreamFnImpl:
     return _PROVIDER_STREAMS[provider_id]
 
 
-def stream_simple(
-    ctx: Any, opts: SimpleStreamOptions
-) -> AsyncIterator[AssistantMessageEvent]:
+def stream_simple(ctx: Any, opts: SimpleStreamOptions) -> AsyncIterator[AssistantMessageEvent]:
     """Dispatch to the registered provider stream wrapper.
 
     `ctx.model.provider` selects the wrapper. Wrappers register at import

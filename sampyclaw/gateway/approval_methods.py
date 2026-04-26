@@ -43,8 +43,4 @@ def register_approval_methods(router: Router, manager: ApprovalManager) -> None:
 
     @router.method("exec-approvals.cancel", _CancelParams)
     async def _cancel(p: _CancelParams) -> dict:  # type: ignore[type-arg]
-        return {
-            "cancelled": manager.cancel(
-                p.id, reason=p.reason, approver_token=p.approver_token
-            )
-        }
+        return {"cancelled": manager.cancel(p.id, reason=p.reason, approver_token=p.approver_token)}

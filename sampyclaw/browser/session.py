@@ -190,9 +190,7 @@ class PlaywrightSession:
         ctx.set_default_timeout(effective.default_timeout_ms)
         ctx.set_default_navigation_timeout(effective.navigation_timeout_ms)
 
-        handler = build_route_handler(
-            effective, pin_cache=self._pin_cache, audit=self._audit
-        )
+        handler = build_route_handler(effective, pin_cache=self._pin_cache, audit=self._audit)
         await ctx.route("**/*", handler)
         self._contexts.add(ctx)
         try:

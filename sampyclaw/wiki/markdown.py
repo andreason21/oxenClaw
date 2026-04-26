@@ -16,12 +16,12 @@ from sampyclaw.wiki.models import (
     WikiClaim,
     WikiEvidence,
     WikiPage,
-    WikiPageKind,
     parse_wiki_page_kind,
 )
 
 try:
     import yaml as _yaml  # type: ignore
+
     HAS_YAML = True
 except ImportError:  # pragma: no cover
     _yaml = None
@@ -95,9 +95,7 @@ def _minimal_yaml_dump(data: dict[str, Any], *, indent: int = 0) -> str:
                         first = True
                         for k, v in item.items():
                             prefix = "- " if first else "  "
-                            lines.append(
-                                f"{pad}{prefix}{k}: {_yaml_scalar(v)}"
-                            )
+                            lines.append(f"{pad}{prefix}{k}: {_yaml_scalar(v)}")
                             first = False
                     else:
                         lines.append(f"{pad}- {_yaml_scalar(item)}")
@@ -140,9 +138,7 @@ def _minimal_yaml_load(text: str) -> dict[str, Any]:
             continue
         if value.startswith("[") and value.endswith("]"):
             inner = value[1:-1].strip()
-            out[key] = (
-                [v.strip().strip('"') for v in inner.split(",")] if inner else []
-            )
+            out[key] = [v.strip().strip('"') for v in inner.split(",")] if inner else []
         elif value.lower() in ("true", "false"):
             out[key] = value.lower() == "true"
         elif value.lower() == "null":
@@ -218,9 +214,7 @@ def render_wiki_markdown(page: WikiPage) -> str:
     related_block = ""
     if page.related:
         bullets = "\n".join(f"- [[{r}]]" for r in page.related)
-        related_block = (
-            f"\n\n{WIKI_RELATED_START_MARKER}\n{bullets}\n{WIKI_RELATED_END_MARKER}"
-        )
+        related_block = f"\n\n{WIKI_RELATED_START_MARKER}\n{bullets}\n{WIKI_RELATED_END_MARKER}"
 
     body = (page.body or "").rstrip()
     return f"---\n{_dump_yaml(fm)}\n---\n\n{body}{related_block}\n"
@@ -236,7 +230,7 @@ def parse_wiki_markdown(content: str) -> WikiPage:
     if match is None:
         raise ValueError("wiki page missing YAML frontmatter")
     fm_text = match.group(1)
-    body_with_related = content[match.end():].lstrip("\n")
+    body_with_related = content[match.end() :].lstrip("\n")
 
     related: tuple[str, ...] = ()
     body = body_with_related

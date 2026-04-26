@@ -6,7 +6,6 @@ import pytest
 
 from sampyclaw.pi.registry import InMemoryAuthStorage
 from sampyclaw.tools_pkg.web import (
-    DuckDuckGoSearch,
     SearchHit,
     SSRFBlocked,
     assert_public_url,
@@ -16,7 +15,6 @@ from sampyclaw.tools_pkg.web import (
     web_fetch_tool,
     web_search_tool,
 )
-
 
 # ─── SSRF ────────────────────────────────────────────────────────────
 
@@ -154,10 +152,13 @@ def test_web_search_tool_metadata() -> None:
 
 
 async def test_web_search_tool_with_injected_provider_returns_summary() -> None:
-    provider = _FakeProvider("inj", [
-        SearchHit(title="One", url="https://x.com/1", snippet="first"),
-        SearchHit(title="Two", url="https://x.com/2", snippet="second"),
-    ])
+    provider = _FakeProvider(
+        "inj",
+        [
+            SearchHit(title="One", url="https://x.com/1", snippet="first"),
+            SearchHit(title="Two", url="https://x.com/2", snippet="second"),
+        ],
+    )
     t = web_search_tool(providers=[provider])
     out = await t.execute({"query": "anything", "k": 3})
     assert "[via inj]" in out

@@ -7,7 +7,6 @@ to loop again based on the assembled message's `stop_reason`.
 
 from __future__ import annotations
 
-import asyncio
 import json
 from dataclasses import dataclass, field
 from typing import Any

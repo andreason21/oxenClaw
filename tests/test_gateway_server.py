@@ -89,10 +89,8 @@ async def test_roundtrip_and_event_push(router: Router) -> None:
             assert frame["body"]["body"]["text"] == "hello from server"
     finally:
         task.cancel()
-        try:
+        with contextlib.suppress(asyncio.CancelledError):
             await task
-        except asyncio.CancelledError:
-            pass
 
 
 async def test_request_shutdown_returns_serve_cleanly(router: Router) -> None:

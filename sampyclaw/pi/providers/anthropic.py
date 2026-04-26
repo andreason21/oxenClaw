@@ -17,7 +17,6 @@ content_block_delta SSE into the pi event union.
 
 from __future__ import annotations
 
-import asyncio
 import json
 from collections.abc import AsyncIterator
 from typing import Any
@@ -171,9 +170,7 @@ def _serialize_tools(tools: list[Any]) -> list[dict[str, Any]]:
     return out
 
 
-def _apply_cache_control(
-    payload: dict[str, Any], *, breakpoints: int
-) -> dict[str, Any]:
+def _apply_cache_control(payload: dict[str, Any], *, breakpoints: int) -> dict[str, Any]:
     """Place `cache_control: {type: "ephemeral"}` markers up to `breakpoints`
     times. Order: system → tools → last user → last assistant. Anthropic
     accepts at most 4 markers."""
@@ -247,9 +244,7 @@ def build_anthropic_payload(ctx: Context) -> dict[str, Any]:
             if budget > 0:
                 payload["thinking"] = {"type": "enabled", "budget_tokens": budget}
     if ctx.model.supports_prompt_cache and ctx.cache_control_breakpoints > 0:
-        payload = _apply_cache_control(
-            payload, breakpoints=min(4, ctx.cache_control_breakpoints)
-        )
+        payload = _apply_cache_control(payload, breakpoints=min(4, ctx.cache_control_breakpoints))
     return payload
 
 
@@ -326,15 +321,11 @@ async def stream_anthropic(
                         if dt == "text_delta":
                             yield TextDeltaEvent(delta=delta.get("text", ""))
                         elif dt == "thinking_delta":
-                            yield ThinkingDeltaEvent(
-                                delta=delta.get("thinking", "")
-                            )
+                            yield ThinkingDeltaEvent(delta=delta.get("thinking", ""))
                         elif dt == "signature_delta":
                             # Final signature for the thinking block. Carry on the
                             # next thinking_delta as `signature=` is closed.
-                            yield ThinkingDeltaEvent(
-                                delta="", signature=delta.get("signature")
-                            )
+                            yield ThinkingDeltaEvent(delta="", signature=delta.get("signature"))
                         elif dt == "input_json_delta":
                             tid = tool_meta.get(idx, {}).get("id", "")
                             yield ToolUseInputDeltaEvent(
@@ -359,10 +350,8 @@ async def stream_anthropic(
                             stop_emitted = True
                 if not stop_emitted:
                     yield StopEvent(reason="end_turn")
-        except (aiohttp.ClientConnectionError, asyncio.TimeoutError) as exc:
-            yield ErrorEvent(
-                message=f"connection error: {exc}", retryable=True, error=exc
-            )
+        except (TimeoutError, aiohttp.ClientConnectionError) as exc:
+            yield ErrorEvent(message=f"connection error: {exc}", retryable=True, error=exc)
 
 
 register_provider_stream("anthropic", stream_anthropic)

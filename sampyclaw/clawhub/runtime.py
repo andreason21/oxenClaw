@@ -29,12 +29,11 @@ The `SkillRuntime` is consumed by anything that runs a skill's commands
 
 from __future__ import annotations
 
-import asyncio
 import os
 import shutil
 import tempfile
 from contextlib import contextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -212,9 +211,7 @@ def prepare_skill_runtime(
         env.update(extra_env)
 
     if config.kind == "ephemeral":
-        ws = Path(
-            tempfile.mkdtemp(prefix=f"sampyclaw-{skill.slug}-", dir=_workspace_root(paths))
-        )
+        ws = Path(tempfile.mkdtemp(prefix=f"sampyclaw-{skill.slug}-", dir=_workspace_root(paths)))
     else:
         ws = _workspace_root(paths) / skill.slug
         ws.mkdir(parents=True, exist_ok=True)

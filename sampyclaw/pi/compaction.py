@@ -23,11 +23,9 @@ contract. Phase 6 wires the compactions into AgentSession persistence.
 
 from __future__ import annotations
 
-import asyncio
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Any
 from uuid import uuid4
 
 from sampyclaw.pi.messages import (
@@ -64,9 +62,7 @@ class CompactionPlan:
     tokens_after_estimated: int
 
 
-def _is_user_or_assistant_pair_index(
-    messages: list[AgentMessage], idx: int
-) -> bool:
+def _is_user_or_assistant_pair_index(messages: list[AgentMessage], idx: int) -> bool:
     """An index that starts a user→assistant pair is a safe split boundary.
     Avoid splitting between assistant tool_use and the matching tool_result."""
     if idx <= 0 or idx >= len(messages):
@@ -78,9 +74,7 @@ def _is_user_or_assistant_pair_index(
         # the tool result — splitting between them orphans the tool call.
         from sampyclaw.pi.messages import ToolUseBlock
 
-        has_pending_tool = any(
-            isinstance(b, ToolUseBlock) for b in prev.content
-        )
+        has_pending_tool = any(isinstance(b, ToolUseBlock) for b in prev.content)
         if has_pending_tool and isinstance(cur, ToolResultMessage):
             return False
     return True
@@ -113,9 +107,7 @@ def decide_compaction(
     # Find a safe boundary: walk back from the tail keep_tail_turns turns.
     n = len(messages)
     tail_start = max(1, n - keep_tail_turns)
-    while tail_start < n and not _is_user_or_assistant_pair_index(
-        messages, tail_start
-    ):
+    while tail_start < n and not _is_user_or_assistant_pair_index(messages, tail_start):
         tail_start += 1
     if tail_start >= n:
         # Nothing safely droppable.
@@ -125,7 +117,8 @@ def decide_compaction(
     # Estimate after-compaction tokens: assume the summary is ~10% of
     # the dropped block's tokens, plus the kept tail.
     dropped_tokens = sum(
-        estimate_tokens([messages[i]]) for i in drop  # type: ignore[list-item]
+        estimate_tokens([messages[i]])
+        for i in drop  # type: ignore[list-item]
     )
     kept_tokens = tokens_now - dropped_tokens
     estimated_after = kept_tokens + max(200, dropped_tokens // 10)
@@ -162,10 +155,7 @@ async def apply_compaction(
     summary_msg = SystemMessage(
         content=f"[COMPACTED SUMMARY of {len(dropped)} prior messages]\n{summary_text}"
     )
-    if plan.drop_indexes:
-        tail = messages[max(plan.drop_indexes) + 1 :]
-    else:
-        tail = messages
+    tail = messages[max(plan.drop_indexes) + 1 :] if plan.drop_indexes else messages
     new_messages: list[AgentMessage] = [summary_msg, *tail]
     tokens_after = estimate_tokens(new_messages)
     entry = CompactionEntry(
@@ -208,9 +198,7 @@ async def maybe_compact(
     )
     if not plan.needed:
         return False
-    new_messages, entry = await apply_compaction(
-        session.messages, plan, summarizer
-    )
+    new_messages, entry = await apply_compaction(session.messages, plan, summarizer)
     session.messages = new_messages
     session.compactions.append(entry)
     return True
@@ -225,9 +213,7 @@ async def truncating_summarizer(messages: list[AgentMessage]) -> str:
     available; the run loop can replace this with a real one."""
     if not messages:
         return ""
-    first_user = next(
-        (m for m in messages if isinstance(m, UserMessage)), None
-    )
+    first_user = next((m for m in messages if isinstance(m, UserMessage)), None)
     last_assistant = next(
         (m for m in reversed(messages) if isinstance(m, AssistantMessage)),
         None,
@@ -239,9 +225,7 @@ async def truncating_summarizer(messages: list[AgentMessage]) -> str:
         else:
             parts.append("First user turn: (multi-block)")
     if last_assistant:
-        text_blocks = [
-            b.text for b in last_assistant.content if hasattr(b, "text")
-        ]
+        text_blocks = [b.text for b in last_assistant.content if hasattr(b, "text")]
         if text_blocks:
             parts.append(f"Last assistant turn: {text_blocks[0][:300]}")
     return "\n".join(parts)

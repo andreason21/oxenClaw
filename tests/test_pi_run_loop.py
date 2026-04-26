@@ -3,20 +3,14 @@
 from __future__ import annotations
 
 import asyncio
-import json
-from typing import Any
-
-import pytest
 
 import sampyclaw.pi.providers  # noqa: F401  registers wrappers
 from sampyclaw.pi import (
     Api,
     AssistantMessage,
     Model,
-    SimpleStreamOptions,
     TextContent,
     ToolUseBlock,
-    UserMessage,
     register_provider_stream,
     text_message,
 )
@@ -227,7 +221,9 @@ async def test_turn_retries_transient_error() -> None:
         config=RuntimeConfig(backoff_initial=0.0, backoff_max=0.0),
     )
     assert result.stopped_reason == "end_turn"
-    assert any("recovered" in b.text for b in result.final_message.content if isinstance(b, TextContent))  # type: ignore[union-attr]
+    assert any(
+        "recovered" in b.text for b in result.final_message.content if isinstance(b, TextContent)
+    )  # type: ignore[union-attr]
 
 
 async def test_turn_iteration_cap_emits_synthetic_message() -> None:

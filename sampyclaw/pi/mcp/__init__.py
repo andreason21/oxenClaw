@@ -30,13 +30,13 @@ from sampyclaw.pi.mcp.names import (
 )
 
 __all__ = [
+    "TOOL_NAME_SEPARATOR",
     "HttpServerConfig",
     "MCPClient",
     "MCPClientPool",
     "MCPError",
     "MCPServerConfig",
     "StdioServerConfig",
-    "TOOL_NAME_SEPARATOR",
     "build_pool_from_config",
     "build_safe_tool_name",
     "load_mcp_configs",

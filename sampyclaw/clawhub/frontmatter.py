@@ -119,8 +119,7 @@ class SkillManifest(BaseModel):
             raise ValueError("name is required")
         if not VALID_SLUG_RE.match(v):
             raise ValueError(
-                f"name {v!r} must be alphanumeric + hyphens, "
-                f"matching {VALID_SLUG_RE.pattern}"
+                f"name {v!r} must be alphanumeric + hyphens, matching {VALID_SLUG_RE.pattern}"
             )
         return v
 

@@ -70,9 +70,7 @@ async def test_add_persists_and_fire_routes_to_agent(tmp_path) -> None:  # type:
 
 async def test_remove_drops_from_store(tmp_path) -> None:  # type: ignore[no-untyped-def]
     store = CronJobStore(path=tmp_path / "c.json")
-    scheduler = CronScheduler(
-        store=store, dispatcher=_dispatcher_with_echo(AsyncMock())
-    )
+    scheduler = CronScheduler(store=store, dispatcher=_dispatcher_with_echo(AsyncMock()))
     job = scheduler.add(_new_job())
     assert scheduler.remove(job.id) is True
     assert scheduler.remove(job.id) is False
@@ -81,9 +79,7 @@ async def test_remove_drops_from_store(tmp_path) -> None:  # type: ignore[no-unt
 
 async def test_toggle_updates_enabled_flag(tmp_path) -> None:  # type: ignore[no-untyped-def]
     store = CronJobStore(path=tmp_path / "c.json")
-    scheduler = CronScheduler(
-        store=store, dispatcher=_dispatcher_with_echo(AsyncMock())
-    )
+    scheduler = CronScheduler(store=store, dispatcher=_dispatcher_with_echo(AsyncMock()))
     job = scheduler.add(_new_job())
     updated = scheduler.toggle(job.id, False)
     assert updated is not None and updated.enabled is False
@@ -92,9 +88,7 @@ async def test_toggle_updates_enabled_flag(tmp_path) -> None:  # type: ignore[no
 
 async def test_toggle_missing_returns_none(tmp_path) -> None:  # type: ignore[no-untyped-def]
     store = CronJobStore(path=tmp_path / "c.json")
-    scheduler = CronScheduler(
-        store=store, dispatcher=_dispatcher_with_echo(AsyncMock())
-    )
+    scheduler = CronScheduler(store=store, dispatcher=_dispatcher_with_echo(AsyncMock()))
     assert scheduler.toggle("nope", False) is None
 
 
@@ -106,9 +100,7 @@ async def test_disabled_job_does_not_fire(tmp_path) -> None:  # type: ignore[no-
         return SendResult(message_id="m", timestamp=0.0)
 
     store = CronJobStore(path=tmp_path / "c.json")
-    scheduler = CronScheduler(
-        store=store, dispatcher=_dispatcher_with_echo(_send)
-    )
+    scheduler = CronScheduler(store=store, dispatcher=_dispatcher_with_echo(_send))
     job = scheduler.add(_new_job())
     scheduler.toggle(job.id, False)
     await scheduler.fire_now(job.id)
@@ -117,17 +109,13 @@ async def test_disabled_job_does_not_fire(tmp_path) -> None:  # type: ignore[no-
 
 async def test_fire_now_missing_returns_false(tmp_path) -> None:  # type: ignore[no-untyped-def]
     store = CronJobStore(path=tmp_path / "c.json")
-    scheduler = CronScheduler(
-        store=store, dispatcher=_dispatcher_with_echo(AsyncMock())
-    )
+    scheduler = CronScheduler(store=store, dispatcher=_dispatcher_with_echo(AsyncMock()))
     assert await scheduler.fire_now("nope") is False
 
 
 async def test_start_and_stop_are_idempotent(tmp_path) -> None:  # type: ignore[no-untyped-def]
     store = CronJobStore(path=tmp_path / "c.json")
-    scheduler = CronScheduler(
-        store=store, dispatcher=_dispatcher_with_echo(AsyncMock())
-    )
+    scheduler = CronScheduler(store=store, dispatcher=_dispatcher_with_echo(AsyncMock()))
     scheduler.add(_new_job())
     scheduler.start()
     scheduler.start()  # second call is no-op, must not raise
@@ -140,9 +128,7 @@ async def test_dispatch_errors_are_swallowed(tmp_path) -> None:  # type: ignore[
         raise RuntimeError("downstream broke")
 
     store = CronJobStore(path=tmp_path / "c.json")
-    scheduler = CronScheduler(
-        store=store, dispatcher=_dispatcher_with_echo(_boom)
-    )
+    scheduler = CronScheduler(store=store, dispatcher=_dispatcher_with_echo(_boom))
     job = scheduler.add(_new_job())
     # Must not raise.
     await scheduler.fire_now(job.id)

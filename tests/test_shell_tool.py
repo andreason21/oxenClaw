@@ -28,7 +28,9 @@ def _echo_tool() -> ShellTool:
         description="Echo text.",
         input_model=_Args,
         argv_template=["echo", "{text}"],
-        policy=IsolationPolicy(backend="subprocess", timeout_seconds=2, network=True, filesystem="full"),
+        policy=IsolationPolicy(
+            backend="subprocess", timeout_seconds=2, network=True, filesystem="full"
+        ),
     )
 
 
@@ -73,7 +75,9 @@ async def test_shell_tool_timeout_raises() -> None:
         description="x",
         input_model=_Args,
         argv_template=["sleep", "5"],
-        policy=IsolationPolicy(backend="subprocess", timeout_seconds=0.5, network=True, filesystem="full"),
+        policy=IsolationPolicy(
+            backend="subprocess", timeout_seconds=0.5, network=True, filesystem="full"
+        ),
     )
     with pytest.raises(ShellToolError, match="timed out"):
         await tool.execute({"text": "ignored"})
@@ -85,7 +89,9 @@ async def test_shell_tool_nonzero_exit_raises() -> None:
         description="x",
         input_model=_Args,
         argv_template=["false"],
-        policy=IsolationPolicy(backend="subprocess", timeout_seconds=2, network=True, filesystem="full"),
+        policy=IsolationPolicy(
+            backend="subprocess", timeout_seconds=2, network=True, filesystem="full"
+        ),
     )
     with pytest.raises(ShellToolError):
         await tool.execute({"text": "ignored"})
@@ -95,8 +101,8 @@ async def test_python_snippet_tool_runs() -> None:
     """The default python_snippet policy is strict (network=False); requires
     a backend that can actually enforce that. On hosts without bwrap/container,
     fail-closed is the correct outcome — skip the live-run test."""
-    from sampyclaw.security.isolation.registry import resolve_backend
     from sampyclaw.security.isolation.policy import IsolationPolicy as _Pol
+    from sampyclaw.security.isolation.registry import resolve_backend
 
     backend = await resolve_backend(_Pol(network=False, filesystem="none"))
     if backend.name == "subprocess":
@@ -118,9 +124,7 @@ async def test_python_snippet_tool_memory_capped() -> None:
         )
     )
     with pytest.raises(ShellToolError):
-        await tool.execute(
-            {"code": "a = bytearray(256*1024*1024); print('escaped')"}
-        )
+        await tool.execute({"code": "a = bytearray(256*1024*1024); print('escaped')"})
 
 
 def test_ping_host_tool_metadata() -> None:
@@ -141,7 +145,13 @@ async def test_isolated_function_tool_runs_in_subprocess() -> None:
         description="echo via isolated subprocess",
         input_model=_Args,
         handler_path="tests._iso_test_handler:echo_args",
-        policy=IsolationPolicy(backend="subprocess", timeout_seconds=10, max_memory_mb=128, network=True, filesystem="full"),
+        policy=IsolationPolicy(
+            backend="subprocess",
+            timeout_seconds=10,
+            max_memory_mb=128,
+            network=True,
+            filesystem="full",
+        ),
     )
     out = await tool.execute({"text": "hello"})
     assert out == "ok:hello"
@@ -155,7 +165,13 @@ async def test_isolated_function_tool_handles_sync_handler() -> None:
         description="sync handler in isolated subprocess",
         input_model=_Args,
         handler_path="tests._iso_test_handler:sync_echo",
-        policy=IsolationPolicy(backend="subprocess", timeout_seconds=10, max_memory_mb=128, network=True, filesystem="full"),
+        policy=IsolationPolicy(
+            backend="subprocess",
+            timeout_seconds=10,
+            max_memory_mb=128,
+            network=True,
+            filesystem="full",
+        ),
     )
     out = await tool.execute({"text": "world"})
     assert out == "sync:world"
@@ -169,7 +185,13 @@ async def test_isolated_function_tool_surfaces_handler_exceptions() -> None:
         description="explode in isolated subprocess",
         input_model=_Args,
         handler_path="tests._iso_test_handler:boom",
-        policy=IsolationPolicy(backend="subprocess", timeout_seconds=10, max_memory_mb=128, network=True, filesystem="full"),
+        policy=IsolationPolicy(
+            backend="subprocess",
+            timeout_seconds=10,
+            max_memory_mb=128,
+            network=True,
+            filesystem="full",
+        ),
     )
     with pytest.raises(ShellToolError, match="intentional failure"):
         await tool.execute({"text": "ignored"})

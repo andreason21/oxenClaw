@@ -24,9 +24,7 @@ class _MessageArgs(BaseModel):
     chat_id: str = Field(..., description="Chat / room / user id.")
     text: str = Field(..., description="Message body to send.")
     thread_id: str | None = Field(None, description="Optional thread/topic id.")
-    reply_to_message_id: str | None = Field(
-        None, description="Optional reply-to message id."
-    )
+    reply_to_message_id: str | None = Field(None, description="Optional reply-to message id.")
 
 
 def message_tool(router: ChannelRouter) -> Tool:

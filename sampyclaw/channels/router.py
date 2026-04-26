@@ -8,7 +8,7 @@ registry for inspection.
 
 from __future__ import annotations
 
-from typing import Iterator
+from collections.abc import Iterator
 
 from sampyclaw.plugin_sdk.channel_contract import (
     ChannelPlugin,
@@ -29,14 +29,10 @@ class ChannelRouter:
     def __init__(self) -> None:
         self._by_binding: dict[tuple[str, str], ChannelPlugin] = {}
 
-    def register(
-        self, channel_id: str, account_id: str, plugin: ChannelPlugin
-    ) -> None:
+    def register(self, channel_id: str, account_id: str, plugin: ChannelPlugin) -> None:
         key = (channel_id, account_id)
         if key in self._by_binding:
-            raise ValueError(
-                f"channel {channel_id!r} already has account {account_id!r}"
-            )
+            raise ValueError(f"channel {channel_id!r} already has account {account_id!r}")
         self._by_binding[key] = plugin
 
     def get(self, channel_id: str, account_id: str) -> ChannelPlugin | None:
@@ -45,9 +41,7 @@ class ChannelRouter:
     def require(self, channel_id: str, account_id: str) -> ChannelPlugin:
         plugin = self.get(channel_id, account_id)
         if plugin is None:
-            raise UserVisibleError(
-                f"no channel plugin for {channel_id}:{account_id}"
-            )
+            raise UserVisibleError(f"no channel plugin for {channel_id}:{account_id}")
         return plugin
 
     def channels_by_id(self) -> dict[str, list[str]]:

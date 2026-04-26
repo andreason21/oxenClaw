@@ -20,16 +20,20 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-from sampyclaw.pi.messages import AgentMessage, AssistantMessage, TextContent
+from sampyclaw.pi.messages import AgentMessage
 from sampyclaw.pi.models import Model
-
 
 # ─── failure classifier ─────────────────────────────────────────────
 
 
 FailureCategory = Literal[
-    "transient", "rate_limit", "auth", "context_overflow", "model_error",
-    "client_error", "unknown",
+    "transient",
+    "rate_limit",
+    "auth",
+    "context_overflow",
+    "model_error",
+    "client_error",
+    "unknown",
 ]
 
 
@@ -71,9 +75,7 @@ def classify_failure(message: str) -> FailureCategory:
 # ─── failover ───────────────────────────────────────────────────────
 
 
-def select_failover_model(
-    primary: Model, candidates: Iterable[Model]
-) -> Model | None:
+def select_failover_model(primary: Model, candidates: Iterable[Model]) -> Model | None:
     """Pick the next-best model when `primary` fails.
 
     Strategy: prefer same provider with similar context window, then any
@@ -85,9 +87,7 @@ def select_failover_model(
         return None
     same_provider = [m for m in pool if m.provider == primary.provider]
     if same_provider:
-        same_provider.sort(
-            key=lambda m: abs(m.context_window - primary.context_window)
-        )
+        same_provider.sort(key=lambda m: abs(m.context_window - primary.context_window))
         return same_provider[0]
     floor = int(primary.context_window * 0.8)
     big_enough = [m for m in pool if m.context_window >= floor]
@@ -177,7 +177,6 @@ def rewrite_transcript(
     Used at session-export time so transcripts can be safely shared. Does
     NOT mutate the input.
     """
-    from sampyclaw.pi.messages import ThinkingBlock, ToolUseBlock
 
     out: list[AgentMessage] = []
     for msg in messages:
@@ -189,9 +188,7 @@ def rewrite_transcript(
                     continue
                 content.append(_redact_block(block, redact_tokens))
             dumped["content"] = content
-        elif dumped.get("role") == "user" and isinstance(
-            dumped.get("content"), str
-        ):
+        elif dumped.get("role") == "user" and isinstance(dumped.get("content"), str):
             dumped["content"] = _redact_str(dumped["content"], redact_tokens)
         from pydantic import TypeAdapter
 

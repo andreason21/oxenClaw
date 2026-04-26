@@ -9,9 +9,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from sampyclaw.wiki.models import WIKI_PAGE_KINDS, WikiPage, WikiPageKind
+from sampyclaw.wiki.models import WIKI_PAGE_KINDS, WikiPage
 from sampyclaw.wiki.vault import WikiVault
-
 
 INDEX_FILENAME = "INDEX.md"
 _INDEX_HEADER = "# Wiki Index\n\nAuto-generated. Edit `<kind>/<slug>.md` directly; re-run compile to regenerate.\n"

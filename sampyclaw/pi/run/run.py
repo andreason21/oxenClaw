@@ -25,7 +25,6 @@ from sampyclaw.pi.messages import (
 from sampyclaw.pi.models import Model
 from sampyclaw.pi.run.attempt import AttemptResult, run_attempt
 from sampyclaw.pi.run.runtime import RuntimeConfig
-from sampyclaw.pi.streaming import AssistantMessageEvent
 from sampyclaw.pi.tools import AgentTool, ToolExecutionResult
 from sampyclaw.plugin_sdk.runtime_env import get_logger
 
@@ -57,9 +56,7 @@ def _backoff_delay(attempt: int, *, initial: float, cap: float) -> float:
     return random.uniform(0, base)
 
 
-async def _execute_tool_safely(
-    tool: AgentTool, request: ToolUseBlock
-) -> ToolExecutionResult:
+async def _execute_tool_safely(tool: AgentTool, request: ToolUseBlock) -> ToolExecutionResult:
     """Run one tool with timing + structured error capture."""
     started = time.monotonic()
     if request.input.get("_parse_error"):
@@ -147,7 +144,7 @@ async def run_agent_turn(
     usage_total: dict[str, int] = {}
     stop_reason = "end_turn"
 
-    for iteration in range(config.max_tool_iterations):
+    for _iteration in range(config.max_tool_iterations):
         if config.abort_event is not None and config.abort_event.is_set():
             abort_msg = AssistantMessage(
                 content=[TextContent(text="(aborted)")],
@@ -190,9 +187,7 @@ async def run_agent_turn(
                     stopped_reason=stop_reason,
                 )
             retry += 1
-            delay = _backoff_delay(
-                retry, initial=config.backoff_initial, cap=config.backoff_max
-            )
+            delay = _backoff_delay(retry, initial=config.backoff_initial, cap=config.backoff_max)
             logger.warning(
                 "transient error (retry %d/%d after %.2fs): %s",
                 retry,
@@ -219,15 +214,11 @@ async def run_agent_turn(
                 stopped_reason=stop_reason,
             )
 
-        results = await _run_tools(
-            tool_uses, tools_by_name, parallel=config.parallel_tools
-        )
+        results = await _run_tools(tool_uses, tools_by_name, parallel=config.parallel_tools)
         executions.extend(results)
         tr_msg = ToolResultMessage(
             results=[
-                ToolResultBlock(
-                    tool_use_id=r.id, content=r.output, is_error=r.is_error
-                )
+                ToolResultBlock(tool_use_id=r.id, content=r.output, is_error=r.is_error)
                 for r in results
             ]
         )
@@ -236,11 +227,7 @@ async def run_agent_turn(
 
     # Iteration cap hit.
     cap_msg = AssistantMessage(
-        content=[
-            TextContent(
-                text="(stopped: reached max tool iterations without a final answer)"
-            )
-        ],
+        content=[TextContent(text="(stopped: reached max tool iterations without a final answer)")],
         stop_reason="iteration_cap",
     )
     if config.soft_iteration_cap:

@@ -18,7 +18,6 @@ from __future__ import annotations
 import ipaddress
 import re
 import socket
-from collections.abc import Iterable
 from urllib.parse import urlparse
 
 from sampyclaw.security.net.policy import NetPolicy
@@ -144,9 +143,7 @@ def assert_url_allowed(url: str, policy: NetPolicy) -> str:
     raises `SsrFBlockedError` otherwise."""
     parsed = urlparse(url)
     if not policy.is_scheme_allowed(parsed.scheme or ""):
-        raise SsrFBlockedError(
-            f"scheme {parsed.scheme!r} not in {policy.allowed_schemes}"
-        )
+        raise SsrFBlockedError(f"scheme {parsed.scheme!r} not in {policy.allowed_schemes}")
     host = parsed.hostname
     if not host:
         raise SsrFBlockedError("URL has no host")
@@ -187,18 +184,14 @@ def assert_ip_allowed(
     try:
         ip = ipaddress.ip_address(ip_str)
     except ValueError as exc:
-        raise SsrFBlockedError(
-            f"unparseable IP {ip_str!r} for {hostname!r}: {exc}"
-        ) from exc
+        raise SsrFBlockedError(f"unparseable IP {ip_str!r} for {hostname!r}: {exc}") from exc
     reason = classify_blocked(
         ip,
         allow_private=policy.allow_private_network,
         allow_loopback=policy.allow_loopback,
     )
     if reason is not None:
-        raise SsrFBlockedError(
-            f"{hostname!r} resolves to {ip} which is blocked: {reason}"
-        )
+        raise SsrFBlockedError(f"{hostname!r} resolves to {ip} which is blocked: {reason}")
     return ip
 
 

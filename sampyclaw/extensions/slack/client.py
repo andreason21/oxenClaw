@@ -142,20 +142,26 @@ class SlackWebClient:
                         body_preview = (await resp.text())[:200]
                         logger.warning(
                             "slack %s retryable %s (attempt %d/%d): %s",
-                            method, resp.status, attempt + 1,
-                            self._max_retries, body_preview,
+                            method,
+                            resp.status,
+                            attempt + 1,
+                            self._max_retries,
+                            body_preview,
                         )
                         await asyncio.sleep(self._delay(attempt, retry_after))
                         attempt += 1
                         continue
                     resp.raise_for_status()
                     data = await resp.json()
-            except (aiohttp.ClientConnectionError, asyncio.TimeoutError) as exc:
+            except (TimeoutError, aiohttp.ClientConnectionError) as exc:
                 if attempt >= self._max_retries:
                     raise
                 logger.warning(
                     "slack %s transient error (attempt %d/%d): %s",
-                    method, attempt + 1, self._max_retries, exc,
+                    method,
+                    attempt + 1,
+                    self._max_retries,
+                    exc,
                 )
                 await asyncio.sleep(self._delay(attempt, 0))
                 attempt += 1
@@ -163,7 +169,8 @@ class SlackWebClient:
             if not data.get("ok"):
                 raise SlackApiError(
                     str(data.get("error") or "unknown"),
-                    status=resp.status, response=data,
+                    status=resp.status,
+                    response=data,
                 )
             return data
 
@@ -172,5 +179,5 @@ class SlackWebClient:
         # jitter with 0.5 → 8s envelope.
         if retry_after > 0:
             return min(retry_after, 30.0)
-        base = min(8.0, 0.5 * (2 ** attempt))
+        base = min(8.0, 0.5 * (2**attempt))
         return random.uniform(0, base)

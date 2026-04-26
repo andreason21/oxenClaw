@@ -47,9 +47,7 @@ def _build_mock_bot():  # type: ignore[no-untyped-def]
 
 async def test_inbound_text_produces_echo_send(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     bot = _build_mock_bot()
-    monkeypatch.setattr(
-        "sampyclaw.extensions.telegram.channel.create_bot", lambda token: bot
-    )
+    monkeypatch.setattr("sampyclaw.extensions.telegram.channel.create_bot", lambda token: bot)
 
     channel = TelegramChannel(token="fake", account_id="main")
     agents = AgentRegistry()
@@ -64,9 +62,7 @@ async def test_inbound_text_produces_echo_send(monkeypatch) -> None:  # type: ig
     )
     dispatcher = Dispatcher(agents=agents, config=config, send=channel.send)
 
-    session = TelegramPollingSession(
-        bot=bot, account_id="main", on_inbound=dispatcher.dispatch
-    )
+    session = TelegramPollingSession(bot=bot, account_id="main", on_inbound=dispatcher.dispatch)
 
     await session._handle_message(_build_inbound_message("hello world"))
 
@@ -78,9 +74,7 @@ async def test_inbound_text_produces_echo_send(monkeypatch) -> None:  # type: ig
 
 async def test_inbound_from_unauthorized_sender_is_dropped(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     bot = _build_mock_bot()
-    monkeypatch.setattr(
-        "sampyclaw.extensions.telegram.channel.create_bot", lambda token: bot
-    )
+    monkeypatch.setattr("sampyclaw.extensions.telegram.channel.create_bot", lambda token: bot)
 
     channel = TelegramChannel(token="fake", account_id="main")
     agents = AgentRegistry()
@@ -94,22 +88,16 @@ async def test_inbound_from_unauthorized_sender_is_dropped(monkeypatch) -> None:
         }
     )
     dispatcher = Dispatcher(agents=agents, config=config, send=channel.send)
-    session = TelegramPollingSession(
-        bot=bot, account_id="main", on_inbound=dispatcher.dispatch
-    )
+    session = TelegramPollingSession(bot=bot, account_id="main", on_inbound=dispatcher.dispatch)
 
-    await session._handle_message(
-        _build_inbound_message("hi", sender_id=100)
-    )
+    await session._handle_message(_build_inbound_message("hi", sender_id=100))
 
     bot.send_message.assert_not_called()
 
 
 async def test_multiple_inbound_each_produces_echo(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     bot = _build_mock_bot()
-    monkeypatch.setattr(
-        "sampyclaw.extensions.telegram.channel.create_bot", lambda token: bot
-    )
+    monkeypatch.setattr("sampyclaw.extensions.telegram.channel.create_bot", lambda token: bot)
 
     channel = TelegramChannel(token="fake", account_id="main")
     agents = AgentRegistry()
@@ -123,9 +111,7 @@ async def test_multiple_inbound_each_produces_echo(monkeypatch) -> None:  # type
         }
     )
     dispatcher = Dispatcher(agents=agents, config=config, send=channel.send)
-    session = TelegramPollingSession(
-        bot=bot, account_id="main", on_inbound=dispatcher.dispatch
-    )
+    session = TelegramPollingSession(bot=bot, account_id="main", on_inbound=dispatcher.dispatch)
 
     for i, text in enumerate(["first", "second", "third"], start=1):
         msg = _build_inbound_message(text).model_copy(update={"message_id": i})

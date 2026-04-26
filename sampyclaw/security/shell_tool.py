@@ -15,7 +15,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from sampyclaw.agents.tools import FunctionTool, Tool
+from sampyclaw.agents.tools import Tool
 from sampyclaw.security.isolation.policy import IsolationPolicy, IsolationResult
 from sampyclaw.security.isolation.registry import resolve_backend
 
@@ -101,14 +101,11 @@ class ShellTool:
         result = await backend.run(argv, policy=self._policy)
         if result.timed_out:
             raise ShellToolError(
-                f"shell tool {self.name!r} timed out after "
-                f"{self._policy.timeout_seconds}s",
+                f"shell tool {self.name!r} timed out after {self._policy.timeout_seconds}s",
                 result=result,
             )
         if result.error is not None:
-            raise ShellToolError(
-                f"shell tool {self.name!r} failed: {result.error}", result=result
-            )
+            raise ShellToolError(f"shell tool {self.name!r} failed: {result.error}", result=result)
         if result.exit_code != 0:
             tail = result.stderr.strip().splitlines()[-3:] if result.stderr else []
             raise ShellToolError(
@@ -156,7 +153,8 @@ def python_snippet_tool(*, policy: IsolationPolicy | None = None) -> ShellTool:
         ),
         input_model=_PythonSnippetArgs,
         argv_template=["python3", "-c", "{code}"],
-        policy=policy or IsolationPolicy(
+        policy=policy
+        or IsolationPolicy(
             network=False,
             timeout_seconds=5.0,
             max_memory_mb=128,

@@ -126,9 +126,7 @@ def mmr_rerank(
     max_score = max(scores)
     min_score = min(scores)
     score_range = max_score - min_score
-    relevance = [
-        1.0 if score_range == 0 else (s - min_score) / score_range for s in scores
-    ]
+    relevance = [1.0 if score_range == 0 else (s - min_score) / score_range for s in scores]
 
     chosen: list[bool] = [False] * n
     max_sim: list[float] = [0.0] * n

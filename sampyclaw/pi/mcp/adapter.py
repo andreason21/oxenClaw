@@ -22,13 +22,10 @@ from sampyclaw.pi.mcp.names import (
     sanitize_server_name,
 )
 
-
 _DEFAULT_TOOL_TIMEOUT_SECONDS = 60.0
 
 
-def _flatten_call_result(
-    server: str, tool: str, result: dict[str, Any]
-) -> str:
+def _flatten_call_result(server: str, tool: str, result: dict[str, Any]) -> str:
     """Render a `CallToolResult` as a string the agent can read.
 
     MCP returns `content` as a list of typed blocks (text/image/...) and
@@ -56,18 +53,10 @@ def _flatten_call_result(
                 parts.append(f"[{mime} image returned by {server}__{tool}]")
             elif kind == "resource":
                 resource = block.get("resource") or {}
-                uri = (
-                    resource.get("uri")
-                    if isinstance(resource, dict)
-                    else None
-                )
-                parts.append(
-                    f"[resource: {uri or '<unknown>'} from {server}__{tool}]"
-                )
+                uri = resource.get("uri") if isinstance(resource, dict) else None
+                parts.append(f"[resource: {uri or '<unknown>'} from {server}__{tool}]")
             else:
-                parts.append(
-                    f"[{kind or 'unknown'} block from {server}__{tool}]"
-                )
+                parts.append(f"[{kind or 'unknown'} block from {server}__{tool}]")
     if not parts:
         structured = result.get("structuredContent")
         if structured is not None:
@@ -118,10 +107,8 @@ class _MCPProxyTool:
         client = self._pool.get(self._server_name)
         if client is None:
             failures = self._pool.failures.get(self._server_name)
-            return (
-                f"mcp tool unavailable: server '{self._server_name}' is not "
-                f"connected"
-                + (f" ({failures})" if failures else "")
+            return f"mcp tool unavailable: server '{self._server_name}' is not connected" + (
+                f" ({failures})" if failures else ""
             )
         try:
             result = await client.call_tool(
@@ -131,9 +118,7 @@ class _MCPProxyTool:
             )
         except MCPError as exc:
             return f"mcp error from {self._server_name}: {exc.message}"
-        return _flatten_call_result(
-            self._server_name, self._original_tool_name, result
-        )
+        return _flatten_call_result(self._server_name, self._original_tool_name, result)
 
 
 def _coerce_input_schema(raw: Any) -> dict[str, Any]:
@@ -176,20 +161,11 @@ async def materialize_mcp_tools(
             if not isinstance(tname, str) or not tname.strip():
                 continue
             description = (
-                tool.get("description")
-                if isinstance(tool.get("description"), str)
-                else None
+                tool.get("description") if isinstance(tool.get("description"), str) else None
             )
-            title = (
-                tool.get("title")
-                if isinstance(tool.get("title"), str)
-                else None
-            )
+            title = tool.get("title") if isinstance(tool.get("title"), str) else None
             schema = _coerce_input_schema(tool.get("inputSchema"))
-            fallback = (
-                f"Provided by MCP server '{server_name}' "
-                f"({client.description})."
-            )
+            fallback = f"Provided by MCP server '{server_name}' ({client.description})."
             flat_tools.append(
                 (
                     server_name,

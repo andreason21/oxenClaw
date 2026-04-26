@@ -24,7 +24,6 @@ import time
 from sampyclaw.security.isolation._truncate import truncate
 from sampyclaw.security.isolation.policy import IsolationPolicy, IsolationResult
 
-
 _RUNTIME_CACHE: tuple[str | None, str | None] = (None, None)
 
 
@@ -72,7 +71,9 @@ def _build_container_argv(
         args += [f"--memory={policy.max_memory_mb}m"]
     if policy.max_cpu_seconds is not None:
         # cpus=fraction for total wall-CPU; rough analogue.
-        args += [f"--cpus={max(0.1, policy.max_cpu_seconds / max(policy.timeout_seconds, 0.1)):.2f}"]
+        args += [
+            f"--cpus={max(0.1, policy.max_cpu_seconds / max(policy.timeout_seconds, 0.1)):.2f}"
+        ]
     args.append(policy.container_image)
     args.extend(inner_argv)
     return args
@@ -117,7 +118,7 @@ class ContainerBackend:
             out, err = await asyncio.wait_for(
                 proc.communicate(input=stdin), timeout=policy.timeout_seconds
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             timed_out = True
             proc.kill()
             try:

@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Callable
-from unittest.mock import MagicMock
+from collections.abc import Callable
 
 import pytest
 

@@ -162,9 +162,7 @@ def _connection_timeout(raw: dict[str, Any]) -> float:
     return DEFAULT_CONNECTION_TIMEOUT_SECONDS
 
 
-def parse_server_config(
-    server_name: str, raw: Any
-) -> MCPServerConfig | _ParseFailure:
+def parse_server_config(server_name: str, raw: Any) -> MCPServerConfig | _ParseFailure:
     """Parse one server entry into a transport config or a parse failure.
 
     The shape mirrors openclaw `mcp.json`::
@@ -195,11 +193,7 @@ def parse_server_config(
         env_raw = raw.get("env")
         env, dropped = _coerce_string_record(env_raw, drop_dangerous_keys=True)
         cwd_raw = raw.get("cwd") or raw.get("workingDirectory")
-        cwd = (
-            cwd_raw
-            if isinstance(cwd_raw, str) and cwd_raw.strip()
-            else None
-        )
+        cwd = cwd_raw if isinstance(cwd_raw, str) and cwd_raw.strip() else None
         return StdioServerConfig(
             server_name=server_name,
             command=command,
@@ -212,18 +206,14 @@ def parse_server_config(
 
     url = raw.get("url")
     if not (isinstance(url, str) and url.strip()):
-        return _ParseFailure(
-            "neither 'command' (stdio) nor 'url' (http) was provided"
-        )
+        return _ParseFailure("neither 'command' (stdio) nor 'url' (http) was provided")
     parsed = urlparse(url.strip())
     if parsed.scheme not in {"http", "https"}:
         return _ParseFailure(
             f"only http/https URLs are supported, got '{parsed.scheme or '<empty>'}'"
         )
 
-    headers, _dropped_headers = _coerce_string_record(
-        raw.get("headers"), drop_dangerous_keys=False
-    )
+    headers, _dropped_headers = _coerce_string_record(raw.get("headers"), drop_dangerous_keys=False)
 
     if requested_transport and requested_transport not in {
         "sse",

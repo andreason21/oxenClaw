@@ -127,7 +127,5 @@ async def test_basemodel_params_passed_through() -> None:
     async def _square(p: P) -> int:
         return p.x * p.x
 
-    resp = await r.dispatch(
-        {"jsonrpc": "2.0", "id": 7, "method": "square", "params": {"x": 5}}
-    )
+    resp = await r.dispatch({"jsonrpc": "2.0", "id": 7, "method": "square", "params": {"x": 5}})
     assert resp.result == 25

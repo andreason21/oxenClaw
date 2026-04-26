@@ -29,14 +29,12 @@ from __future__ import annotations
 import asyncio
 import json
 from pathlib import Path
-from typing import Any
 
 import pytest
 from pydantic import BaseModel
 from typer.testing import CliRunner
 
 import sampyclaw.pi.providers  # noqa: F401  registers stream wrappers
-
 from sampyclaw.agents.base import AgentContext
 from sampyclaw.agents.pi_agent import PiAgent
 from sampyclaw.agents.tools import FunctionTool, ToolRegistry
@@ -74,7 +72,6 @@ from sampyclaw.pi.policy import (
     SendPolicy,
     SessionChatType,
     SessionPolicy,
-    set_policy,
 )
 from sampyclaw.pi.registry import InMemoryModelRegistry
 from sampyclaw.pi.run import RuntimeConfig, run_agent_turn
@@ -95,7 +92,6 @@ from sampyclaw.pi.streaming import (
 )
 from sampyclaw.plugin_sdk.channel_contract import ChannelTarget, InboundEnvelope
 from tests._memory_stubs import StubEmbeddings
-
 
 # ─── helpers ─────────────────────────────────────────────────────────
 
@@ -269,7 +265,9 @@ async def test_scenario_group_chat_send_policy_gates_inbound() -> None:
     p = pol.send
 
     # Group: alice ok, bob denied (also in deny), carol blocked by mode.
-    assert p.should_reply(chat_type=SessionChatType.GROUP, sender_id="alice", text="@bot hi") is True
+    assert (
+        p.should_reply(chat_type=SessionChatType.GROUP, sender_id="alice", text="@bot hi") is True
+    )
     assert p.should_reply(chat_type=SessionChatType.GROUP, sender_id="bob", text="hey") is False
     assert p.should_reply(chat_type=SessionChatType.GROUP, sender_id="carol", text="hey") is False
 
@@ -280,9 +278,20 @@ async def test_scenario_group_chat_send_policy_gates_inbound() -> None:
 
     # ADDRESSED_ONLY: needs mention or reply-to-bot.
     p3 = SendPolicy(mode=SendMode.ADDRESSED_ONLY, addressed_handles=("@sampyclaw",))
-    assert p3.should_reply(chat_type=SessionChatType.GROUP, sender_id="anyone", text="random chat") is False
-    assert p3.should_reply(chat_type=SessionChatType.GROUP, sender_id="anyone", text="@sampyclaw help") is True
-    assert p3.should_reply(chat_type=SessionChatType.GROUP, sender_id="anyone", text="ok", is_reply_to_bot=True) is True
+    assert (
+        p3.should_reply(chat_type=SessionChatType.GROUP, sender_id="anyone", text="random chat")
+        is False
+    )
+    assert (
+        p3.should_reply(chat_type=SessionChatType.GROUP, sender_id="anyone", text="@sampyclaw help")
+        is True
+    )
+    assert (
+        p3.should_reply(
+            chat_type=SessionChatType.GROUP, sender_id="anyone", text="ok", is_reply_to_bot=True
+        )
+        is True
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -407,7 +416,9 @@ async def test_scenario_failover_after_persistent_provider_error(
     config = RuntimeConfig(max_retries=2, backoff_initial=0.0, backoff_max=0.0)
     result = await run_agent_turn(
         model=primary,
-        api=type("Api", (), {"base_url": "x", "api_key": None, "organization": None, "extra_headers": {}})(),
+        api=type(
+            "Api", (), {"base_url": "x", "api_key": None, "organization": None, "extra_headers": {}}
+        )(),
         system="be brief",
         history=[UserMessage(content="hi")],
         tools=[],
@@ -425,7 +436,9 @@ async def test_scenario_failover_after_persistent_provider_error(
     # Re-run with the failover model and verify it succeeds.
     result2 = await run_agent_turn(
         model=pick,
-        api=type("Api", (), {"base_url": "x", "api_key": None, "organization": None, "extra_headers": {}})(),
+        api=type(
+            "Api", (), {"base_url": "x", "api_key": None, "organization": None, "extra_headers": {}}
+        )(),
         system="be brief",
         history=[UserMessage(content="hi")],
         tools=[],
@@ -496,9 +509,7 @@ def test_scenario_cli_full_session_lifecycle(
         s.messages = [
             SystemMessage(content="be helpful"),
             UserMessage(content="hello"),
-            AssistantMessage(
-                content=[TextContent(text="hi back")], stop_reason="end_turn"
-            ),
+            AssistantMessage(content=[TextContent(text="hi back")], stop_reason="end_turn"),
         ]
         await sm.save(s)
         sm.close()
@@ -561,8 +572,8 @@ async def test_scenario_pi_agent_web_search_then_fetch(tmp_path: Path) -> None:
     and that the SSRF guard fires on a private URL."""
     from sampyclaw.tools_pkg.web import (
         SearchHit,
-        web_search_tool,
         web_fetch_tool,
+        web_search_tool,
     )
 
     class _P:
@@ -577,9 +588,7 @@ async def test_scenario_pi_agent_web_search_then_fetch(tmp_path: Path) -> None:
         state["calls"] += 1
         if state["calls"] == 1:
             yield ToolUseStartEvent(id="t1", name="web_search")
-            yield ToolUseInputDeltaEvent(
-                id="t1", input_delta='{"query":"langchain","k":3}'
-            )
+            yield ToolUseInputDeltaEvent(id="t1", input_delta='{"query":"langchain","k":3}')
             yield ToolUseEndEvent(id="t1")
             yield StopEvent(reason="tool_use")
         elif state["calls"] == 2:
@@ -643,11 +652,7 @@ async def test_scenario_coding_agent_runs_in_skill_workspace(
     bd = tmp_path / "bin"
     bd.mkdir(parents=True)
     fake = bd / "codex"
-    fake.write_text(
-        "#!/usr/bin/env bash\n"
-        "echo \"PWD=$PWD\"\n"
-        "echo \"FLAG=$SKILL_FLAG\"\n"
-    )
+    fake.write_text('#!/usr/bin/env bash\necho "PWD=$PWD"\necho "FLAG=$SKILL_FLAG"\n')
     fake.chmod(0o755)
     monkeypatch.setenv("PATH", f"{bd}:/usr/bin:/bin")
 
@@ -659,7 +664,7 @@ async def test_scenario_coding_agent_runs_in_skill_workspace(
         "  workspace:\n"
         "    kind: ephemeral\n"
         "  env_overrides:\n"
-        "    SKILL_FLAG: \"green\"\n"
+        '    SKILL_FLAG: "green"\n'
         "---\n"
     )
     manifest, body = parse_skill_text(md)

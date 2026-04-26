@@ -25,9 +25,7 @@ class _CronArgs(BaseModel):
     catalogue small (LLMs do better with few tools and clear actions).
     """
 
-    action: Literal["add", "list", "remove", "toggle"] = Field(
-        ..., description="What to do."
-    )
+    action: Literal["add", "list", "remove", "toggle"] = Field(..., description="What to do.")
 
     # add / toggle args
     schedule: str | None = Field(

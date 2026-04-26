@@ -27,9 +27,7 @@ def test_manifest_from_dict() -> None:
 
 
 def test_manifest_from_json_string() -> None:
-    m = Manifest.from_json(
-        '{"id": "x", "name": "X", "channels": ["x"]}'
-    )
+    m = Manifest.from_json('{"id": "x", "name": "X", "channels": ["x"]}')
     assert m.id == "x"
 
 

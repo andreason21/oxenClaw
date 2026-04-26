@@ -18,7 +18,6 @@ from sampyclaw.cli.gateway_cmd import (
 from sampyclaw.config.paths import SampyclawPaths
 from sampyclaw.cron import CronJobStore, CronScheduler
 from sampyclaw.extensions.telegram.channel import TelegramChannel
-from sampyclaw.plugin_sdk.channel_contract import SendResult
 from sampyclaw.plugin_sdk.config_schema import (
     AgentChannelRouting,
     AgentConfig,
@@ -65,9 +64,7 @@ def _setup_gateway(tmp_path, mocked_bot_factory):  # type: ignore[no-untyped-def
     cr.register("telegram", "main", TelegramChannel(token="t", account_id="main"))
 
     dispatcher = Dispatcher(agents=agents, config=config, send=cr.send)
-    cron = CronScheduler(
-        store=CronJobStore(path=tmp_path / "cron.json"), dispatcher=dispatcher
-    )
+    cron = CronScheduler(store=CronJobStore(path=tmp_path / "cron.json"), dispatcher=dispatcher)
     approvals = ApprovalManager()
     paths = SampyclawPaths(home=tmp_path)
     paths.ensure_home()
@@ -83,9 +80,7 @@ def _setup_gateway(tmp_path, mocked_bot_factory):  # type: ignore[no-untyped-def
     return router, cr, agents, cron, approvals
 
 
-async def test_build_router_registers_every_method_group(
-    tmp_path, mocked_bot_factory
-) -> None:  # type: ignore[no-untyped-def]
+async def test_build_router_registers_every_method_group(tmp_path, mocked_bot_factory) -> None:  # type: ignore[no-untyped-def]
     router, _, _, _, _ = _setup_gateway(tmp_path, mocked_bot_factory)
     for name in [
         "chat.send",
@@ -152,9 +147,7 @@ async def test_outbound_only_channel_skips_monitor_supervisor(tmp_path) -> None:
 
     async with _supervise_monitors(cr, dispatcher) as runners:
         # Slack is outbound-only → 0 runners spawned.
-        assert runners == [], (
-            f"expected no runners for outbound-only slack, got {runners!r}"
-        )
+        assert runners == [], f"expected no runners for outbound-only slack, got {runners!r}"
 
 
 async def test_chat_send_passes_media_into_inbound_envelope(
@@ -225,9 +218,7 @@ async def test_chat_send_unrouted_returns_local_ok_with_warning(
     agents.register(EchoAgent())
     empty_cr = ChannelRouter()
     dispatcher = Dispatcher(agents=agents, config=config, send=empty_cr.send)
-    cron = CronScheduler(
-        store=CronJobStore(path=tmp_path / "cron.json"), dispatcher=dispatcher
-    )
+    cron = CronScheduler(store=CronJobStore(path=tmp_path / "cron.json"), dispatcher=dispatcher)
     paths = SampyclawPaths(home=tmp_path)
     paths.ensure_home()
     router = _build_router(
@@ -288,9 +279,7 @@ async def test_supervise_monitors_spawns_and_cancels_tasks(
 
     cr = ChannelRouter()
     cr.register("telegram", "main", TelegramChannel(token="t", account_id="main"))
-    cr.register(
-        "telegram", "secondary", TelegramChannel(token="t", account_id="secondary")
-    )
+    cr.register("telegram", "secondary", TelegramChannel(token="t", account_id="secondary"))
 
     agents = AgentRegistry()
     agents.register(EchoAgent())
@@ -332,9 +321,7 @@ def test_build_channel_router_uses_plugin_discovery(monkeypatch, tmp_path) -> No
     )
     reg = PluginRegistry()
     reg.register(entry)
-    monkeypatch.setattr(
-        "sampyclaw.cli.gateway_cmd.discover_plugins", lambda: reg
-    )
+    monkeypatch.setattr("sampyclaw.cli.gateway_cmd.discover_plugins", lambda: reg)
     monkeypatch.setenv("SAMPYCLAW_HOME", str(tmp_path))
 
     cr = build_channel_router()

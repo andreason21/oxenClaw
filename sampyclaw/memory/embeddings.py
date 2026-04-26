@@ -82,9 +82,7 @@ class OpenAIEmbeddings:
     @property
     def dimensions(self) -> int:
         if self._dimensions is None:
-            raise RuntimeError(
-                "embedding dimensions not yet known — call embed() at least once"
-            )
+            raise RuntimeError("embedding dimensions not yet known — call embed() at least once")
         return self._dimensions
 
     async def _ensure_session(self) -> aiohttp.ClientSession:

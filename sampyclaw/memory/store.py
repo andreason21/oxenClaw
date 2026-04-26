@@ -134,9 +134,7 @@ class MemoryStore:
             """
         )
         # Detect dim if vec table already exists.
-        row = c.execute(
-            "SELECT sql FROM sqlite_master WHERE name='chunks_vec'"
-        ).fetchone()
+        row = c.execute("SELECT sql FROM sqlite_master WHERE name='chunks_vec'").fetchone()
         if row is not None and "float[" in row["sql"].lower():
             sql = row["sql"]
             try:
@@ -164,10 +162,7 @@ class MemoryStore:
                 f"{existing['embedding_model']!r} but got {model!r}. Run "
                 f"`sampyclaw memory rebuild --yes` to reset the index."
             )
-        if (
-            "embedding_provider" in existing
-            and existing["embedding_provider"] != provider
-        ):
+        if "embedding_provider" in existing and existing["embedding_provider"] != provider:
             raise ValueError(
                 f"embedding provider mismatch: store recorded "
                 f"{existing['embedding_provider']!r} but got {provider!r}. "
@@ -182,9 +177,7 @@ class MemoryStore:
         ]
         if "created_at" not in existing:
             rows.append(("created_at", str(now)))
-        self._conn.executemany(
-            "INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", rows
-        )
+        self._conn.executemany("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", rows)
         self._conn.commit()
         self._ensure_vec_table(dims)
 
@@ -213,9 +206,7 @@ class MemoryStore:
 
     # ── files ──
 
-    def upsert_file(
-        self, path: str, source: str, hash_: str, mtime: float, size: int
-    ) -> None:
+    def upsert_file(self, path: str, source: str, hash_: str, mtime: float, size: int) -> None:
         self._conn.execute(
             """
             INSERT INTO files (path, source, hash, mtime, size)
@@ -233,18 +224,12 @@ class MemoryStore:
     def delete_file(self, path: str) -> None:
         chunk_ids = [
             r["id"]
-            for r in self._conn.execute(
-                "SELECT id FROM chunks WHERE path = ?", (path,)
-            ).fetchall()
+            for r in self._conn.execute("SELECT id FROM chunks WHERE path = ?", (path,)).fetchall()
         ]
         if chunk_ids:
             qmarks = ",".join("?" * len(chunk_ids))
-            self._conn.execute(
-                f"DELETE FROM chunks_vec WHERE chunk_id IN ({qmarks})", chunk_ids
-            )
-            self._conn.execute(
-                f"DELETE FROM chunks_fts WHERE chunk_id IN ({qmarks})", chunk_ids
-            )
+            self._conn.execute(f"DELETE FROM chunks_vec WHERE chunk_id IN ({qmarks})", chunk_ids)
+            self._conn.execute(f"DELETE FROM chunks_fts WHERE chunk_id IN ({qmarks})", chunk_ids)
         self._conn.execute("DELETE FROM chunks WHERE path = ?", (path,))
         self._conn.execute("DELETE FROM files WHERE path = ?", (path,))
         self._conn.commit()
@@ -308,12 +293,8 @@ class MemoryStore:
             ]
             if existing:
                 qmarks = ",".join("?" * len(existing))
-                self._conn.execute(
-                    f"DELETE FROM chunks_vec WHERE chunk_id IN ({qmarks})", existing
-                )
-                self._conn.execute(
-                    f"DELETE FROM chunks_fts WHERE chunk_id IN ({qmarks})", existing
-                )
+                self._conn.execute(f"DELETE FROM chunks_vec WHERE chunk_id IN ({qmarks})", existing)
+                self._conn.execute(f"DELETE FROM chunks_fts WHERE chunk_id IN ({qmarks})", existing)
             self._conn.execute("DELETE FROM chunks WHERE path = ?", (path,))
             for start_line, end_line, text, hash_, embedding in chunks:
                 cid = new_chunk_id()
@@ -344,9 +325,7 @@ class MemoryStore:
         return new_ids
 
     def get_chunk(self, chunk_id: str) -> MemoryChunk | None:
-        row = self._conn.execute(
-            "SELECT * FROM chunks WHERE id = ?", (chunk_id,)
-        ).fetchone()
+        row = self._conn.execute("SELECT * FROM chunks WHERE id = ?", (chunk_id,)).fetchone()
         return _row_to_chunk(row) if row else None
 
     def search_vector(
@@ -431,9 +410,7 @@ class MemoryStore:
 
     # ── embedding cache ──
 
-    def cache_get(
-        self, provider: str, model: str, content_hash: str
-    ) -> list[float] | None:
+    def cache_get(self, provider: str, model: str, content_hash: str) -> list[float] | None:
         row = self._conn.execute(
             """
             SELECT embedding, dims FROM embedding_cache
@@ -509,9 +486,7 @@ class MemoryStore:
         self._conn.commit()
 
     def cache_size(self) -> int:
-        row = self._conn.execute(
-            "SELECT COUNT(*) AS n FROM embedding_cache"
-        ).fetchone()
+        row = self._conn.execute("SELECT COUNT(*) AS n FROM embedding_cache").fetchone()
         return int(row["n"])
 
 

@@ -23,20 +23,16 @@ import gzip
 import json
 import time
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass, field
-from enum import Enum
+from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
-from uuid import uuid4
 
 from sampyclaw.pi.messages import (
     AgentMessage,
-    AssistantMessage,
     SystemMessage,
-    ToolResultMessage,
     UserMessage,
 )
-from sampyclaw.pi.persistence import SQLiteSessionManager
 from sampyclaw.pi.session import (
     AgentSession,
     CompactionEntry,
@@ -51,7 +47,7 @@ logger = get_logger("pi.lifecycle")
 # ─── Lifecycle events ────────────────────────────────────────────────
 
 
-class LifecycleEvent(str, Enum):
+class LifecycleEvent(StrEnum):
     CREATED = "session.created"
     UPDATED = "session.updated"
     RESET = "session.reset"
@@ -123,9 +119,7 @@ def _is_user(msg: AgentMessage) -> bool:
     return isinstance(msg, UserMessage)
 
 
-def reset_session_messages(
-    session: AgentSession, policy: ResetPolicy
-) -> int:
+def reset_session_messages(session: AgentSession, policy: ResetPolicy) -> int:
     """Apply `policy` to `session.messages` in-place. Returns drop count.
 
     On a partial reset, walks back from the tail keeping `keep_last_user_turns`
@@ -135,8 +129,10 @@ def reset_session_messages(
     before = len(session.messages)
     if policy.full and policy.keep_last_user_turns <= 0:
         kept: list[AgentMessage] = []
-        if policy.keep_system and session.messages and isinstance(
-            session.messages[0], SystemMessage
+        if (
+            policy.keep_system
+            and session.messages
+            and isinstance(session.messages[0], SystemMessage)
         ):
             kept.append(session.messages[0])
         session.messages = kept
@@ -153,8 +149,10 @@ def reset_session_messages(
                     break
         kept_tail.reverse()
         head: list[AgentMessage] = []
-        if policy.keep_system and session.messages and isinstance(
-            session.messages[0], SystemMessage
+        if (
+            policy.keep_system
+            and session.messages
+            and isinstance(session.messages[0], SystemMessage)
         ):
             head.append(session.messages[0])
         session.messages = head + kept_tail
@@ -338,9 +336,7 @@ async def archive_session(
     return ArchiveResult(archive_path=out_path, bytes_written=bytes_written)
 
 
-async def restore_archive(
-    sm: SessionManager, archive_path: Path
-) -> AgentSession | None:
+async def restore_archive(sm: SessionManager, archive_path: Path) -> AgentSession | None:
     """Inverse of `archive_session`. Reads the gzipped JSON and re-creates
     a session row. Returns the new session (the original id is preserved
     — if a row with that id already exists, it is overwritten via save())."""
@@ -361,8 +357,7 @@ async def restore_archive(
     from pydantic import TypeAdapter
 
     new.messages = [
-        TypeAdapter(AgentMessage).validate_python(m)
-        for m in payload.get("messages") or []
+        TypeAdapter(AgentMessage).validate_python(m) for m in payload.get("messages") or []
     ]
     new.compactions = [
         CompactionEntry(

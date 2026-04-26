@@ -17,6 +17,9 @@ Modules:
 - `lint`     — claim freshness + missing-evidence checks.
 """
 
+from sampyclaw.wiki.compile import compile_wiki_index
+from sampyclaw.wiki.ingest import upsert_wiki_page
+from sampyclaw.wiki.lint import LintFinding, LintSeverity, lint_vault
 from sampyclaw.wiki.markdown import (
     parse_wiki_markdown,
     render_wiki_markdown,
@@ -30,24 +33,21 @@ from sampyclaw.wiki.models import (
     WikiPageKind,
     WikiVaultConfig,
 )
-from sampyclaw.wiki.vault import (
-    WikiVault,
-    initialize_wiki_vault,
-)
-from sampyclaw.wiki.ingest import upsert_wiki_page
+from sampyclaw.wiki.palace import build_memory_palace_section
 from sampyclaw.wiki.query import (
     get_wiki_page,
     list_wiki_pages,
     search_wiki_pages,
 )
-from sampyclaw.wiki.compile import compile_wiki_index
-from sampyclaw.wiki.palace import build_memory_palace_section
-from sampyclaw.wiki.lint import LintFinding, LintSeverity, lint_vault
+from sampyclaw.wiki.vault import (
+    WikiVault,
+    initialize_wiki_vault,
+)
 
 __all__ = [
+    "WIKI_PAGE_KINDS",
     "LintFinding",
     "LintSeverity",
-    "WIKI_PAGE_KINDS",
     "WikiClaim",
     "WikiEvidence",
     "WikiPage",

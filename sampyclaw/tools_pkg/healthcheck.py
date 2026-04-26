@@ -8,8 +8,6 @@ silently skipped so a partial deployment still produces useful output.
 from __future__ import annotations
 
 import time
-from pathlib import Path
-from typing import Any
 
 from pydantic import BaseModel
 
@@ -21,7 +19,6 @@ from sampyclaw.pi.persistence import SQLiteSessionManager
 from sampyclaw.pi.store_ops import db_size_bytes
 from sampyclaw.security.isolation.registry import (
     available_backends,
-    default_registry,
 )
 
 
@@ -60,8 +57,7 @@ def healthcheck_tool(
             jobs = cron.list()
             enabled = sum(1 for j in jobs if j.enabled)
             lines.append(
-                f"cron: {len(jobs)} jobs ({enabled} enabled, "
-                f"{len(jobs) - enabled} disabled)"
+                f"cron: {len(jobs)} jobs ({enabled} enabled, {len(jobs) - enabled} disabled)"
             )
         else:
             lines.append("cron: (not wired)")
@@ -69,18 +65,14 @@ def healthcheck_tool(
         if sessions is not None:
             rows = await sessions.list()
             size = db_size_bytes(sessions._path)  # type: ignore[attr-defined]
-            lines.append(
-                f"sessions: {len(rows)} rows, store size {_fmt_bytes(size)}"
-            )
+            lines.append(f"sessions: {len(rows)} rows, store size {_fmt_bytes(size)}")
         else:
             lines.append("sessions: (not wired)")
 
         if memory is not None:
             f_count = memory.count_files()
             c_count = memory.count_chunks()
-            lines.append(
-                f"memory: {f_count} files, {c_count} indexed chunks"
-            )
+            lines.append(f"memory: {f_count} files, {c_count} indexed chunks")
         else:
             lines.append("memory: (not wired)")
 
@@ -89,9 +81,7 @@ def healthcheck_tool(
             avail = await available_backends()
             order = ["container", "bwrap", "subprocess", "inprocess"]
             strongest = next((n for n in order if n in avail), "inprocess")
-            lines.append(
-                f"isolation: available={','.join(avail)} strongest={strongest}"
-            )
+            lines.append(f"isolation: available={','.join(avail)} strongest={strongest}")
         except Exception as exc:  # pragma: no cover
             lines.append(f"isolation: (probe failed: {exc})")
 

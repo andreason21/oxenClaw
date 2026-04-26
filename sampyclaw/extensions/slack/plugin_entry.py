@@ -24,9 +24,7 @@ def _factory(**kwargs: Any) -> ChannelPlugin:
     return SlackChannel(token=token, account_id=account_id, **kwargs)
 
 
-def _loader(
-    config: RootConfig, paths: SampyclawPaths
-) -> dict[str, ChannelPlugin]:
+def _loader(config: RootConfig, paths: SampyclawPaths) -> dict[str, ChannelPlugin]:
     """Bulk-load every Slack account declared in config."""
     registry = SlackAccountRegistry(paths=paths)
     registry.load_from_config(config)

@@ -44,9 +44,7 @@ async def test_function_tool_execute_async_handler() -> None:
     async def _h(a: _Args) -> str:
         return f"v={a.value}"
 
-    t = FunctionTool(
-        name="async", description="d", input_model=_Args, handler=_h
-    )
+    t = FunctionTool(name="async", description="d", input_model=_Args, handler=_h)
     assert await t.execute({"value": 5}) == "v=5"
 
 

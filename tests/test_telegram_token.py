@@ -26,9 +26,7 @@ def test_resolve_missing_returns_none(store: CredentialStore) -> None:
     assert TokenResolver(store).resolve("absent") is None
 
 
-def test_resolve_falls_back_to_env_only_for_main(
-    store: CredentialStore, monkeypatch
-) -> None:  # type: ignore[no-untyped-def]
+def test_resolve_falls_back_to_env_only_for_main(store: CredentialStore, monkeypatch) -> None:  # type: ignore[no-untyped-def]
     monkeypatch.setenv(DEFAULT_ENV_KEY, "from-env")
     resolver = TokenResolver(store)
     assert resolver.resolve("main") == "from-env"
@@ -36,9 +34,7 @@ def test_resolve_falls_back_to_env_only_for_main(
     assert resolver.resolve("secondary") is None
 
 
-def test_resolve_prefers_store_over_env(
-    store: CredentialStore, monkeypatch
-) -> None:  # type: ignore[no-untyped-def]
+def test_resolve_prefers_store_over_env(store: CredentialStore, monkeypatch) -> None:  # type: ignore[no-untyped-def]
     store.write("telegram", "main", {"token": "stored"})
     monkeypatch.setenv(DEFAULT_ENV_KEY, "from-env")
     assert TokenResolver(store).resolve("main") == "stored"

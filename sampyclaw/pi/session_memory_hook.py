@@ -29,7 +29,6 @@ from sampyclaw.memory.hashing import sha256_text
 from sampyclaw.memory.store import MemoryStore
 from sampyclaw.pi.lifecycle import LifecycleBus, LifecycleEvent
 from sampyclaw.pi.messages import (
-    AgentMessage,
     AssistantMessage,
     SystemMessage,
     TextContent,
@@ -80,9 +79,7 @@ def render_transcript(session: AgentSession) -> str:
     lines: list[str] = []
     title = session.title or session.id[:8]
     lines.append(f"# Session {session.id} — {title}")
-    lines.append(
-        f"Agent: {session.agent_id}  Model: {session.model_id or '(unset)'}"
-    )
+    lines.append(f"Agent: {session.agent_id}  Model: {session.model_id or '(unset)'}")
     lines.append("")
     turn_idx = 0
     for msg in session.messages:
@@ -138,9 +135,7 @@ class SessionMemoryHook:
         Idempotent: replaces existing chunks for this session's path.
         """
         if len(session.messages) < self.min_messages:
-            logger.debug(
-                "skip session %s: only %d messages", session.id, len(session.messages)
-            )
+            logger.debug("skip session %s: only %d messages", session.id, len(session.messages))
             return 0
         text = render_transcript(session)
         if len(text) < self.min_chars:
@@ -166,7 +161,7 @@ class SessionMemoryHook:
         )
         # Atomic replace.
         rows = []
-        for (start, end, body), vec in zip(chunks, vectors):
+        for (start, end, body), vec in zip(chunks, vectors, strict=False):
             rows.append((start, end, body, sha256_text(body), vec))
         self.store.replace_chunks_for_file(
             path=path,

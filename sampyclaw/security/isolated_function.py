@@ -34,7 +34,6 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from sampyclaw.agents.tools import Tool
 from sampyclaw.security.isolation.policy import IsolationPolicy
 from sampyclaw.security.isolation.registry import resolve_backend
 from sampyclaw.security.shell_tool import ShellToolError
@@ -91,9 +90,7 @@ class IsolatedFunctionTool:
         policy: IsolationPolicy | None = None,
     ) -> None:
         if ":" not in handler_path:
-            raise ValueError(
-                f"handler_path must be 'module:attr', got {handler_path!r}"
-            )
+            raise ValueError(f"handler_path must be 'module:attr', got {handler_path!r}")
         self.name = name
         self.description = description
         self._input_model = input_model
@@ -106,9 +103,7 @@ class IsolatedFunctionTool:
         # Strip any caller-supplied PYTHONPATH passthrough — it would re-leak
         # the host env and defeat the curation we just did.
         passthrough = tuple(k for k in base.env_passthrough if k != "PYTHONPATH")
-        inject = tuple(
-            (k, v) for (k, v) in base.env_inject if k != "PYTHONPATH"
-        )
+        inject = tuple((k, v) for (k, v) in base.env_inject if k != "PYTHONPATH")
         if curated:
             inject = (*inject, ("PYTHONPATH", curated))
         self._policy = IsolationPolicy(
@@ -143,8 +138,7 @@ class IsolatedFunctionTool:
 
         if result.timed_out:
             raise ShellToolError(
-                f"isolated tool {self.name!r} timed out after "
-                f"{self._policy.timeout_seconds}s",
+                f"isolated tool {self.name!r} timed out after {self._policy.timeout_seconds}s",
                 result=result,
             )
 

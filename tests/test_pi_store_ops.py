@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import time
 from pathlib import Path
 
@@ -72,8 +71,9 @@ async def test_migrations_apply_once_idempotent(tmp_path: Path) -> None:
 async def test_migration_failure_rolls_back(tmp_path: Path) -> None:
     sm = SQLiteSessionManager(tmp_path / "m.db")
     bad = [Migration(version=1, description="broken", sql="THIS IS NOT SQL;")]
-    import pytest
     import sqlite3
+
+    import pytest
 
     with pytest.raises(sqlite3.Error):
         apply_migrations(sm._conn, bad)

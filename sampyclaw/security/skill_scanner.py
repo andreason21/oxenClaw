@@ -15,15 +15,16 @@ overlap intentionally; severity reflects how bad a real instance would be.
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
-from enum import Enum
-from typing import TYPE_CHECKING, Iterable
+from enum import StrEnum
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from sampyclaw.clawhub.frontmatter import SkillManifest
 
 
-class Severity(str, Enum):
+class Severity(StrEnum):
     INFO = "info"
     WARN = "warn"
     CRITICAL = "critical"
@@ -74,9 +75,7 @@ _BODY_RULES: tuple[_Rule, ...] = (
     _Rule(
         id="dynamic-eval",
         severity=Severity.WARN,
-        pattern=re.compile(
-            r"\b(eval|exec|Function\s*\(|setTimeout\s*\(\s*['\"]|`\$\(.+\)`)\b"
-        ),
+        pattern=re.compile(r"\b(eval|exec|Function\s*\(|setTimeout\s*\(\s*['\"]|`\$\(.+\)`)\b"),
         message="Skill body references dynamic-code-execution constructs.",
     ),
     _Rule(
@@ -100,17 +99,13 @@ _BODY_RULES: tuple[_Rule, ...] = (
     _Rule(
         id="ssh-key-harvest",
         severity=Severity.CRITICAL,
-        pattern=re.compile(
-            r"~/\.ssh/(id_[a-zA-Z0-9_]+|authorized_keys|config)", re.IGNORECASE
-        ),
+        pattern=re.compile(r"~/\.ssh/(id_[a-zA-Z0-9_]+|authorized_keys|config)", re.IGNORECASE),
         message="Skill references private SSH keys or authorized_keys.",
     ),
     _Rule(
         id="aws-credential-harvest",
         severity=Severity.CRITICAL,
-        pattern=re.compile(
-            r"~/\.(aws/credentials|kube/config|docker/config\.json)", re.IGNORECASE
-        ),
+        pattern=re.compile(r"~/\.(aws/credentials|kube/config|docker/config\.json)", re.IGNORECASE),
         message="Skill references cloud credentials files.",
     ),
     _Rule(

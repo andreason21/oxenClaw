@@ -24,7 +24,6 @@ Usage:
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from typing import Any
 
 import aiohttp
 
@@ -35,12 +34,10 @@ from sampyclaw.security.net.audit import (
     should_audit_from_env,
 )
 from sampyclaw.security.net.pinning import (
-    PinnedResolver,
     make_guarded_connector,
 )
 from sampyclaw.security.net.policy import NetPolicy
 from sampyclaw.security.net.ssrf import assert_url_allowed
-
 
 # Module-level singleton audit store so repeated `guarded_session` calls
 # share one DB instead of opening N connections.
@@ -54,9 +51,7 @@ def _get_audit_store(cfg: AuditConfig) -> OutboundAuditStore | None:
     if _AUDIT_STORE is None or _AUDIT_STORE.path != cfg.db_path:
         if _AUDIT_STORE is not None:
             _AUDIT_STORE.close()
-        _AUDIT_STORE = OutboundAuditStore(
-            cfg.db_path, max_body_bytes=cfg.max_body_bytes
-        )
+        _AUDIT_STORE = OutboundAuditStore(cfg.db_path, max_body_bytes=cfg.max_body_bytes)
     return _AUDIT_STORE
 
 

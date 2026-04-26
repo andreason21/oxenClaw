@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-import asyncio
-
 import sampyclaw.pi.providers  # noqa: F401  registers wrappers
-
 from sampyclaw.pi import (
     InMemoryAuthStorage,
     Model,
@@ -13,7 +10,6 @@ from sampyclaw.pi import (
     TextDeltaEvent,
     register_provider_stream,
 )
-from sampyclaw.pi.run import RuntimeConfig
 from sampyclaw.tools_pkg.subagent import SubagentConfig, subagents_tool
 
 
@@ -64,9 +60,7 @@ async def test_subagent_includes_context_in_user_prompt() -> None:
 async def test_subagent_recursion_capped_at_max_depth() -> None:
     """Inside the child, calling `subagents` again must refuse once the
     cap is hit. We simulate by manually building the tool at depth=max."""
-    cfg = SubagentConfig(
-        model=_model("subagent_p3"), auth=_auth("subagent_p3"), max_depth=1
-    )
+    cfg = SubagentConfig(model=_model("subagent_p3"), auth=_auth("subagent_p3"), max_depth=1)
     # Build the tool already at depth=1; first call should refuse.
     tool = subagents_tool(cfg, current_depth=1)
     out = await tool.execute({"task": "anything"})

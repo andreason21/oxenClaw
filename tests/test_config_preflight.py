@@ -75,9 +75,7 @@ def test_preflight_no_warning_when_env_set(tmp_path: Path, monkeypatch):
     )
     monkeypatch.setenv("SET_TOKEN_X", "tok-abc")
     report = run_preflight(paths)
-    missing_warnings = [
-        f for f in report.warnings if "SET_TOKEN_X" in f.message
-    ]
+    missing_warnings = [f for f in report.warnings if "SET_TOKEN_X" in f.message]
     assert missing_warnings == []
 
 
@@ -94,7 +92,5 @@ def test_preflight_flags_malformed_credentials(tmp_path: Path):
 def test_preflight_finding_format_is_human_readable():
     from sampyclaw.config.preflight import PreflightFinding
 
-    f = PreflightFinding(
-        severity="error", source="config.yaml", message="missing 'channels'"
-    )
+    f = PreflightFinding(severity="error", source="config.yaml", message="missing 'channels'")
     assert f.format() == "[error] config.yaml: missing 'channels'"

@@ -18,7 +18,7 @@ Discriminator: the `role` field. Pydantic v2 handles the union via the
 
 from __future__ import annotations
 
-from typing import Annotated, Any, Literal, Union
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -66,11 +66,9 @@ class ThinkingBlock(BaseModel):
     signature: str | None = None
 
 
-UserContentBlock = Annotated[
-    Union[TextContent, ImageContent], Field(discriminator="type")
-]
+UserContentBlock = Annotated[TextContent | ImageContent, Field(discriminator="type")]
 AssistantContentBlock = Annotated[
-    Union[TextContent, ToolUseBlock, ThinkingBlock], Field(discriminator="type")
+    TextContent | ToolUseBlock | ThinkingBlock, Field(discriminator="type")
 ]
 
 
@@ -127,7 +125,7 @@ class ToolResultMessage(BaseModel):
 
 
 AgentMessage = Annotated[
-    Union[SystemMessage, UserMessage, AssistantMessage, ToolResultMessage],
+    SystemMessage | UserMessage | AssistantMessage | ToolResultMessage,
     Field(discriminator="role"),
 ]
 

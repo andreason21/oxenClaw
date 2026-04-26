@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
 from typer.testing import CliRunner
 
 from sampyclaw.cli.sessions_cmd import app as sessions_app
@@ -22,7 +21,6 @@ from sampyclaw.pi.persistence import SQLiteSessionManager
 from sampyclaw.pi.policy import (
     SessionChatType,
     SessionPolicy,
-    deserialize_policy,
     get_policy,
     serialize_policy,
 )
@@ -31,15 +29,11 @@ from sampyclaw.pi.policy import (
 async def _seed(sm: SQLiteSessionManager, *, n: int = 3) -> list[str]:
     ids = []
     for i in range(n):
-        s = await sm.create(
-            CreateAgentSessionOptions(agent_id="x", title=f"s{i}")
-        )
+        s = await sm.create(CreateAgentSessionOptions(agent_id="x", title=f"s{i}"))
         s.messages = [
             SystemMessage(content="be brief"),
             UserMessage(content=f"u{i} question"),
-            AssistantMessage(
-                content=[TextContent(text=f"a{i} answer")], stop_reason="end_turn"
-            ),
+            AssistantMessage(content=[TextContent(text=f"a{i} answer")], stop_reason="end_turn"),
         ]
         await sm.save(s)
         ids.append(s.id)
@@ -58,8 +52,7 @@ async def test_sessions_list_filters_by_agent(tmp_path: Path) -> None:
     register_sessions_methods(router, sm, archive_dir=tmp_path / "ar")
 
     resp = await router.dispatch(
-        {"jsonrpc": "2.0", "id": 1, "method": "sessions.list",
-         "params": {"agent_id": "x"}}
+        {"jsonrpc": "2.0", "id": 1, "method": "sessions.list", "params": {"agent_id": "x"}}
     )
     assert resp.error is None
     assert all(r["agent_id"] == "x" for r in resp.result)
@@ -88,8 +81,7 @@ async def test_sessions_preview_summary(tmp_path: Path) -> None:
     router = Router()
     register_sessions_methods(router, sm)
     resp = await router.dispatch(
-        {"jsonrpc": "2.0", "id": 1, "method": "sessions.preview",
-         "params": {"id": ids[0]}}
+        {"jsonrpc": "2.0", "id": 1, "method": "sessions.preview", "params": {"id": ids[0]}}
     )
     p = resp.result
     assert p["first_user"].startswith("u0 ")
@@ -103,8 +95,7 @@ async def test_sessions_get_missing_returns_null(tmp_path: Path) -> None:
     router = Router()
     register_sessions_methods(router, sm)
     resp = await router.dispatch(
-        {"jsonrpc": "2.0", "id": 1, "method": "sessions.get",
-         "params": {"id": "missing"}}
+        {"jsonrpc": "2.0", "id": 1, "method": "sessions.get", "params": {"id": "missing"}}
     )
     assert resp.error is None
     assert resp.result is None
@@ -123,7 +114,9 @@ async def test_sessions_patch_updates_title_and_policy(tmp_path: Path) -> None:
     new_policy = SessionPolicy(chat_type=SessionChatType.GROUP)
     resp = await router.dispatch(
         {
-            "jsonrpc": "2.0", "id": 1, "method": "sessions.patch",
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "sessions.patch",
             "params": {
                 "id": ids[0],
                 "title": "renamed",
@@ -146,7 +139,9 @@ async def test_sessions_reset_drops_messages(tmp_path: Path) -> None:
     register_sessions_methods(router, sm)
     resp = await router.dispatch(
         {
-            "jsonrpc": "2.0", "id": 1, "method": "sessions.reset",
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "sessions.reset",
             "params": {"id": ids[0], "full": True, "keep_system": True},
         }
     )
@@ -161,7 +156,9 @@ async def test_sessions_fork_creates_branch(tmp_path: Path) -> None:
     register_sessions_methods(router, sm)
     resp = await router.dispatch(
         {
-            "jsonrpc": "2.0", "id": 1, "method": "sessions.fork",
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "sessions.fork",
             "params": {"id": ids[0]},
         }
     )
@@ -180,7 +177,9 @@ async def test_sessions_archive_writes_and_deletes(tmp_path: Path) -> None:
     register_sessions_methods(router, sm, archive_dir=tmp_path / "arch")
     resp = await router.dispatch(
         {
-            "jsonrpc": "2.0", "id": 1, "method": "sessions.archive",
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "sessions.archive",
             "params": {"id": ids[0]},
         }
     )
@@ -195,8 +194,7 @@ async def test_sessions_delete(tmp_path: Path) -> None:
     router = Router()
     register_sessions_methods(router, sm)
     resp = await router.dispatch(
-        {"jsonrpc": "2.0", "id": 1, "method": "sessions.delete",
-         "params": {"id": ids[0]}}
+        {"jsonrpc": "2.0", "id": 1, "method": "sessions.delete", "params": {"id": ids[0]}}
     )
     assert resp.result == {"deleted": True}
     sm.close()
@@ -218,8 +216,7 @@ async def test_reset_emits_lifecycle_event_via_bus(tmp_path: Path) -> None:
     router = Router()
     register_sessions_methods(router, sm, bus=bus)
     await router.dispatch(
-        {"jsonrpc": "2.0", "id": 1, "method": "sessions.reset",
-         "params": {"id": ids[0]}}
+        {"jsonrpc": "2.0", "id": 1, "method": "sessions.reset", "params": {"id": ids[0]}}
     )
     assert seen and seen[0][0].value == "session.reset"
     sm.close()

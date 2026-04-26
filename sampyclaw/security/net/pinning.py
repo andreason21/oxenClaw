@@ -26,14 +26,13 @@ import asyncio
 import socket
 import time
 from collections.abc import Iterable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 import aiohttp
 
 from sampyclaw.security.net.policy import NetPolicy
 from sampyclaw.security.net.ssrf import SsrFBlockedError, assert_ip_allowed
-
 
 DEFAULT_TTL_SECONDS = 60.0
 
@@ -83,9 +82,7 @@ class PinnedResolver(aiohttp.abc.AbstractResolver):
         async with self._lock:
             return await self._resolve_locked(host, port, family)
 
-    async def _resolve_locked(
-        self, host: str, port: int, family: int
-    ) -> list[dict[str, Any]]:
+    async def _resolve_locked(self, host: str, port: int, family: int) -> list[dict[str, Any]]:
         cache_key = (host, family)
         cached = self._cache.get(cache_key)
         now = time.monotonic()
@@ -98,9 +95,7 @@ class PinnedResolver(aiohttp.abc.AbstractResolver):
                 host, port or None, type=socket.SOCK_STREAM, family=family
             )
         except socket.gaierror as exc:
-            raise SsrFBlockedError(
-                f"DNS resolution failed for {host!r}: {exc}"
-            ) from exc
+            raise SsrFBlockedError(f"DNS resolution failed for {host!r}: {exc}") from exc
 
         addresses: list[str] = []
         for fam, _socktype, _proto, _canon, sockaddr in infos:
@@ -118,13 +113,9 @@ class PinnedResolver(aiohttp.abc.AbstractResolver):
             addresses.append(ip_str)
 
         if not addresses:
-            raise SsrFBlockedError(
-                f"no usable addresses returned for {host!r}"
-            )
+            raise SsrFBlockedError(f"no usable addresses returned for {host!r}")
         unique_addrs = tuple(dict.fromkeys(addresses))
-        self._cache[cache_key] = _PinnedEntry(
-            addresses=unique_addrs, family=family, cached_at=now
-        )
+        self._cache[cache_key] = _PinnedEntry(addresses=unique_addrs, family=family, cached_at=now)
         return self._format(host, unique_addrs, port, family)
 
     def _format(

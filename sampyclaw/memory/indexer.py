@@ -31,9 +31,7 @@ class MemoryIndexer:
         self._memory_dir = memory_dir
         self._chunker_opts = chunker_opts or {}
 
-    async def sync(
-        self, sources: dict[str, Path] | None = None
-    ) -> SyncReport:
+    async def sync(self, sources: dict[str, Path] | None = None) -> SyncReport:
         srcs = sources or {"memory": self._memory_dir}
         added = 0
         changed = 0
@@ -53,9 +51,7 @@ class MemoryIndexer:
                 if prev is not None and prev.hash == content_hash:
                     # Unchanged: refresh mtime/size in case fs metadata moved.
                     if prev.mtime != mtime or prev.size != size:
-                        self._store.upsert_file(
-                            relpath, source, content_hash, mtime, size
-                        )
+                        self._store.upsert_file(relpath, source, content_hash, mtime, size)
                     continue
 
                 pieces = chunk_markdown(text, **self._chunker_opts)
@@ -77,9 +73,7 @@ class MemoryIndexer:
                     )
                     meta_done = True
 
-                self._store.upsert_file(
-                    relpath, source, content_hash, mtime, size
-                )
+                self._store.upsert_file(relpath, source, content_hash, mtime, size)
                 chunk_rows: list[tuple[int, int, str, str, list[float]]] = [
                     (start, end, t, sha256_text(t), vec)
                     for (start, end, t), vec in zip(pieces, vectors, strict=True)

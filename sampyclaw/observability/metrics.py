@@ -62,9 +62,7 @@ class Counter:
     name: str
     help: str
     label_names: tuple[str, ...] = ()
-    _values: dict[tuple[tuple[str, str], ...], float] = field(
-        default_factory=dict
-    )
+    _values: dict[tuple[tuple[str, str], ...], float] = field(default_factory=dict)
     _lock: threading.Lock = field(default_factory=threading.Lock)
 
     def inc(self, n: float = 1.0, labels: dict[str, str] | None = None) -> None:
@@ -95,9 +93,7 @@ class Gauge:
     name: str
     help: str
     label_names: tuple[str, ...] = ()
-    _values: dict[tuple[tuple[str, str], ...], float] = field(
-        default_factory=dict
-    )
+    _values: dict[tuple[tuple[str, str], ...], float] = field(default_factory=dict)
     _lock: threading.Lock = field(default_factory=threading.Lock)
 
     def set(self, value: float, labels: dict[str, str] | None = None) -> None:
@@ -140,16 +136,12 @@ class Histogram:
     help: str
     label_names: tuple[str, ...] = ()
     buckets: tuple[float, ...] = DEFAULT_HISTOGRAM_BUCKETS
-    _bucket_counts: dict[tuple[tuple[str, str], ...], list[int]] = field(
-        default_factory=dict
-    )
+    _bucket_counts: dict[tuple[tuple[str, str], ...], list[int]] = field(default_factory=dict)
     _sum: dict[tuple[tuple[str, str], ...], float] = field(default_factory=dict)
     _count: dict[tuple[tuple[str, str], ...], int] = field(default_factory=dict)
     _lock: threading.Lock = field(default_factory=threading.Lock)
 
-    def observe(
-        self, value: float, labels: dict[str, str] | None = None
-    ) -> None:
+    def observe(self, value: float, labels: dict[str, str] | None = None) -> None:
         sig = _label_signature(labels)
         with self._lock:
             counts = self._bucket_counts.get(sig)
@@ -172,16 +164,12 @@ class Histogram:
             sum_snap = dict(self._sum)
             count_snap = dict(self._count)
         for sig in sigs:
-            for b, c in zip(buckets, counts_snap[sig]):
+            for b, c in zip(buckets, counts_snap[sig], strict=False):
                 le = "+Inf" if b == math.inf else f"{b}"
-                merged = sig + (("le", le),)
+                merged = (*sig, ("le", le))
                 yield f"{self.name}_bucket{_format_label_pairs(merged)} {c}"
-            yield (
-                f"{self.name}_sum{_format_label_pairs(sig)} {sum_snap.get(sig, 0.0)}"
-            )
-            yield (
-                f"{self.name}_count{_format_label_pairs(sig)} {count_snap.get(sig, 0)}"
-            )
+            yield (f"{self.name}_sum{_format_label_pairs(sig)} {sum_snap.get(sig, 0.0)}")
+            yield (f"{self.name}_count{_format_label_pairs(sig)} {count_snap.get(sig, 0)}")
 
 
 class Metrics:
@@ -296,11 +284,7 @@ class Metrics:
         )
 
     def all_metrics(self) -> list[Counter | Gauge | Histogram]:
-        return [
-            v
-            for v in self.__dict__.values()
-            if isinstance(v, (Counter, Gauge, Histogram))
-        ]
+        return [v for v in self.__dict__.values() if isinstance(v, (Counter, Gauge, Histogram))]
 
 
 METRICS = Metrics()

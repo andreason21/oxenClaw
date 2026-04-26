@@ -7,7 +7,6 @@ import asyncio
 from sampyclaw.pi import (
     AssistantMessage,
     Model,
-    SystemMessage,
     TextContent,
     ThinkingBlock,
     UserMessage,
@@ -23,7 +22,6 @@ from sampyclaw.pi.extras import (
     summarize_usage,
     wait_for_idle,
 )
-
 
 # ─── classifier ──────────────────────────────────────────────────────
 
@@ -107,9 +105,7 @@ def test_usage_accumulator_aggregates_and_costs() -> None:
 
 
 def test_summarize_usage_helper() -> None:
-    summary = summarize_usage(
-        [{"input_tokens": 100}, {"input_tokens": 200, "output_tokens": 50}]
-    )
+    summary = summarize_usage([{"input_tokens": 100}, {"input_tokens": 200, "output_tokens": 50}])
     assert summary["input_tokens"] == 300
     assert summary["output_tokens"] == 50
 

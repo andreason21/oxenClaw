@@ -24,14 +24,12 @@ import asyncio
 import secrets
 import socket
 import subprocess
-import sys
 import time
 from collections.abc import AsyncIterator
 from contextlib import closing
 from pathlib import Path
 
 import pytest
-
 
 # ─── module-level skip gates ──────────────────────────────────────────
 
@@ -54,13 +52,17 @@ def _chromium_runnable() -> tuple[bool, str]:
     if not home.exists():
         return False, "no playwright browsers installed (`playwright install chromium`)"
     candidates = list(home.glob("chromium-*/chrome-linux*/chrome"))
-    candidates += list(home.glob("chromium_headless_shell-*/chrome-headless-shell-*/chrome-headless-shell"))
+    candidates += list(
+        home.glob("chromium_headless_shell-*/chrome-headless-shell-*/chrome-headless-shell")
+    )
     if not candidates:
         return False, "chromium binary not found (`playwright install chromium`)"
     try:
         out = subprocess.run(
             [str(candidates[0]), "--version"],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
         return False, f"chromium binary not runnable: {exc}"
@@ -177,7 +179,7 @@ async def gateway(tmp_path) -> AsyncIterator[dict]:  # type: ignore[no-untyped-d
         server.request_shutdown()
         try:
             await asyncio.wait_for(serve_task, timeout=3)
-        except (asyncio.TimeoutError, asyncio.CancelledError):
+        except (TimeoutError, asyncio.CancelledError):
             serve_task.cancel()
         cron.stop()
 
@@ -209,11 +211,12 @@ async def page(_browser, gateway):  # type: ignore[no-untyped-def]
     page = await ctx.new_page()
     errors: list[str] = []
     page.on("pageerror", lambda e: errors.append(f"pageerror: {e}"))
-    page.on("console",
-            lambda msg: errors.append(f"console.error: {msg.text}")
-            if msg.type == "error" else None)
+    page.on(
+        "console",
+        lambda msg: errors.append(f"console.error: {msg.text}") if msg.type == "error" else None,
+    )
     page.goto_url = gateway["url_with_token"]  # type: ignore[attr-defined]
-    page._js_errors = errors                   # type: ignore[attr-defined]
+    page._js_errors = errors  # type: ignore[attr-defined]
     await page.goto(gateway["url_with_token"], wait_until="networkidle", timeout=15_000)
     yield page
     await ctx.close()

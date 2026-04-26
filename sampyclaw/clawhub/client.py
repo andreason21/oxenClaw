@@ -110,9 +110,7 @@ class ClawHubClient:
             h["Authorization"] = f"Bearer {self._token}"
         return h
 
-    async def _get_json(
-        self, path: str, *, params: dict[str, Any] | None = None
-    ) -> Any:
+    async def _get_json(self, path: str, *, params: dict[str, Any] | None = None) -> Any:
         url = f"{self._base_url}{path}"
         session = await self._ensure_session()
         async with session.get(
@@ -131,9 +129,7 @@ class ClawHubClient:
 
     # ── public API ────────────────────────────────────────────────────────
 
-    async def search_skills(
-        self, query: str, *, limit: int | None = None
-    ) -> list[dict[str, Any]]:
+    async def search_skills(self, query: str, *, limit: int | None = None) -> list[dict[str, Any]]:
         data = await self._get_json(
             "/api/v1/search",
             params={"q": query.strip(), "limit": str(limit) if limit else None},

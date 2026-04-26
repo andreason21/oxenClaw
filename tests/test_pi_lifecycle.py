@@ -5,8 +5,6 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
-import pytest
-
 from sampyclaw.pi import (
     AssistantMessage,
     CreateAgentSessionOptions,
@@ -36,9 +34,7 @@ def _seeded_session(*, n_user: int = 4, with_system: bool = True) -> AgentSessio
     for i in range(n_user):
         s.messages.append(UserMessage(content=f"u{i}"))
         s.messages.append(
-            AssistantMessage(
-                content=[TextContent(text=f"a{i}")], stop_reason="end_turn"
-            )
+            AssistantMessage(content=[TextContent(text=f"a{i}")], stop_reason="end_turn")
         )
     return s
 
@@ -65,9 +61,7 @@ def test_full_reset_without_system_preservation() -> None:
 
 def test_partial_reset_keeps_last_n_user_turns() -> None:
     s = _seeded_session(n_user=5)
-    reset_session_messages(
-        s, ResetPolicy(full=True, keep_system=True, keep_last_user_turns=2)
-    )
+    reset_session_messages(s, ResetPolicy(full=True, keep_system=True, keep_last_user_turns=2))
     # Expect: system + last 2 user turns + their assistant pairs.
     roles = [m.role for m in s.messages]
     assert roles[0] == "system"
@@ -80,8 +74,13 @@ def test_reset_drops_compactions_when_not_kept() -> None:
     s = _seeded_session(n_user=2)
     s.compactions.append(
         CompactionEntry(
-            id="c", summary="x", replaced_message_indexes=(0,),
-            created_at=0.0, reason="auto", tokens_before=0, tokens_after=0,
+            id="c",
+            summary="x",
+            replaced_message_indexes=(0,),
+            created_at=0.0,
+            reason="auto",
+            tokens_before=0,
+            tokens_after=0,
         )
     )
     reset_session_messages(s, ResetPolicy(keep_compactions=False))
@@ -196,9 +195,7 @@ async def test_archive_keeps_live_when_delete_after_false(tmp_path: Path) -> Non
     s = await sm.create(CreateAgentSessionOptions(agent_id="x"))
     s.messages = _seeded_session(n_user=1).messages
     await sm.save(s)
-    res = await archive_session(
-        sm, s.id, archive_dir=tmp_path / "ar", delete_after=False
-    )
+    res = await archive_session(sm, s.id, archive_dir=tmp_path / "ar", delete_after=False)
     assert res is not None
     assert await sm.get(s.id) is not None
     sm.close()
@@ -210,9 +207,13 @@ async def test_restore_round_trips(tmp_path: Path) -> None:
     s.messages = _seeded_session(n_user=2).messages
     s.compactions.append(
         CompactionEntry(
-            id="c1", summary="prior", replaced_message_indexes=(0, 1),
-            created_at=time.time(), reason="auto",
-            tokens_before=100, tokens_after=20,
+            id="c1",
+            summary="prior",
+            replaced_message_indexes=(0, 1),
+            created_at=time.time(),
+            reason="auto",
+            tokens_before=100,
+            tokens_after=20,
         )
     )
     await sm.save(s)

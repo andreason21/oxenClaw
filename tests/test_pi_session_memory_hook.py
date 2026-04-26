@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from sampyclaw.memory.embedding_cache import EmbeddingCache
 from sampyclaw.memory.store import MemoryStore
 from sampyclaw.pi import (
@@ -178,9 +176,7 @@ async def test_attach_drops_on_deleted_event(tmp_path: Path) -> None:
 
     bus = LifecycleBus()
     hook.attach(bus, sm)
-    await bus.emit(
-        LifecycleEvent.DELETED, {"id": s.id, "agent_id": s.agent_id}
-    )
+    await bus.emit(LifecycleEvent.DELETED, {"id": s.id, "agent_id": s.agent_id})
     assert store.count_chunks() == 0
 
 

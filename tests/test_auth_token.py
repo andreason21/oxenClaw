@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from sampyclaw.config.auth_token import (
     TOKEN_FILE_NAME,
     format_startup_banner,
@@ -77,9 +75,7 @@ def test_resolve_explicit_token_wins(tmp_path: Path):
 def test_resolve_env_beats_persisted(tmp_path: Path):
     paths = _paths(tmp_path)
     write_persisted_token("from-file", paths)
-    resolved = resolve_or_generate_token(
-        paths=paths, env={"SAMPYCLAW_GATEWAY_TOKEN": "from-env"}
-    )
+    resolved = resolve_or_generate_token(paths=paths, env={"SAMPYCLAW_GATEWAY_TOKEN": "from-env"})
     assert resolved.token == "from-env"
     assert resolved.source == "env"
 
@@ -117,18 +113,14 @@ def test_resolve_rotate_replaces_persisted(tmp_path: Path):
 def test_resolve_empty_env_var_is_treated_as_unset(tmp_path: Path):
     paths = _paths(tmp_path)
     write_persisted_token("from-file", paths)
-    resolved = resolve_or_generate_token(
-        paths=paths, env={"SAMPYCLAW_GATEWAY_TOKEN": "   "}
-    )
+    resolved = resolve_or_generate_token(paths=paths, env={"SAMPYCLAW_GATEWAY_TOKEN": "   "})
     assert resolved.source == "persisted"
 
 
 def test_format_startup_banner_for_generated_includes_token_and_url():
     from sampyclaw.config.auth_token import ResolvedToken
 
-    r = ResolvedToken(
-        token="ABC123", source="generated", path=Path("/x/gateway-token")
-    )
+    r = ResolvedToken(token="ABC123", source="generated", path=Path("/x/gateway-token"))
     text = format_startup_banner(r, host="127.0.0.1", port=7331)
     assert "ABC123" in text
     assert "http://127.0.0.1:7331/?token=ABC123" in text
@@ -138,9 +130,7 @@ def test_format_startup_banner_for_generated_includes_token_and_url():
 def test_format_startup_banner_for_persisted_includes_rotate_hint():
     from sampyclaw.config.auth_token import ResolvedToken
 
-    r = ResolvedToken(
-        token="XYZ", source="persisted", path=Path("/x/gateway-token")
-    )
+    r = ResolvedToken(token="XYZ", source="persisted", path=Path("/x/gateway-token"))
     text = format_startup_banner(r, host="h", port=1)
     assert "XYZ" in text
     assert "rotate" in text

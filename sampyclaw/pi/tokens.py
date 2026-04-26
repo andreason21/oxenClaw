@@ -24,7 +24,7 @@ import json
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from sampyclaw.pi.messages import AgentMessage
+    pass
 
 # Per-message overhead. OpenAI's chat-format docs cite 4 tokens; Anthropic
 # and Google are similar in practice. Slightly conservative.
@@ -62,7 +62,7 @@ def estimate_tokens_for_text(text: str) -> int:
     enc = _get_encoder()
     if enc is not None:
         return len(enc.encode(text, disallowed_special=()))
-    return max(1, int(round(len(text) / _CHAR_PER_TOKEN_FALLBACK)))
+    return max(1, round(len(text) / _CHAR_PER_TOKEN_FALLBACK))
 
 
 def estimate_tokens(value: str | list[Any] | dict[str, Any]) -> int:

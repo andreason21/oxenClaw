@@ -11,7 +11,7 @@ approval affirmatively first.
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 from typing import Any
 
 from sampyclaw.agents.tools import Tool
@@ -43,10 +43,7 @@ class _GatedTool:
 
     @property
     def description(self) -> str:
-        return (
-            f"{self._wrapped.description} "
-            f"(requires human approval before execution)"
-        )
+        return f"{self._wrapped.description} (requires human approval before execution)"
 
     @property
     def input_schema(self) -> dict[str, Any]:
@@ -69,10 +66,7 @@ class _GatedTool:
             ApprovalStatus.TIMED_OUT: "no approver responded in time",
             ApprovalStatus.CANCELLED: "approval cancelled",
         }.get(result.status, f"not approved ({result.status.value})")
-        return (
-            f"tool call {verb}"
-            + (f": {result.reason}" if result.reason else "")
-        )
+        return f"tool call {verb}" + (f": {result.reason}" if result.reason else "")
 
 
 def gated_tool(

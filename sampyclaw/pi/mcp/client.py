@@ -99,14 +99,10 @@ class MCPClient:
         )
         if isinstance(result, dict):
             self._server_capabilities = (
-                result.get("capabilities")
-                if isinstance(result.get("capabilities"), dict)
-                else None
+                result.get("capabilities") if isinstance(result.get("capabilities"), dict) else None
             )
             self._server_info = (
-                result.get("serverInfo")
-                if isinstance(result.get("serverInfo"), dict)
-                else None
+                result.get("serverInfo") if isinstance(result.get("serverInfo"), dict) else None
             )
         await self._notify("notifications/initialized", {})
         self._initialized = True
@@ -129,9 +125,7 @@ class MCPClient:
         except asyncio.CancelledError:
             return
         except Exception as exc:
-            logger.warning(
-                "mcp:%s reader crashed: %s", self.server_name, exc
-            )
+            logger.warning("mcp:%s reader crashed: %s", self.server_name, exc)
             self._fail_all_pending(exc)
 
     def _dispatch(self, message: dict[str, Any]) -> None:
@@ -191,13 +185,11 @@ class MCPClient:
             if timeout is not None:
                 return await asyncio.wait_for(future, timeout=timeout)
             return await future
-        except asyncio.TimeoutError:
+        except TimeoutError:
             self._pending.pop(msg_id, None)
             raise
 
-    async def _notify(
-        self, method: str, params: dict[str, Any] | None = None
-    ) -> None:
+    async def _notify(self, method: str, params: dict[str, Any] | None = None) -> None:
         if self._closed or self._transport is None:
             raise TransportClosed(f"client '{self.server_name}' is closed")
         envelope: dict[str, Any] = {"jsonrpc": "2.0", "method": method}
@@ -208,9 +200,7 @@ class MCPClient:
     async def list_tools(self) -> list[dict[str, Any]]:
         """Walk all `tools/list` pages and concatenate."""
         if not self._initialized:
-            raise RuntimeError(
-                f"client '{self.server_name}' has not completed initialize"
-            )
+            raise RuntimeError(f"client '{self.server_name}' has not completed initialize")
         tools: list[dict[str, Any]] = []
         cursor: str | None = None
         while True:
@@ -244,9 +234,7 @@ class MCPClient:
         the model is expected to read.
         """
         if not self._initialized:
-            raise RuntimeError(
-                f"client '{self.server_name}' has not completed initialize"
-            )
+            raise RuntimeError(f"client '{self.server_name}' has not completed initialize")
         result = await self._request(
             "tools/call",
             {"name": name, "arguments": arguments or {}},
@@ -332,7 +320,5 @@ class MCPClientPool:
     async def close(self) -> None:
         clients = list(self._clients.values())
         self._clients.clear()
-        await asyncio.gather(
-            *(c.close() for c in clients), return_exceptions=True
-        )
+        await asyncio.gather(*(c.close() for c in clients), return_exceptions=True)
         self._connected = False

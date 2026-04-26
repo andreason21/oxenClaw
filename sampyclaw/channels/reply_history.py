@@ -19,10 +19,8 @@ ports.
 
 from __future__ import annotations
 
-import time
-from collections.abc import Iterable, Iterator, Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-
 
 HISTORY_CONTEXT_MARKER = "[Chat messages since your last reply - for context]"
 CURRENT_MESSAGE_MARKER = "[Current message]"
@@ -71,9 +69,7 @@ def record_pending_history_entry_if_enabled(
     record_pending_history_entry(history_map, key, entry, limit=limit)
 
 
-def clear_history_entries(
-    history_map: dict[str, list[HistoryEntry]], key: str
-) -> None:
+def clear_history_entries(history_map: dict[str, list[HistoryEntry]], key: str) -> None:
     """Drop the bucket for `key` entirely."""
     history_map.pop(key, None)
 
@@ -109,9 +105,7 @@ def evict_old_history_keys(
 # ─── prompt assembly ────────────────────────────────────────────────
 
 
-def format_entries(
-    entries: Iterable[HistoryEntry], *, line_break: str = "\n"
-) -> str:
+def format_entries(entries: Iterable[HistoryEntry], *, line_break: str = "\n") -> str:
     """Format entries as `sender: body` lines (openclaw-compatible)."""
     return line_break.join(f"{e.sender}: {e.body}" for e in entries)
 
@@ -191,8 +185,8 @@ __all__ = [
     "CURRENT_MESSAGE_MARKER",
     "DEFAULT_GROUP_HISTORY_LIMIT",
     "HISTORY_CONTEXT_MARKER",
-    "HistoryEntry",
     "MAX_HISTORY_KEYS",
+    "HistoryEntry",
     "build_history_context",
     "build_history_context_from_entries",
     "build_history_context_from_map",

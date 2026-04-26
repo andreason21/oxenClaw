@@ -70,9 +70,7 @@ def load_persisted_token(
     return text, p
 
 
-def write_persisted_token(
-    token: str, paths: SampyclawPaths | None = None
-) -> Path:
+def write_persisted_token(token: str, paths: SampyclawPaths | None = None) -> Path:
     """Persist `token` to `~/.sampyclaw/gateway-token` with mode 0600."""
     resolved = paths or default_paths()
     resolved.ensure_home()
@@ -123,9 +121,7 @@ def resolve_or_generate_token(
     return ResolvedToken(token=new_token, source="generated", path=path)
 
 
-def format_startup_banner(
-    resolved: ResolvedToken, *, host: str, port: int
-) -> str:
+def format_startup_banner(resolved: ResolvedToken, *, host: str, port: int) -> str:
     """Multi-line operator banner showing the token + dashboard URL.
 
     Suppress the actual secret when the source is `env` or `explicit` —
@@ -136,45 +132,29 @@ def format_startup_banner(
     bar = "─" * 60
     lines = [bar, "  sampyClaw gateway ready", bar]
     if resolved.source == "generated":
-        lines.append(
-            f"  • a fresh gateway token was generated and saved to {resolved.path}"
-        )
-        lines.append(f"  • token: {resolved.token}")
-        lines.append(
-            f"  • open: {base}?token={resolved.token}"
-        )
-        lines.append(
-            "    (the dashboard sets a 12h cookie on first load and strips"
-        )
-        lines.append("     the token from the address bar)")
-    elif resolved.source == "persisted":
-        lines.append(
-            f"  • loaded persisted gateway token from {resolved.path}"
-        )
+        lines.append(f"  • a fresh gateway token was generated and saved to {resolved.path}")
         lines.append(f"  • token: {resolved.token}")
         lines.append(f"  • open: {base}?token={resolved.token}")
-        lines.append(
-            "  • rotate with `sampyclaw gateway token --rotate`"
-        )
+        lines.append("    (the dashboard sets a 12h cookie on first load and strips")
+        lines.append("     the token from the address bar)")
+    elif resolved.source == "persisted":
+        lines.append(f"  • loaded persisted gateway token from {resolved.path}")
+        lines.append(f"  • token: {resolved.token}")
+        lines.append(f"  • open: {base}?token={resolved.token}")
+        lines.append("  • rotate with `sampyclaw gateway token --rotate`")
     elif resolved.source == "env":
-        lines.append(
-            "  • using SAMPYCLAW_GATEWAY_TOKEN from the environment"
-        )
-        lines.append(
-            f"  • open: {base}  (paste your token in the login form)"
-        )
+        lines.append("  • using SAMPYCLAW_GATEWAY_TOKEN from the environment")
+        lines.append(f"  • open: {base}  (paste your token in the login form)")
     else:  # explicit
         lines.append("  • using --auth-token from the command line")
-        lines.append(
-            f"  • open: {base}  (paste your token in the login form)"
-        )
+        lines.append(f"  • open: {base}  (paste your token in the login form)")
     lines.append(bar)
     return "\n".join(lines)
 
 
 __all__ = [
-    "ResolvedToken",
     "TOKEN_FILE_NAME",
+    "ResolvedToken",
     "format_startup_banner",
     "generate_token",
     "load_persisted_token",

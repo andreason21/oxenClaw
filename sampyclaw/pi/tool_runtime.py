@@ -26,12 +26,11 @@ from __future__ import annotations
 
 import fnmatch
 import json
-from collections.abc import Iterable, Iterator
-from dataclasses import dataclass, field
+from collections.abc import Iterable
+from dataclasses import dataclass
 from typing import Any, Literal
 
 from sampyclaw.pi.tools import AgentTool
-
 
 DEFAULT_MAX_TOOL_RESULT_CHARS = 32_000  # ~8K tokens; sane default
 MIN_TOOL_RESULT_CHARS = 1_024  # never go lower than this even under pressure
@@ -102,9 +101,7 @@ def apply_context_guard(
     elif ratio < relief_ratio:
         state.consecutive_pressure_turns = 0
         # Slowly grow back to default.
-        new_budget = min(
-            DEFAULT_MAX_TOOL_RESULT_CHARS, state.current_max_chars * 2
-        )
+        new_budget = min(DEFAULT_MAX_TOOL_RESULT_CHARS, state.current_max_chars * 2)
         state.current_max_chars = new_budget
     return state.current_max_chars
 
@@ -238,8 +235,8 @@ def split_large_payload(
 
 __all__ = [
     "DEFAULT_MAX_TOOL_RESULT_CHARS",
-    "EffectiveToolPolicy",
     "MIN_TOOL_RESULT_CHARS",
+    "EffectiveToolPolicy",
     "ToolContextGuardState",
     "ToolNameAllowlist",
     "ToolOverride",

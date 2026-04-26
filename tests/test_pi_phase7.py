@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from sampyclaw.pi.cache_observability import (
     CacheObserver,
-    DEFAULT_CACHE_TTL_SECONDS,
     should_apply_cache_markers,
 )
 from sampyclaw.pi.system_prompt import (
@@ -16,7 +15,6 @@ from sampyclaw.pi.system_prompt import (
     time_contribution,
 )
 
-
 # ─── system prompt assembly ──────────────────────────────────────────
 
 
@@ -25,11 +23,9 @@ def test_assemble_orders_by_priority_and_skips_disabled() -> None:
         SystemPromptContribution(name="b", body="B body", priority=20),
         SystemPromptContribution(name="a", body="A body", priority=10),
         SystemPromptContribution(name="c", body="", priority=5),  # empty → skip
-        SystemPromptContribution(
-            name="d", body="D body", priority=15, enabled=False
-        ),
+        SystemPromptContribution(name="d", body="D body", priority=15, enabled=False),
     ]
-    out, prefix = assemble_system_prompt("BASE", parts)
+    out, _prefix = assemble_system_prompt("BASE", parts)
     assert out.startswith("BASE")
     assert out.index("A body") < out.index("B body")
     assert "C body" not in out and "D body" not in out

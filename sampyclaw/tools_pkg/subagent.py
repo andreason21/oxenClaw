@@ -18,26 +18,22 @@ unless explicitly opted in. Recursion is capped via `max_depth`.
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any
 
 from pydantic import BaseModel, Field
 
-from sampyclaw.agents.base import AgentContext
 from sampyclaw.agents.tools import FunctionTool, Tool, ToolRegistry
 from sampyclaw.pi import (
     AssistantMessage,
     AuthStorage,
     InMemorySessionManager,
     Model,
-    ModelRegistry,
     SessionManager,
     TextContent,
     UserMessage,
 )
-from sampyclaw.pi.run import RuntimeConfig, run_agent_turn
 from sampyclaw.pi.auth import resolve_api
+from sampyclaw.pi.run import RuntimeConfig, run_agent_turn
 from sampyclaw.plugin_sdk.runtime_env import get_logger
 
 logger = get_logger("tools.subagent")
@@ -69,9 +65,7 @@ class _SubagentArgs(BaseModel):
     )
 
 
-def subagents_tool(
-    config: SubagentConfig, *, current_depth: int = 0
-) -> Tool:
+def subagents_tool(config: SubagentConfig, *, current_depth: int = 0) -> Tool:
     """Build a `subagents` tool bound to `config`.
 
     `current_depth` is incremented as the parent passes the tool down to
@@ -96,9 +90,7 @@ def subagents_tool(
         # a *new* subagents tool with depth+1 so a child can spawn a
         # grandchild but not infinitely.
         child_tools: list[Tool] = list(config.tools)
-        child_tools.append(
-            subagents_tool(config, current_depth=current_depth + 1)
-        )
+        child_tools.append(subagents_tool(config, current_depth=current_depth + 1))
 
         api = await resolve_api(config.model, config.auth)
         try:
@@ -116,9 +108,7 @@ def subagents_tool(
 
         if not isinstance(result.final_message, AssistantMessage):
             return "subagents: child produced no message"
-        text_blocks = [
-            b.text for b in result.final_message.content if isinstance(b, TextContent)
-        ]
+        text_blocks = [b.text for b in result.final_message.content if isinstance(b, TextContent)]
         text = "\n".join(t for t in text_blocks if t).strip()
         if not text:
             text = f"(child returned no text; stop_reason={result.stopped_reason})"

@@ -16,9 +16,7 @@ from sampyclaw.plugin_sdk.config_schema import RootConfig
 ConfigSink = Callable[[RootConfig], None]
 
 
-def register_config_methods(
-    router: Router, *, sink: ConfigSink | None = None
-) -> None:
+def register_config_methods(router: Router, *, sink: ConfigSink | None = None) -> None:
     """Register config.get / config.reload.
 
     `sink` is called on reload with the fresh RootConfig so the caller can

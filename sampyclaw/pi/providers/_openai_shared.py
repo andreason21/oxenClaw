@@ -19,7 +19,6 @@ The wrapper translates each SSE chunk to the pi event union:
 
 from __future__ import annotations
 
-import asyncio
 import json
 from collections.abc import AsyncIterator, Callable
 from typing import Any
@@ -31,7 +30,6 @@ from sampyclaw.pi.messages import (
     ImageContent,
     SystemMessage,
     TextContent,
-    ThinkingBlock,
     ToolResultMessage,
     ToolUseBlock,
     UserMessage,
@@ -76,9 +74,7 @@ def _serialize_message(msg: Any) -> dict[str, Any]:
                 parts.append(
                     {
                         "type": "image_url",
-                        "image_url": {
-                            "url": f"data:{block.media_type};base64,{block.data}"
-                        },
+                        "image_url": {"url": f"data:{block.media_type};base64,{block.data}"},
                     }
                 )
         return {"role": "user", "content": parts}
@@ -130,13 +126,17 @@ def _serialize_messages(messages: list[Any]) -> list[dict[str, Any]]:
             out.append(_serialize_message(msg))
         except _ToolResultExpand as exp:
             for r in exp.msg.results:
-                content = r.content if isinstance(r.content, str) else json.dumps(
-                    [
-                        {"type": "text", "text": b.text}
-                        if isinstance(b, TextContent)
-                        else {"type": "image_url", "image_url": {"url": "data:..."}}
-                        for b in r.content
-                    ]
+                content = (
+                    r.content
+                    if isinstance(r.content, str)
+                    else json.dumps(
+                        [
+                            {"type": "text", "text": b.text}
+                            if isinstance(b, TextContent)
+                            else {"type": "image_url", "image_url": {"url": "data:..."}}
+                            for b in r.content
+                        ]
+                    )
                 )
                 out.append(
                     {
@@ -279,9 +279,7 @@ async def stream_openai_compatible(
 
                     for tc in delta.get("tool_calls") or []:
                         idx = tc.get("index", 0)
-                        slot = tool_buf.setdefault(
-                            idx, {"id": "", "name": "", "arguments": ""}
-                        )
+                        slot = tool_buf.setdefault(idx, {"id": "", "name": "", "arguments": ""})
                         if tc.get("id"):
                             slot["id"] = tc["id"]
                         fn_delta = tc.get("function") or {}
@@ -289,11 +287,7 @@ async def stream_openai_compatible(
                             slot["name"] += fn_delta["name"]
                         if fn_delta.get("arguments"):
                             slot["arguments"] += fn_delta["arguments"]
-                        if (
-                            idx not in tool_started
-                            and slot["id"]
-                            and slot["name"]
-                        ):
+                        if idx not in tool_started and slot["id"] and slot["name"]:
                             tool_started.add(idx)
                             yield ToolUseStartEvent(id=slot["id"], name=slot["name"])
                         if idx in tool_started and fn_delta.get("arguments"):
@@ -313,10 +307,8 @@ async def stream_openai_compatible(
                     for idx in sorted(tool_started):
                         yield ToolUseEndEvent(id=tool_buf[idx]["id"])
                     yield StopEvent(reason="end_turn")
-        except (aiohttp.ClientConnectionError, asyncio.TimeoutError) as exc:
-            yield ErrorEvent(
-                message=f"connection error: {exc}", retryable=True, error=exc
-            )
+        except (TimeoutError, aiohttp.ClientConnectionError) as exc:
+            yield ErrorEvent(message=f"connection error: {exc}", retryable=True, error=exc)
 
 
 __all__ = [

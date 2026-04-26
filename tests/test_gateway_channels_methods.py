@@ -31,9 +31,7 @@ def patched_bot(monkeypatch):  # type: ignore[no-untyped-def]
 async def test_list_groups_accounts_by_channel(patched_bot) -> None:  # type: ignore[no-untyped-def]
     cr = ChannelRouter()
     cr.register("telegram", "main", TelegramChannel(token="t", account_id="main"))
-    cr.register(
-        "telegram", "secondary", TelegramChannel(token="t", account_id="secondary")
-    )
+    cr.register("telegram", "secondary", TelegramChannel(token="t", account_id="secondary"))
 
     router = Router()
     register_channels_methods(router, cr)

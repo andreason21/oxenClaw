@@ -7,7 +7,6 @@ sequence* the wrapper yields and on the *payload* it would have sent.
 from __future__ import annotations
 
 import json
-from typing import Any
 
 import pytest
 
@@ -17,22 +16,17 @@ from sampyclaw.pi import (
     Context,
     Model,
     SimpleStreamOptions,
-    SystemMessage,
     TextContent,
-    ThinkingBlock,
-    ThinkingLevel,
     ToolResultBlock,
     ToolResultMessage,
     ToolUseBlock,
-    UserMessage,
-    assistant_text,
     get_provider_stream,
     text_message,
 )
+from sampyclaw.pi.providers._openai_shared import build_openai_payload
 from sampyclaw.pi.providers.anthropic import build_anthropic_payload
 from sampyclaw.pi.providers.bedrock import is_anthropic_bedrock_model
 from sampyclaw.pi.providers.google import build_google_payload
-from sampyclaw.pi.providers._openai_shared import build_openai_payload
 from sampyclaw.pi.streaming import (
     StopEvent,
     TextDeltaEvent,
@@ -41,7 +35,6 @@ from sampyclaw.pi.streaming import (
     ToolUseStartEvent,
     UsageEvent,
 )
-
 
 # ─── Registration ────────────────────────────────────────────────────
 
@@ -99,15 +92,14 @@ def test_openai_payload_serializes_tool_use_and_result() -> None:
     api = Api(base_url="https://api.openai.com/v1", api_key="sk-x")
     asst = ToolUseBlock(id="t1", name="echo", input={"x": 1})
     from sampyclaw.pi.messages import AssistantMessage as A
+
     ctx = Context(
         model=model,
         api=api,
         messages=[
             text_message("hi"),
             A(content=[asst], stop_reason="tool_use"),
-            ToolResultMessage(
-                results=[ToolResultBlock(tool_use_id="t1", content="x=1")]
-            ),
+            ToolResultMessage(results=[ToolResultBlock(tool_use_id="t1", content="x=1")]),
         ],
     )
     payload = build_openai_payload(ctx, stream=True)
@@ -259,6 +251,7 @@ class _FakeContent:
         async def _gen():
             for ln in self._lines:
                 yield ln.encode("utf-8")
+
         return _gen()
 
 
@@ -297,9 +290,7 @@ def patch_aiohttp(monkeypatch):  # type: ignore[no-untyped-def]
     """Replace `aiohttp.ClientSession` in a target module with a fake."""
 
     def _apply(module, lines: list[str], status: int = 200):  # type: ignore[no-untyped-def]
-        monkeypatch.setattr(
-            module, "aiohttp", _FakeAiohttpModule(lines, status)
-        )
+        monkeypatch.setattr(module, "aiohttp", _FakeAiohttpModule(lines, status))
 
     return _apply
 
@@ -351,9 +342,7 @@ async def test_openai_sse_translates_text_and_tool_deltas(patch_aiohttp) -> None
     assert text == "hello"
     starts = [e for e in events if isinstance(e, ToolUseStartEvent)]
     assert starts and starts[0].name == "echo"
-    inputs = "".join(
-        e.input_delta for e in events if isinstance(e, ToolUseInputDeltaEvent)
-    )
+    inputs = "".join(e.input_delta for e in events if isinstance(e, ToolUseInputDeltaEvent))
     assert inputs == '{"x":1}'
     assert any(isinstance(e, ToolUseEndEvent) for e in events)
     assert any(isinstance(e, StopEvent) for e in events)
@@ -365,18 +354,12 @@ async def test_anthropic_sse_translates_thinking_text_and_tool(
     from sampyclaw.pi.providers import anthropic as ant
 
     chunks = [
-        (
-            'data: {"type":"content_block_start","index":0,'
-            '"content_block":{"type":"thinking"}}'
-        ),
+        ('data: {"type":"content_block_start","index":0,"content_block":{"type":"thinking"}}'),
         (
             'data: {"type":"content_block_delta","index":0,'
             '"delta":{"type":"thinking_delta","thinking":"hmm"}}'
         ),
-        (
-            'data: {"type":"content_block_start","index":1,'
-            '"content_block":{"type":"text"}}'
-        ),
+        ('data: {"type":"content_block_start","index":1,"content_block":{"type":"text"}}'),
         (
             'data: {"type":"content_block_delta","index":1,'
             '"delta":{"type":"text_delta","text":"hi"}}'
@@ -413,9 +396,7 @@ async def test_anthropic_sse_translates_thinking_text_and_tool(
     from sampyclaw.pi.streaming import ThinkingDeltaEvent
 
     assert any(isinstance(e, ThinkingDeltaEvent) for e in events)
-    assert "".join(
-        e.delta for e in events if isinstance(e, TextDeltaEvent)
-    ) == "hi"
+    assert "".join(e.delta for e in events if isinstance(e, TextDeltaEvent)) == "hi"
     starts = [e for e in events if isinstance(e, ToolUseStartEvent)]
     assert starts and starts[0].name == "echo"
     assert any(isinstance(e, UsageEvent) for e in events)
@@ -452,7 +433,5 @@ async def test_openai_http_error_emits_retryable_event(patch_aiohttp) -> None:
     model = Model(id="gpt-4o", provider="openai")
     api = Api(base_url="https://api.openai.com/v1", api_key="sk-x")
     ctx = Context(model=model, api=api, messages=[text_message("hi")])
-    events = [
-        ev async for ev in shared.stream_openai_compatible(ctx, SimpleStreamOptions())
-    ]
+    events = [ev async for ev in shared.stream_openai_compatible(ctx, SimpleStreamOptions())]
     assert any(isinstance(e, ErrorEvent) and e.retryable for e in events)

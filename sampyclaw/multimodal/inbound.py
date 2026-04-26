@@ -76,8 +76,7 @@ def _validate_mime(declared: str | None, raw: bytes) -> str:
     sniffed = _sniff_mime(raw)
     if sniffed is None:
         raise MediaNormalizationError(
-            "could not sniff image MIME type from payload "
-            "(expected JPEG/PNG/GIF/WebP)"
+            "could not sniff image MIME type from payload (expected JPEG/PNG/GIF/WebP)"
         )
     if declared and declared.lower() != sniffed:
         # Trust the sniff over the declaration — clients lie about MIME.
@@ -87,9 +86,7 @@ def _validate_mime(declared: str | None, raw: bytes) -> str:
             sniffed,
         )
     if not any(sniffed.startswith(p) for p in ALLOWED_MIME_PREFIXES):
-        raise MediaNormalizationError(
-            f"refused non-image MIME type: {sniffed!r}"
-        )
+        raise MediaNormalizationError(f"refused non-image MIME type: {sniffed!r}")
     return sniffed
 
 
@@ -101,9 +98,7 @@ def _from_data_uri(source: str) -> tuple[str, bytes]:
     try:
         raw = base64.b64decode(match.group("payload"), validate=True)
     except Exception as exc:
-        raise MediaNormalizationError(
-            f"data: URI base64 payload not decodable: {exc}"
-        ) from exc
+        raise MediaNormalizationError(f"data: URI base64 payload not decodable: {exc}") from exc
     return mime, raw
 
 
@@ -123,30 +118,21 @@ async def _fetch_url(url: str, *, max_bytes: int) -> bytes:
     try:
         policy_pre_flight(url, policy)
     except Exception as exc:
-        raise MediaNormalizationError(
-            f"image URL refused by NetPolicy: {exc}"
-        ) from exc
+        raise MediaNormalizationError(f"image URL refused by NetPolicy: {exc}") from exc
     try:
-        async with guarded_session(policy) as session:
-            async with session.get(url) as resp:
-                if resp.status >= 400:
-                    raise MediaNormalizationError(
-                        f"image fetch returned HTTP {resp.status}"
-                    )
-                buf = bytearray()
-                async for chunk in resp.content.iter_chunked(64 * 1024):
-                    buf.extend(chunk)
-                    if len(buf) > max_bytes:
-                        raise MediaNormalizationError(
-                            f"image exceeds max_bytes={max_bytes}"
-                        )
-                return bytes(buf)
+        async with guarded_session(policy) as session, session.get(url) as resp:
+            if resp.status >= 400:
+                raise MediaNormalizationError(f"image fetch returned HTTP {resp.status}")
+            buf = bytearray()
+            async for chunk in resp.content.iter_chunked(64 * 1024):
+                buf.extend(chunk)
+                if len(buf) > max_bytes:
+                    raise MediaNormalizationError(f"image exceeds max_bytes={max_bytes}")
+            return bytes(buf)
     except MediaNormalizationError:
         raise
     except Exception as exc:
-        raise MediaNormalizationError(
-            f"image fetch failed: {exc}"
-        ) from exc
+        raise MediaNormalizationError(f"image fetch failed: {exc}") from exc
 
 
 async def normalize_media_item(
@@ -174,9 +160,7 @@ async def normalize_media_item(
             "(plugins should embed bytes before reaching the agent)"
         )
     if len(raw) > max_bytes:
-        raise MediaNormalizationError(
-            f"image size {len(raw)} exceeds max_bytes={max_bytes}"
-        )
+        raise MediaNormalizationError(f"image size {len(raw)} exceeds max_bytes={max_bytes}")
     media_type = _validate_mime(mime, raw)
     return InboundImage(
         media_type=media_type,
@@ -204,17 +188,11 @@ async def normalize_inbound_images(
             continue
         photo_count += 1
         if photo_count > max_images:
-            dropped.append(
-                f"image #{idx + 1}: skipped (max_images={max_images} exceeded)"
-            )
+            dropped.append(f"image #{idx + 1}: skipped (max_images={max_images} exceeded)")
             continue
         try:
-            images.append(
-                await normalize_media_item(item, max_bytes=max_bytes)
-            )
+            images.append(await normalize_media_item(item, max_bytes=max_bytes))
         except MediaNormalizationError as exc:
             dropped.append(f"image #{idx + 1}: {exc}")
-            logger.debug(
-                "skipping image #%d: %s", idx + 1, exc, exc_info=False
-            )
+            logger.debug("skipping image #%d: %s", idx + 1, exc, exc_info=False)
     return images, dropped

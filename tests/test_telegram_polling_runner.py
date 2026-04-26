@@ -78,9 +78,7 @@ async def test_runner_backoff_doubles_up_to_max() -> None:
     session = _FakeSession(
         [TelegramNetworkError(method=SendMessage(chat_id=1, text="x"), message="x")] * 5
     )
-    runner, sleeps = _runner(
-        session, initial_backoff=1.0, max_backoff=4.0
-    )
+    runner, sleeps = _runner(session, initial_backoff=1.0, max_backoff=4.0)
 
     async def _stop() -> None:
         import asyncio

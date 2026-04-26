@@ -5,9 +5,9 @@ from __future__ import annotations
 import pytest
 
 from sampyclaw.agents import (
+    SUPPORTED_PROVIDERS,
     EchoAgent,
     LocalAgent,
-    SUPPORTED_PROVIDERS,
     UnknownProvider,
     build_agent,
 )
@@ -69,9 +69,7 @@ def test_build_local_custom_endpoint_and_model() -> None:
 
 def test_anthropic_provider_ignores_base_url() -> None:
     # base_url is for local/vllm; anthropic (now a pi alias) ignores it.
-    agent = build_agent(
-        agent_id="a", provider="anthropic", base_url="ignored"
-    )
+    agent = build_agent(agent_id="a", provider="anthropic", base_url="ignored")
     assert isinstance(agent, PiAgent)
 
 

@@ -35,7 +35,6 @@ from sampyclaw.pi import (
     text_message,
 )
 
-
 # ─── messages ─────────────────────────────────────────────────────
 
 
@@ -126,9 +125,7 @@ def test_provider_id_alias_normalises() -> None:
 
 
 def test_inmemory_registry_aliases_resolve() -> None:
-    reg = InMemoryModelRegistry(
-        models=[Model(id="a", provider="ollama", aliases=("a-alias",))]
-    )
+    reg = InMemoryModelRegistry(models=[Model(id="a", provider="ollama", aliases=("a-alias",))])
     assert reg.get("a-alias") is reg.get("a")
     assert len(reg) == 1
     assert reg.by_provider("ollama") == [reg.require("a")]

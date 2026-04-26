@@ -67,22 +67,16 @@ def restore(
 ) -> None:
     """Restore a backup archive into `~/.sampyclaw/`."""
     try:
-        result = restore_backup(
-            archive, dry_run=dry_run, overwrite=overwrite
-        )
+        result = restore_backup(archive, dry_run=dry_run, overwrite=overwrite)
     except Exception as exc:
         typer.echo(f"restore failed: {exc}", err=True)
         raise typer.Exit(code=1) from exc
     if dry_run:
         typer.echo(
-            f"dry-run ok: would restore {len(result.restored_files)} file(s) "
-            f"into {result.target}"
+            f"dry-run ok: would restore {len(result.restored_files)} file(s) into {result.target}"
         )
         return
-    typer.echo(
-        f"restore ok: {len(result.restored_files)} file(s) restored "
-        f"into {result.target}"
-    )
+    typer.echo(f"restore ok: {len(result.restored_files)} file(s) restored into {result.target}")
     if result.skipped_files:
         typer.echo(f"  skipped: {len(result.skipped_files)} file(s)")
 

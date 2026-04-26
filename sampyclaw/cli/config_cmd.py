@@ -49,14 +49,11 @@ def validate(
         typer.echo(finding.format(), err=stream_err)
     if report.errors:
         typer.echo(
-            f"\npreflight failed: {len(report.errors)} error(s), "
-            f"{len(report.warnings)} warning(s)",
+            f"\npreflight failed: {len(report.errors)} error(s), {len(report.warnings)} warning(s)",
             err=True,
         )
         raise typer.Exit(code=1)
-    typer.echo(
-        f"\npreflight ok: {len(report.warnings)} warning(s), no errors"
-    )
+    typer.echo(f"\npreflight ok: {len(report.warnings)} warning(s), no errors")
 
 
 @app.command("path")

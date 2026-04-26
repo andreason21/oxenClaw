@@ -54,14 +54,8 @@ async def send_message_telegram(bot: Bot, params: SendParams) -> SendResult:
 
     reply_markup = _to_reply_markup(params.buttons)
     chat_id = int(params.target.chat_id)
-    thread_id = (
-        int(params.target.thread_id) if params.target.thread_id is not None else None
-    )
-    reply_to = (
-        int(params.reply_to_message_id)
-        if params.reply_to_message_id is not None
-        else None
-    )
+    thread_id = int(params.target.thread_id) if params.target.thread_id is not None else None
+    reply_to = int(params.reply_to_message_id) if params.reply_to_message_id is not None else None
 
     try:
         if not params.media:

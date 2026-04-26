@@ -24,7 +24,7 @@ def _next_run_at(scheduler: CronScheduler, job_id: str) -> float | None:
     from apscheduler.jobstores.base import JobLookupError
 
     try:
-        ap_job = scheduler._scheduler.get_job(job_id)  # noqa: SLF001
+        ap_job = scheduler._scheduler.get_job(job_id)
     except JobLookupError:
         return None
     if ap_job is None or ap_job.next_run_time is None:

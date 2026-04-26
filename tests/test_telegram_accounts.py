@@ -34,9 +34,7 @@ def patch_create_bot(monkeypatch):  # type: ignore[no-untyped-def]
         bot.session.close = AsyncMock()
         return bot
 
-    monkeypatch.setattr(
-        "sampyclaw.extensions.telegram.channel.create_bot", _fake
-    )
+    monkeypatch.setattr("sampyclaw.extensions.telegram.channel.create_bot", _fake)
     return monkeypatch
 
 
@@ -63,9 +61,7 @@ def test_load_from_config_registers_accounts_with_tokens(
     assert isinstance(reg.get("main"), TelegramChannel)
 
 
-def test_load_skips_accounts_without_tokens(
-    store: CredentialStore, patch_create_bot
-) -> None:  # type: ignore[no-untyped-def]
+def test_load_skips_accounts_without_tokens(store: CredentialStore, patch_create_bot) -> None:  # type: ignore[no-untyped-def]
     store.write("telegram", "main", {"token": "t"})
     reg = TelegramAccountRegistry(tokens=TokenResolver(store))
     loaded = reg.load_from_config(_config("main", "missing"))
@@ -73,9 +69,7 @@ def test_load_skips_accounts_without_tokens(
     assert reg.missing(_config("main", "missing")) == ["missing"]
 
 
-def test_load_is_idempotent(
-    store: CredentialStore, patch_create_bot
-) -> None:  # type: ignore[no-untyped-def]
+def test_load_is_idempotent(store: CredentialStore, patch_create_bot) -> None:  # type: ignore[no-untyped-def]
     store.write("telegram", "main", {"token": "t"})
     reg = TelegramAccountRegistry(tokens=TokenResolver(store))
     reg.load_from_config(_config("main"))
@@ -99,9 +93,7 @@ def test_require_raises_when_missing(
         reg.require("nope")
 
 
-def test_register_rejects_duplicates(
-    store: CredentialStore, patch_create_bot
-) -> None:  # type: ignore[no-untyped-def]
+def test_register_rejects_duplicates(store: CredentialStore, patch_create_bot) -> None:  # type: ignore[no-untyped-def]
     reg = TelegramAccountRegistry(tokens=TokenResolver(store))
     ch = TelegramChannel(token="t", account_id="main")
     reg.register(ch)
@@ -109,9 +101,7 @@ def test_register_rejects_duplicates(
         reg.register(TelegramChannel(token="t", account_id="main"))
 
 
-async def test_aclose_closes_every_channel(
-    store: CredentialStore, patch_create_bot
-) -> None:  # type: ignore[no-untyped-def]
+async def test_aclose_closes_every_channel(store: CredentialStore, patch_create_bot) -> None:  # type: ignore[no-untyped-def]
     store.write("telegram", "main", {"token": "t"})
     reg = TelegramAccountRegistry(tokens=TokenResolver(store))
     reg.load_from_config(_config("main"))

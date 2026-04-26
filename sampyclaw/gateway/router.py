@@ -87,9 +87,7 @@ class Router:
             # wire. Log the full trace with a correlation id and return a
             # generic message + the id so operators can grep the log.
             corr_id = secrets.token_hex(8)
-            logger.exception(
-                "unhandled error in method %s [corr=%s]", req.method, corr_id
-            )
+            logger.exception("unhandled error in method %s [corr=%s]", req.method, corr_id)
             return _err(
                 req.id,
                 ErrorCode.INTERNAL_ERROR,

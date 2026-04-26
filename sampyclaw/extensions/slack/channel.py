@@ -56,7 +56,9 @@ class SlackChannel:
             raise ValueError("token is required")
         self._account_id = account_id
         self._client = client or SlackWebClient(
-            token=token, base_url=base_url, policy=policy,
+            token=token,
+            base_url=base_url,
+            policy=policy,
         )
 
     async def send(self, params: SendParams) -> SendResult:
@@ -76,21 +78,25 @@ class SlackChannel:
     async def probe(self, opts: ProbeOpts) -> ProbeResult:
         """`auth.test` ping — verifies token + workspace identity."""
         try:
-            data = await self._client._call("auth.test", {})  # noqa: SLF001
+            data = await self._client._call("auth.test", {})
         except SlackApiError as exc:
             return ProbeResult(
-                ok=False, account_id=opts.account_id,
+                ok=False,
+                account_id=opts.account_id,
                 error=f"{exc.error_code} (http {exc.status})",
             )
         except Exception as exc:
             return ProbeResult(
-                ok=False, account_id=opts.account_id, error=str(exc),
+                ok=False,
+                account_id=opts.account_id,
+                error=str(exc),
             )
         # auth.test returns {ok, url, team, user, team_id, user_id, ...}
         team = data.get("team") or data.get("team_id") or ""
         user = data.get("user") or ""
         return ProbeResult(
-            ok=True, account_id=opts.account_id,
+            ok=True,
+            account_id=opts.account_id,
             display_name=f"{user}@{team}" if user and team else (user or team or None),
         )
 

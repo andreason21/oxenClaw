@@ -31,19 +31,11 @@ from sampyclaw.pi.lifecycle import (
     fork_session,
     reset_session,
 )
-from sampyclaw.pi.persistence import SQLiteSessionManager
 from sampyclaw.pi.policy import (
-    SendPolicy,
-    SessionChatType,
-    SessionOverrides,
-    SessionPolicy,
     deserialize_policy,
-    get_policy,
-    serialize_policy,
     set_policy,
 )
 from sampyclaw.pi.session import SessionManager
-
 
 # ─── param models ────────────────────────────────────────────────────
 
@@ -158,9 +150,7 @@ def _preview(s, *, head: int, tail: int) -> dict[str, Any]:  # type: ignore[no-u
                 break
     for m in reversed(s.messages):
         if m.role == "assistant":
-            text_blocks = [
-                b.text for b in m.content if getattr(b, "type", None) == "text"
-            ]
+            text_blocks = [b.text for b in m.content if getattr(b, "type", None) == "text"]
             if text_blocks:
                 last_assistant_text = text_blocks[-1][-tail:]
                 break
@@ -218,15 +208,19 @@ def register_sessions_methods(
             set_policy(s, deserialize_policy(p.policy))
         await sm.save(s)
         return _entry_to_dict(
-            type("E", (), {  # tiny duck-typed entry
-                "id": s.id,
-                "title": s.title,
-                "agent_id": s.agent_id,
-                "model_id": s.model_id,
-                "message_count": len(s.messages),
-                "created_at": s.created_at,
-                "updated_at": s.updated_at,
-            })()
+            type(
+                "E",
+                (),
+                {  # tiny duck-typed entry
+                    "id": s.id,
+                    "title": s.title,
+                    "agent_id": s.agent_id,
+                    "model_id": s.model_id,
+                    "message_count": len(s.messages),
+                    "created_at": s.created_at,
+                    "updated_at": s.updated_at,
+                },
+            )()
         )
 
     @router.method("sessions.reset", _ResetParams)

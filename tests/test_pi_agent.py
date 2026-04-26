@@ -3,13 +3,10 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
-import pytest
 from pydantic import BaseModel
 
 import sampyclaw.pi.providers  # noqa: F401  registers wrappers
-
 from sampyclaw.agents.base import AgentContext
 from sampyclaw.agents.factory import SUPPORTED_PROVIDERS, build_agent
 from sampyclaw.agents.pi_agent import PiAgent
@@ -22,7 +19,6 @@ from sampyclaw.pi import (
     register_provider_stream,
 )
 from sampyclaw.pi.registry import InMemoryModelRegistry
-from sampyclaw.pi.run import RuntimeConfig
 from sampyclaw.pi.streaming import (
     StopEvent,
     TextDeltaEvent,

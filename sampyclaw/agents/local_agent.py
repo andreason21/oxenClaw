@@ -212,9 +212,7 @@ class LocalAgent:
         dropped_notes: list[str] = []
         if inbound.media:
             if model_supports_images(self._model):
-                images, dropped_notes = await normalize_inbound_images(
-                    inbound.media
-                )
+                images, dropped_notes = await normalize_inbound_images(inbound.media)
             else:
                 photo_count = sum(1 for m in inbound.media if m.kind == "photo")
                 if photo_count:
@@ -248,14 +246,10 @@ class LocalAgent:
         # string when text-only (smaller payload, no semantic difference
         # — Ollama's OpenAI shim accepts both).
         if images:
-            content_blocks: list[dict] = [
-                openai_image_url_block(img) for img in images
-            ]
+            content_blocks: list[dict] = [openai_image_url_block(img) for img in images]
             text_parts = [t for t in (user_text, *dropped_notes) if t]
             if text_parts:
-                content_blocks.append(
-                    {"type": "text", "text": "\n".join(text_parts)}
-                )
+                content_blocks.append({"type": "text", "text": "\n".join(text_parts)})
             history.append({"role": "user", "content": content_blocks})
         else:
             combined = "\n".join(t for t in (user_text, *dropped_notes) if t)
@@ -282,9 +276,7 @@ class LocalAgent:
         collected_text: list[str] = []
 
         for _ in range(self._max_tool_iterations):
-            response = await self._chat_complete(
-                messages=history.messages(), tools=tools_param
-            )
+            response = await self._chat_complete(messages=history.messages(), tools=tools_param)
             self._log_usage(response)
             choice = (response.get("choices") or [{}])[0]
             message = choice.get("message") or {}
@@ -305,10 +297,8 @@ class LocalAgent:
             if finish_reason != "tool_calls" or not tool_calls:
                 break
 
-            results = await asyncio.gather(
-                *(self._execute_tool(call) for call in tool_calls)
-            )
-            for call, (result_text, is_error) in zip(tool_calls, results):
+            results = await asyncio.gather(*(self._execute_tool(call) for call in tool_calls))
+            for call, (result_text, is_error) in zip(tool_calls, results, strict=False):
                 history.append(
                     {
                         "role": "tool",
@@ -323,9 +313,7 @@ class LocalAgent:
                 self.id,
                 self._max_tool_iterations,
             )
-            collected_text.append(
-                "(stopped: reached max tool iterations without a final answer)"
-            )
+            collected_text.append("(stopped: reached max tool iterations without a final answer)")
 
         return "\n".join(p for p in collected_text if p).strip()
 
@@ -364,9 +352,7 @@ class LocalAgent:
     ) -> dict[str, Any]:
         if self._stream:
             return await self._chat_complete_stream(messages=messages, tools=tools)
-        return await self._chat_complete_once(
-            messages=messages, tools=tools, stream=False
-        )
+        return await self._chat_complete_once(messages=messages, tools=tools, stream=False)
 
     async def _chat_complete_once(
         self,
@@ -411,7 +397,7 @@ class LocalAgent:
                     else:
                         resp.raise_for_status()
                         return await resp.json()
-            except (aiohttp.ClientConnectionError, asyncio.TimeoutError) as exc:
+            except (TimeoutError, aiohttp.ClientConnectionError) as exc:
                 last_exc = exc
                 if attempt >= self._max_retries:
                     raise
@@ -469,7 +455,7 @@ class LocalAgent:
                     else:
                         resp.raise_for_status()
                         return await self._consume_sse(resp)
-            except (aiohttp.ClientConnectionError, asyncio.TimeoutError) as exc:
+            except (TimeoutError, aiohttp.ClientConnectionError) as exc:
                 if attempt >= self._max_retries:
                     raise
                 logger.warning(
@@ -539,8 +525,7 @@ class LocalAgent:
             "choices": [
                 {
                     "message": message,
-                    "finish_reason": finish_reason
-                    or ("tool_calls" if tool_buf else "stop"),
+                    "finish_reason": finish_reason or ("tool_calls" if tool_buf else "stop"),
                 }
             ]
         }

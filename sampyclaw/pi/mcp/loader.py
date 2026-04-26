@@ -82,9 +82,7 @@ def load_mcp_configs(
         return [], [(str(target), "top-level value must be an object")]
     servers = raw.get("mcpServers")
     if not isinstance(servers, dict):
-        return [], [
-            (str(target), "missing or non-object 'mcpServers' map")
-        ]
+        return [], [(str(target), "missing or non-object 'mcpServers' map")]
     expanded = _expand_env_in_obj(servers)
     return parse_servers_map(expanded)  # type: ignore[arg-type]
 

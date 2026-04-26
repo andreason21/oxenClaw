@@ -7,7 +7,6 @@ import hashlib
 import hmac
 import socket
 from pathlib import Path
-from typing import Any
 
 import pytest
 
@@ -21,7 +20,6 @@ from sampyclaw.security.net import (
 from sampyclaw.security.net.audit import (
     AuditConfig,
     OutboundAuditStore,
-    make_audit_trace_config,
     should_audit_from_env,
 )
 from sampyclaw.security.net.guarded_fetch import (
@@ -51,7 +49,6 @@ from sampyclaw.security.net.webhook_guards import (
     default_guards,
     verify_hmac_signature,
 )
-
 
 # ─── Phase N1: NetPolicy ─────────────────────────────────────────────
 
@@ -162,9 +159,7 @@ def test_classify_blocks_ipv4_classes() -> None:
         ("224.0.0.1", "multicast"),
     ]
     for addr, expect_token in cases:
-        reason = classify_blocked(
-            ip.IPv4Address(addr), allow_private=False, allow_loopback=False
-        )
+        reason = classify_blocked(ip.IPv4Address(addr), allow_private=False, allow_loopback=False)
         assert reason is not None and expect_token.lower() in reason.lower()
 
 
@@ -184,9 +179,7 @@ def test_classify_allows_public_ipv4() -> None:
 def test_classify_blocks_ipv6_loopback_and_ula() -> None:
     import ipaddress as ip
 
-    assert classify_blocked(
-        ip.IPv6Address("::1"), allow_private=False, allow_loopback=False
-    )
+    assert classify_blocked(ip.IPv6Address("::1"), allow_private=False, allow_loopback=False)
     assert classify_blocked(
         ip.IPv6Address("fc00::1"),
         allow_private=False,
@@ -283,9 +276,7 @@ class _StubLoop:
 async def test_pinned_resolver_caches_and_validates(monkeypatch) -> None:
     pol = NetPolicy()
     resolver = PinnedResolver(pol, ttl_seconds=60)
-    monkeypatch.setattr(
-        asyncio, "get_running_loop", lambda: _StubLoop({"good.com": ["1.1.1.1"]})
-    )
+    monkeypatch.setattr(asyncio, "get_running_loop", lambda: _StubLoop({"good.com": ["1.1.1.1"]}))
     out1 = await resolver.resolve("good.com", port=443, family=socket.AF_INET)
     out2 = await resolver.resolve("good.com", port=443, family=socket.AF_INET)
     assert out1 == out2
@@ -295,9 +286,7 @@ async def test_pinned_resolver_caches_and_validates(monkeypatch) -> None:
 async def test_pinned_resolver_rejects_private_ip(monkeypatch) -> None:
     pol = NetPolicy()  # private not allowed
     resolver = PinnedResolver(pol)
-    monkeypatch.setattr(
-        asyncio, "get_running_loop", lambda: _StubLoop({"bad.com": ["10.0.0.1"]})
-    )
+    monkeypatch.setattr(asyncio, "get_running_loop", lambda: _StubLoop({"bad.com": ["10.0.0.1"]}))
     with pytest.raises(SsrFBlockedError):
         await resolver.resolve("bad.com", port=443, family=socket.AF_INET)
 
@@ -305,9 +294,7 @@ async def test_pinned_resolver_rejects_private_ip(monkeypatch) -> None:
 async def test_pinned_resolver_passes_when_allow_private(monkeypatch) -> None:
     pol = NetPolicy(allow_private_network=True)
     resolver = PinnedResolver(pol)
-    monkeypatch.setattr(
-        asyncio, "get_running_loop", lambda: _StubLoop({"x.com": ["10.0.0.1"]})
-    )
+    monkeypatch.setattr(asyncio, "get_running_loop", lambda: _StubLoop({"x.com": ["10.0.0.1"]}))
     out = await resolver.resolve("x.com", port=443, family=socket.AF_INET)
     assert out[0]["host"] == "10.0.0.1"
 
@@ -410,9 +397,7 @@ def test_rate_limiter_window_resets() -> None:
     def _now() -> float:
         return clock["t"]
 
-    rl = FixedWindowRateLimiter(
-        max_requests=2, window_seconds=10, clock=_now
-    )
+    rl = FixedWindowRateLimiter(max_requests=2, window_seconds=10, clock=_now)
     assert rl.check("u1") is True
     assert rl.check("u1") is True
     assert rl.check("u1") is False
@@ -423,9 +408,7 @@ def test_rate_limiter_window_resets() -> None:
 
 def test_rate_limiter_assert_raises_with_retry_after() -> None:
     clock = {"t": 0.0}
-    rl = FixedWindowRateLimiter(
-        max_requests=1, window_seconds=5, clock=lambda: clock["t"]
-    )
+    rl = FixedWindowRateLimiter(max_requests=1, window_seconds=5, clock=lambda: clock["t"])
     rl.assert_allowed("u")
     with pytest.raises(RateLimited) as exc_info:
         rl.assert_allowed("u")
@@ -433,9 +416,7 @@ def test_rate_limiter_assert_raises_with_retry_after() -> None:
 
 
 def test_rate_limiter_prunes_when_max_keys() -> None:
-    rl = FixedWindowRateLimiter(
-        max_requests=1, window_seconds=1, max_keys=4
-    )
+    rl = FixedWindowRateLimiter(max_requests=1, window_seconds=1, max_keys=4)
     for i in range(10):
         rl.check(f"u{i}")
     assert len(rl) <= 10  # may have been pruned, but not unbounded

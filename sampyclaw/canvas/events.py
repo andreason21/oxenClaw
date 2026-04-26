@@ -75,7 +75,8 @@ class CanvasEventBus:
             except asyncio.QueueFull:
                 logger.warning(
                     "canvas subscriber queue full; dropping event kind=%s agent=%s",
-                    event.kind, event.agent_id,
+                    event.kind,
+                    event.agent_id,
                 )
         return delivered
 

@@ -22,9 +22,7 @@ def _populate_home(home: Path) -> None:
     """Create a representative home dir tree."""
     home.mkdir(parents=True, exist_ok=True)
     (home / "config.yaml").write_text("channels: {}\n")
-    (home / "mcp.json").write_text(
-        json.dumps({"mcpServers": {"x": {"command": "echo"}}})
-    )
+    (home / "mcp.json").write_text(json.dumps({"mcpServers": {"x": {"command": "echo"}}}))
     (home / "approvals.json").write_text(json.dumps({"pending": []}))
     creds = home / "credentials" / "telegram"
     creds.mkdir(parents=True, exist_ok=True)
@@ -102,9 +100,9 @@ def test_restore_reconstructs_home_dir(tmp_path: Path):
     assert rr.target == restore_dir
     assert restore_dir.exists()
     assert (restore_dir / "config.yaml").read_text() == "channels: {}\n"
-    assert (
-        restore_dir / "credentials/telegram/main.json"
-    ).read_text() == json.dumps({"token": "abc"})
+    assert (restore_dir / "credentials/telegram/main.json").read_text() == json.dumps(
+        {"token": "abc"}
+    )
     # SQLite snapshot survived: rows still there.
     conn = sqlite3.connect(str(restore_dir / "memory.db"))
     rows = list(conn.execute("SELECT body FROM notes ORDER BY id"))

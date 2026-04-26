@@ -4,7 +4,6 @@ palace, lint, and CLI."""
 from __future__ import annotations
 
 import json
-import time
 from pathlib import Path
 
 import pytest
@@ -23,7 +22,6 @@ from sampyclaw.wiki import (
     get_wiki_page,
     initialize_wiki_vault,
     lint_vault,
-    list_wiki_pages,
     parse_wiki_markdown,
     render_wiki_markdown,
     search_wiki_pages,
@@ -31,7 +29,6 @@ from sampyclaw.wiki import (
 )
 from sampyclaw.wiki.ingest import upsert_simple, upsert_wiki_page
 from sampyclaw.wiki.lint import count_by_severity
-
 
 # ─── slugify ─────────────────────────────────────────────────────────
 
@@ -68,9 +65,7 @@ def _sample_page() -> WikiPage:
         claims=(
             WikiClaim(
                 text="Foam exists at the Planck scale.",
-                evidence=(
-                    WikiEvidence(source_id="wheeler-1955", note="page 12"),
-                ),
+                evidence=(WikiEvidence(source_id="wheeler-1955", note="page 12"),),
                 confidence=0.7,
             ),
         ),
@@ -348,9 +343,7 @@ def test_cli_full_lifecycle(tmp_path: Path, monkeypatch) -> None:
     assert res.exit_code == 0
     assert "vault initialised" in res.stdout
 
-    res = runner.invoke(
-        wiki_cli, ["add", "concept", "Demo", "--summary", "demo summary"]
-    )
+    res = runner.invoke(wiki_cli, ["add", "concept", "Demo", "--summary", "demo summary"])
     assert res.exit_code == 0
     assert "wrote concept/demo" in res.stdout
 

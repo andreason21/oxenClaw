@@ -179,9 +179,7 @@ class MemoryRetriever:
         from_line: int = 1,
         lines: int = 120,
     ) -> MemoryReadResult:
-        return read_file_range(
-            self._memory_dir, rel_path, from_line=from_line, lines=lines
-        )
+        return read_file_range(self._memory_dir, rel_path, from_line=from_line, lines=lines)
 
     async def aclose(self) -> None:
         await self._embeddings.aclose()
@@ -203,9 +201,4 @@ def format_memories_for_prompt(results: list[MemorySearchResult]) -> str:
 
 
 def _xml_escape(s: str) -> str:
-    return (
-        s.replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace('"', "&quot;")
-    )
+    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")

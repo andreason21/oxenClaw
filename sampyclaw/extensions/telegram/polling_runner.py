@@ -61,9 +61,7 @@ class PollingRunner:
                 if not is_retryable(exc):
                     logger.error("non-retryable polling error: %s", exc)
                     raise
-                logger.exception(
-                    "polling crashed; restarting in %.1fs", backoff
-                )
+                logger.exception("polling crashed; restarting in %.1fs", backoff)
 
             await self._sleep(backoff * (1 + random.uniform(0, self._jitter)))
             self.restart_count += 1

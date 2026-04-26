@@ -56,8 +56,7 @@ class _NavigateArgs(BaseModel):
     wait_until: str = Field(
         default="load",
         description=(
-            "Playwright lifecycle event: 'load', 'domcontentloaded', "
-            "'networkidle', or 'commit'."
+            "Playwright lifecycle event: 'load', 'domcontentloaded', 'networkidle', or 'commit'."
         ),
     )
 
@@ -296,9 +295,7 @@ def browser_download_tool(
 ) -> Tool:
     pol = policy or BrowserPolicy.closed()
     if not pol.allow_downloads:
-        raise BrowserPolicyError(
-            "browser_download requires BrowserPolicy.allow_downloads=True"
-        )
+        raise BrowserPolicyError("browser_download requires BrowserPolicy.allow_downloads=True")
 
     async def _handler(args: _DownloadArgs) -> str:
         dest = Path(args.dest_dir)

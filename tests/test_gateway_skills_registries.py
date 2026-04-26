@@ -19,7 +19,6 @@ from sampyclaw.config.paths import SampyclawPaths
 from sampyclaw.gateway.router import Router
 from sampyclaw.gateway.skills_methods import register_skills_methods
 
-
 SAMPLE = """---
 name: foo
 description: x.
@@ -73,9 +72,7 @@ def setup(tmp_path):  # type: ignore[no-untyped-def]
 
 async def test_registries_rpc(setup) -> None:  # type: ignore[no-untyped-def]
     router, _, _ = setup
-    resp = await router.dispatch(
-        {"jsonrpc": "2.0", "id": 1, "method": "skills.registries"}
-    )
+    resp = await router.dispatch({"jsonrpc": "2.0", "id": 1, "method": "skills.registries"})
     assert resp.error is None
     names = [r["name"] for r in resp.result["registries"]]
     assert names == ["public", "mirror"]
@@ -85,7 +82,7 @@ async def test_registries_rpc(setup) -> None:  # type: ignore[no-untyped-def]
 
 
 async def test_search_routes_to_named_registry(setup) -> None:  # type: ignore[no-untyped-def]
-    router, multi, _ = setup
+    router, _multi, _ = setup
     resp = await router.dispatch(
         {
             "jsonrpc": "2.0",
@@ -100,7 +97,7 @@ async def test_search_routes_to_named_registry(setup) -> None:  # type: ignore[n
 
 
 async def test_install_with_registry(setup) -> None:  # type: ignore[no-untyped-def]
-    router, _, paths = setup
+    router, _, _paths = setup
     resp = await router.dispatch(
         {
             "jsonrpc": "2.0",
@@ -125,9 +122,7 @@ async def test_list_installed_includes_trust(setup) -> None:  # type: ignore[no-
             "params": {"slug": "foo", "registry": "mirror"},
         }
     )
-    resp = await router.dispatch(
-        {"jsonrpc": "2.0", "id": 2, "method": "skills.list_installed"}
-    )
+    resp = await router.dispatch({"jsonrpc": "2.0", "id": 2, "method": "skills.list_installed"})
     s = resp.result["skills"][0]
     assert s["registry_name"] == "mirror"
     assert s["trust"] == "mirror"

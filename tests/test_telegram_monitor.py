@@ -35,9 +35,7 @@ async def test_handler_delivers_envelope() -> None:
     async def handler(env: InboundEnvelope) -> None:
         received.append(env)
 
-    session = TelegramPollingSession(
-        bot=MagicMock(), account_id="main", on_inbound=handler
-    )
+    session = TelegramPollingSession(bot=MagicMock(), account_id="main", on_inbound=handler)
     await session._handle_message(_msg(1, "hello"))
     assert len(received) == 1
     assert received[0].text == "hello"
@@ -51,9 +49,7 @@ async def test_handler_dedups_repeat_message_id() -> None:
         nonlocal calls
         calls += 1
 
-    session = TelegramPollingSession(
-        bot=MagicMock(), account_id="main", on_inbound=handler
-    )
+    session = TelegramPollingSession(bot=MagicMock(), account_id="main", on_inbound=handler)
     await session._handle_message(_msg(1))
     await session._handle_message(_msg(1))
     assert calls == 1
@@ -65,9 +61,7 @@ async def test_handler_skips_messages_without_text() -> None:
     async def handler(env: InboundEnvelope) -> None:
         received.append(env)
 
-    session = TelegramPollingSession(
-        bot=MagicMock(), account_id="main", on_inbound=handler
-    )
+    session = TelegramPollingSession(bot=MagicMock(), account_id="main", on_inbound=handler)
     await session._handle_message(_msg(1, text=None))
     assert received == []
 
@@ -93,8 +87,6 @@ async def test_handler_swallows_exceptions_from_inbound() -> None:
     async def handler(env: InboundEnvelope) -> None:
         raise RuntimeError("consumer broke")
 
-    session = TelegramPollingSession(
-        bot=MagicMock(), account_id="main", on_inbound=handler
-    )
+    session = TelegramPollingSession(bot=MagicMock(), account_id="main", on_inbound=handler)
     # must not raise out of the polling handler — gets logged instead
     await session._handle_message(_msg(1))

@@ -70,7 +70,9 @@ class _HideArgs(BaseModel):
 class _EvalArgs(BaseModel):
     model_config = {"extra": "forbid"}
     expression: str = Field(
-        ..., min_length=1, max_length=4096,
+        ...,
+        min_length=1,
+        max_length=4096,
         description=(
             "JavaScript expression to evaluate inside the canvas iframe. "
             "The HTML you presented must include a "
@@ -79,7 +81,9 @@ class _EvalArgs(BaseModel):
         ),
     )
     timeout_seconds: float = Field(
-        default=5.0, gt=0.0, le=15.0,
+        default=5.0,
+        gt=0.0,
+        le=15.0,
         description="Hard deadline before the call returns 'no response'.",
     )
 
@@ -96,15 +100,15 @@ def canvas_present_tool(
     async def _handler(args: _PresentArgs) -> str:
         size = len(args.html.encode("utf-8"))
         if size > cap:
-            raise CanvasResourceCapError(
-                f"html is {size} bytes, exceeds canvas cap {cap}"
-            )
+            raise CanvasResourceCapError(f"html is {size} bytes, exceeds canvas cap {cap}")
         state = store.present(agent_id, html=args.html, title=args.title)
-        bus.publish(CanvasEvent(
-            kind="present",
-            agent_id=agent_id,
-            payload={"html": args.html, "title": args.title, "version": state.version},
-        ))
+        bus.publish(
+            CanvasEvent(
+                kind="present",
+                agent_id=agent_id,
+                payload={"html": args.html, "title": args.title, "version": state.version},
+            )
+        )
         return f"canvas presented (version={state.version}, bytes={size})"
 
     return FunctionTool(
@@ -151,24 +155,22 @@ def canvas_eval_tool(
     async def _handler(args: _EvalArgs) -> str:
         state = store.get(agent_id)
         if state is None or state.hidden:
-            raise CanvasNotOpenError(
-                "no visible canvas to evaluate; call canvas_present first"
-            )
+            raise CanvasNotOpenError("no visible canvas to evaluate; call canvas_present first")
         request_id = bus.new_eval_request_id()
         fut = bus.register_eval_waiter(request_id)
-        bus.publish(CanvasEvent(
-            kind="eval",
-            agent_id=agent_id,
-            request_id=request_id,
-            payload={"expression": args.expression},
-        ))
+        bus.publish(
+            CanvasEvent(
+                kind="eval",
+                agent_id=agent_id,
+                request_id=request_id,
+                payload={"expression": args.expression},
+            )
+        )
         try:
             value: Any = await asyncio.wait_for(fut, timeout=args.timeout_seconds)
         except TimeoutError as exc:
             bus.reject_eval(request_id, exc)
-            raise CanvasEvalError(
-                f"canvas_eval timed out after {args.timeout_seconds}s"
-            ) from exc
+            raise CanvasEvalError(f"canvas_eval timed out after {args.timeout_seconds}s") from exc
         try:
             text = json.dumps(value, ensure_ascii=False, default=str)
         except Exception:

@@ -28,9 +28,7 @@ def register_isolation_methods(router: Router) -> None:
         return {
             "available": avail,
             "all_known": all_backends,
-            "strongest": next(
-                (n for n in all_backends if n in avail), "inprocess"
-            ),
+            "strongest": next((n for n in all_backends if n in avail), "inprocess"),
         }
 
     @router.method("isolation.smoke", _SmokeParams)
@@ -48,9 +46,7 @@ def register_isolation_methods(router: Router) -> None:
             filesystem="full",
         )
         backend = await default_registry().resolve(policy)
-        result = await backend.run(
-            ["echo", "isolation-smoke"], policy=policy
-        )
+        result = await backend.run(["echo", "isolation-smoke"], policy=policy)
         return {
             "backend": result.backend,
             "ok": result.ok,

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import sys
 import textwrap
 from pathlib import Path
@@ -27,8 +26,6 @@ from sampyclaw.pi.mcp.names import (
     sanitize_server_name,
     sanitize_tool_name,
 )
-from sampyclaw.pi.mcp.transport import Transport
-
 
 # ---------------------------------------------------------------------- config
 
@@ -95,9 +92,7 @@ def test_parse_rejects_non_http_scheme():
 
 
 def test_parse_rejects_unknown_transport():
-    cfg = parse_server_config(
-        "bad", {"url": "https://example.com", "transport": "websocket"}
-    )
+    cfg = parse_server_config("bad", {"url": "https://example.com", "transport": "websocket"})
     assert hasattr(cfg, "reason") and "websocket" in cfg.reason
 
 
@@ -285,9 +280,7 @@ async def _wait_for_outbox(
     deadline = asyncio.get_running_loop().time() + timeout
     while len(transport.outbox) < min_len:
         if asyncio.get_running_loop().time() > deadline:
-            raise asyncio.TimeoutError(
-                f"outbox did not reach {min_len} (got {len(transport.outbox)})"
-            )
+            raise TimeoutError(f"outbox did not reach {min_len} (got {len(transport.outbox)})")
         await asyncio.sleep(0.005)
     return list(transport.outbox)
 
@@ -300,9 +293,7 @@ async def test_client_call_tool_returns_result():
 
     async def server_script() -> None:
         msg = await _wait_for_outbox(transport, 1)
-        await transport.inbox.put(
-            {"jsonrpc": "2.0", "id": msg[0]["id"], "result": {}}
-        )
+        await transport.inbox.put({"jsonrpc": "2.0", "id": msg[0]["id"], "result": {}})
         await _wait_for_outbox(transport, 2)  # init notification
         msg = await _wait_for_outbox(transport, 3)
         assert msg[2]["method"] == "tools/call"
@@ -337,9 +328,7 @@ async def test_client_call_tool_propagates_jsonrpc_error():
 
     async def server_script() -> None:
         msg = await _wait_for_outbox(transport, 1)
-        await transport.inbox.put(
-            {"jsonrpc": "2.0", "id": msg[0]["id"], "result": {}}
-        )
+        await transport.inbox.put({"jsonrpc": "2.0", "id": msg[0]["id"], "result": {}})
         await _wait_for_outbox(transport, 2)
         msg = await _wait_for_outbox(transport, 3)
         await transport.inbox.put(
@@ -476,9 +465,7 @@ async def test_adapter_renames_to_avoid_reserved_collisions(tmp_path: Path):
     )
     pool = MCPClientPool([cfg])
     try:
-        tools = await materialize_mcp_tools(
-            pool, reserved_names=["fs__ping"]
-        )
+        tools = await materialize_mcp_tools(pool, reserved_names=["fs__ping"])
         assert len(tools) == 1
         assert tools[0].name != "fs__ping"
         assert tools[0].name.startswith("fs__ping")

@@ -92,10 +92,7 @@ def validate_bind_host(host: str, *, allow_non_loopback: bool = False) -> None:
             host,
         )
         return
-    if is_unspecified_host(host):
-        kind = "wildcard (all interfaces)"
-    else:
-        kind = "non-loopback"
+    kind = "wildcard (all interfaces)" if is_unspecified_host(host) else "non-loopback"
     raise RemoteBindRefused(
         f"refusing to bind gateway to {kind} host {host!r}. "
         f"sampyClaw defaults to loopback so the agent runs only for the "

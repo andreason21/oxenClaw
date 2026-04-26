@@ -12,7 +12,7 @@ from __future__ import annotations
 import fnmatch
 import os
 from collections.abc import Iterable
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, replace
 
 
 class NetPolicyError(Exception):
@@ -47,9 +47,7 @@ class NetPolicy:
         # certainly a mistake. We refuse rather than silently defaulting.
         for pat in self.allowed_hostnames:
             if pat in self.denied_hostnames:
-                raise NetPolicyError(
-                    f"hostname pattern {pat!r} appears in both allow and deny"
-                )
+                raise NetPolicyError(f"hostname pattern {pat!r} appears in both allow and deny")
 
     # ─── matchers ────────────────────────────────────────────────────
 
@@ -70,7 +68,7 @@ class NetPolicy:
 
     # ─── derive ──────────────────────────────────────────────────────
 
-    def with_extra_allow(self, *patterns: str) -> "NetPolicy":
+    def with_extra_allow(self, *patterns: str) -> NetPolicy:
         """Return a copy with `patterns` appended to allow list."""
         merged = tuple(dict.fromkeys((*self.allowed_hostnames, *patterns)))
         return replace(self, allowed_hostnames=merged)
@@ -79,10 +77,7 @@ class NetPolicy:
 def hostname_matches(host: str, patterns: Iterable[str]) -> bool:
     """Glob match `host` against any pattern in `patterns` (case-insensitive)."""
     h = host.lower()
-    for pat in patterns:
-        if fnmatch.fnmatchcase(h, pat.lower()):
-            return True
-    return False
+    return any(fnmatch.fnmatchcase(h, pat.lower()) for pat in patterns)
 
 
 def merge_policies(*policies: NetPolicy | None) -> NetPolicy:
@@ -104,27 +99,21 @@ def merge_policies(*policies: NetPolicy | None) -> NetPolicy:
     if len(real) == 1:
         return real[0]
 
-    def _merge_allowlist(
-        a: tuple[str, ...], b: tuple[str, ...]
-    ) -> tuple[str, ...]:
+    def _merge_allowlist(a: tuple[str, ...], b: tuple[str, ...]) -> tuple[str, ...]:
         if not a:
             return b
         if not b:
             return a
         return tuple(p for p in a if p in b)
 
-    def _merge_ports(
-        a: tuple[int, ...], b: tuple[int, ...]
-    ) -> tuple[int, ...]:
+    def _merge_ports(a: tuple[int, ...], b: tuple[int, ...]) -> tuple[int, ...]:
         if not a:
             return b
         if not b:
             return a
         return tuple(p for p in a if p in b)
 
-    def _merge_schemes(
-        a: tuple[str, ...], b: tuple[str, ...]
-    ) -> tuple[str, ...]:
+    def _merge_schemes(a: tuple[str, ...], b: tuple[str, ...]) -> tuple[str, ...]:
         if not a:
             return b
         if not b:
@@ -134,17 +123,11 @@ def merge_policies(*policies: NetPolicy | None) -> NetPolicy:
     out = real[0]
     for p in real[1:]:
         out = NetPolicy(
-            allowed_hostnames=_merge_allowlist(
-                out.allowed_hostnames, p.allowed_hostnames
-            ),
-            denied_hostnames=tuple(
-                dict.fromkeys((*out.denied_hostnames, *p.denied_hostnames))
-            ),
+            allowed_hostnames=_merge_allowlist(out.allowed_hostnames, p.allowed_hostnames),
+            denied_hostnames=tuple(dict.fromkeys((*out.denied_hostnames, *p.denied_hostnames))),
             allow_private_network=out.allow_private_network and p.allow_private_network,
             allow_loopback=out.allow_loopback and p.allow_loopback,
-            extra_allowed_ports=_merge_ports(
-                out.extra_allowed_ports, p.extra_allowed_ports
-            ),
+            extra_allowed_ports=_merge_ports(out.extra_allowed_ports, p.extra_allowed_ports),
             allowed_schemes=_merge_schemes(out.allowed_schemes, p.allowed_schemes),
         )
     return out
@@ -183,8 +166,7 @@ def policy_from_env(env: dict[str, str] | None = None) -> NetPolicy:
         denied_hostnames=_csv(src.get("SAMPYCLAW_NET_DENY_HOSTS")),
         allow_private_network=src.get("SAMPYCLAW_NET_ALLOW_PRIVATE", "").lower()
         in ("1", "true", "yes"),
-        allow_loopback=src.get("SAMPYCLAW_NET_ALLOW_LOOPBACK", "").lower()
-        in ("1", "true", "yes"),
+        allow_loopback=src.get("SAMPYCLAW_NET_ALLOW_LOOPBACK", "").lower() in ("1", "true", "yes"),
         extra_allowed_ports=_ports(src.get("SAMPYCLAW_NET_EXTRA_PORTS")),
     )
 

@@ -58,9 +58,7 @@ class ThreadBindings:
             self._by_thread.pop((previous.chat_id, previous.thread_id), None)
         thread_previous = self._by_thread.pop((chat_id, thread_id), None)
         if thread_previous is not None:
-            self._by_session.pop(
-                (thread_previous.agent_id, thread_previous.session_key), None
-            )
+            self._by_session.pop((thread_previous.agent_id, thread_previous.session_key), None)
 
         now = self._now()
         binding = ThreadBinding(

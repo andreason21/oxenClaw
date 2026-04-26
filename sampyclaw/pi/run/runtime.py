@@ -8,8 +8,9 @@ for production.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
 
 from sampyclaw.pi.thinking import ThinkingLevel
 

@@ -69,9 +69,7 @@ async def test_single_agent_used_as_implicit_fallback_when_no_routing():
     should still reach the one registered agent."""
     agent = _RecordingAgent("assistant")
     cfg = RootConfig()  # no agents declared
-    dispatcher = Dispatcher(
-        agents=_registry_with(agent), config=cfg, send=_send_ok
-    )
+    dispatcher = Dispatcher(agents=_registry_with(agent), config=cfg, send=_send_ok)
 
     outcome = await dispatcher.dispatch_with_outcome(_envelope())
 
@@ -96,9 +94,7 @@ async def test_explicit_routing_still_wins_over_single_agent_fallback():
             )
         }
     )
-    dispatcher = Dispatcher(
-        agents=_registry_with(main, other), config=cfg, send=_send_ok
-    )
+    dispatcher = Dispatcher(agents=_registry_with(main, other), config=cfg, send=_send_ok)
 
     outcome = await dispatcher.dispatch_with_outcome(_envelope())
     assert outcome.agent_id == "main"
@@ -110,9 +106,7 @@ async def test_multiple_agents_no_routing_drops_with_reason():
     a = _RecordingAgent("a")
     b = _RecordingAgent("b")
     cfg = RootConfig()
-    dispatcher = Dispatcher(
-        agents=_registry_with(a, b), config=cfg, send=_send_ok
-    )
+    dispatcher = Dispatcher(agents=_registry_with(a, b), config=cfg, send=_send_ok)
 
     outcome = await dispatcher.dispatch_with_outcome(_envelope())
     assert outcome.agent_id is None
@@ -124,9 +118,7 @@ async def test_multiple_agents_no_routing_drops_with_reason():
 @pytest.mark.asyncio
 async def test_no_agents_registered_drops_with_clear_reason():
     cfg = RootConfig()
-    dispatcher = Dispatcher(
-        agents=AgentRegistry(), config=cfg, send=_send_ok
-    )
+    dispatcher = Dispatcher(agents=AgentRegistry(), config=cfg, send=_send_ok)
 
     outcome = await dispatcher.dispatch_with_outcome(_envelope())
     assert outcome.results == []
@@ -146,19 +138,13 @@ async def test_allow_from_blocks_sender_and_does_not_fall_through():
         agents={
             "assistant": AgentConfig(
                 id="assistant",
-                channels={
-                    "telegram": AgentChannelRouting(allow_from=["alice"])
-                },
+                channels={"telegram": AgentChannelRouting(allow_from=["alice"])},
             )
         }
     )
-    dispatcher = Dispatcher(
-        agents=_registry_with(agent), config=cfg, send=_send_ok
-    )
+    dispatcher = Dispatcher(agents=_registry_with(agent), config=cfg, send=_send_ok)
 
-    outcome = await dispatcher.dispatch_with_outcome(
-        _envelope(sender_id="bob")
-    )
+    outcome = await dispatcher.dispatch_with_outcome(_envelope(sender_id="bob"))
     assert outcome.agent_id is None
     assert outcome.drop_reason and "allow_from" in outcome.drop_reason
     assert not agent.received
@@ -171,19 +157,13 @@ async def test_allow_from_permits_listed_sender():
         agents={
             "assistant": AgentConfig(
                 id="assistant",
-                channels={
-                    "telegram": AgentChannelRouting(allow_from=["alice"])
-                },
+                channels={"telegram": AgentChannelRouting(allow_from=["alice"])},
             )
         }
     )
-    dispatcher = Dispatcher(
-        agents=_registry_with(agent), config=cfg, send=_send_ok
-    )
+    dispatcher = Dispatcher(agents=_registry_with(agent), config=cfg, send=_send_ok)
 
-    outcome = await dispatcher.dispatch_with_outcome(
-        _envelope(sender_id="alice")
-    )
+    outcome = await dispatcher.dispatch_with_outcome(_envelope(sender_id="alice"))
     assert outcome.agent_id == "assistant"
     assert outcome.results
 
@@ -201,9 +181,7 @@ async def test_routing_to_unregistered_agent_drops_with_diagnostic_reason():
             )
         }
     )
-    dispatcher = Dispatcher(
-        agents=AgentRegistry(), config=cfg, send=_send_ok
-    )
+    dispatcher = Dispatcher(agents=AgentRegistry(), config=cfg, send=_send_ok)
     outcome = await dispatcher.dispatch_with_outcome(_envelope())
     assert outcome.agent_id == "ghost"
     assert outcome.drop_reason and "not registered" in outcome.drop_reason
@@ -223,13 +201,9 @@ async def test_agent_yielded_but_send_failed_is_not_a_drop():
     cfg = RootConfig()
 
     async def _failing_send(p: SendParams) -> SendResult:
-        raise UserVisibleError(
-            f"no route for {p.target.channel}:{p.target.account_id}"
-        )
+        raise UserVisibleError(f"no route for {p.target.channel}:{p.target.account_id}")
 
-    dispatcher = Dispatcher(
-        agents=_registry_with(agent), config=cfg, send=_failing_send
-    )
+    dispatcher = Dispatcher(agents=_registry_with(agent), config=cfg, send=_failing_send)
     outcome = await dispatcher.dispatch_with_outcome(_envelope())
     assert outcome.agent_id == "assistant"
     assert outcome.agent_yielded == 1
@@ -243,9 +217,7 @@ async def test_agent_yielded_but_send_failed_is_not_a_drop():
 async def test_legacy_dispatch_method_returns_list_of_results():
     agent = _RecordingAgent("assistant")
     cfg = RootConfig()
-    dispatcher = Dispatcher(
-        agents=_registry_with(agent), config=cfg, send=_send_ok
-    )
+    dispatcher = Dispatcher(agents=_registry_with(agent), config=cfg, send=_send_ok)
     results = await dispatcher.dispatch(_envelope())
     assert isinstance(results, list)
     assert len(results) == 1
@@ -263,8 +235,8 @@ async def test_chat_send_rpc_returns_dropped_status_with_reason(tmp_path: Path):
     from sampyclaw.approvals import ApprovalManager
     from sampyclaw.channels import ChannelRouter
     from sampyclaw.cli.gateway_cmd import _build_router
-    from sampyclaw.cron import CronJobStore, CronScheduler
     from sampyclaw.config.paths import SampyclawPaths
+    from sampyclaw.cron import CronJobStore, CronScheduler
 
     paths = SampyclawPaths(home=tmp_path)
     paths.ensure_home()
@@ -275,16 +247,12 @@ async def test_chat_send_rpc_returns_dropped_status_with_reason(tmp_path: Path):
     agents.register(build_agent(agent_id="b", provider="echo"))
     channel_router = ChannelRouter()
     cfg = RootConfig()
-    dispatcher = Dispatcher(
-        agents=agents, config=cfg, send=channel_router.send
-    )
+    dispatcher = Dispatcher(agents=agents, config=cfg, send=channel_router.send)
     router = _build_router(
         agents=agents,
         dispatcher=dispatcher,
         channel_router=channel_router,
-        cron_scheduler=CronScheduler(
-            store=CronJobStore(paths=paths), dispatcher=dispatcher
-        ),
+        cron_scheduler=CronScheduler(store=CronJobStore(paths=paths), dispatcher=dispatcher),
         approvals=ApprovalManager(state_path=paths.home / "approvals.json"),
         paths_home=paths,
     )

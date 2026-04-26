@@ -16,15 +16,14 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from enum import Enum
-from pathlib import Path
+from enum import StrEnum
 
 from sampyclaw.wiki.markdown import parse_wiki_markdown
 from sampyclaw.wiki.models import WikiPage, WikiPageKind
 from sampyclaw.wiki.vault import WikiVault
 
 
-class LintSeverity(str, Enum):
+class LintSeverity(StrEnum):
     ERROR = "error"
     WARNING = "warning"
     INFO = "info"
@@ -54,20 +53,16 @@ def lint_vault(
         try:
             page = parse_wiki_markdown(path.read_text(encoding="utf-8"))
         except Exception as exc:
-            findings.append(
-                LintFinding(LintSeverity.ERROR, rel, f"parse error: {exc}")
-            )
+            findings.append(LintFinding(LintSeverity.ERROR, rel, f"parse error: {exc}"))
             continue
         pages_by_slug[(page.kind, page.slug)] = page
         all_slugs.add(page.slug)
 
     now = time.time()
-    source_slugs = {
-        slug for (kind, slug) in pages_by_slug if kind is WikiPageKind.SOURCE
-    }
+    source_slugs = {slug for (kind, slug) in pages_by_slug if kind is WikiPageKind.SOURCE}
 
     # 2. Per-page checks.
-    for (kind, slug), page in pages_by_slug.items():
+    for (kind, _slug), page in pages_by_slug.items():
         rel = page.relative_path
 
         # Related-link orphans.

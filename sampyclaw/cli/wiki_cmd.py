@@ -14,7 +14,6 @@ import typer
 from sampyclaw.config.paths import default_paths
 from sampyclaw.wiki import (
     LintSeverity,
-    WikiPage,
     WikiPageKind,
     WikiVaultConfig,
     build_memory_palace_section,
@@ -22,7 +21,6 @@ from sampyclaw.wiki import (
     initialize_wiki_vault,
     lint_vault,
     list_wiki_pages,
-    parse_wiki_markdown,
     search_wiki_pages,
 )
 from sampyclaw.wiki.ingest import upsert_simple
@@ -63,8 +61,7 @@ def list_cmd(
         typer.echo(
             json.dumps(
                 [
-                    {"kind": p.kind.value, "slug": p.slug, "name": p.name,
-                     "summary": p.summary}
+                    {"kind": p.kind.value, "slug": p.slug, "name": p.name, "summary": p.summary}
                     for p in pages
                 ],
                 ensure_ascii=False,
@@ -101,9 +98,7 @@ def add_cmd(
     vault: Path | None = typer.Option(None, "--vault"),
 ) -> None:
     v = _open_vault(vault)
-    page = upsert_simple(
-        v, kind=WikiPageKind(kind), name=name, body=body, summary=summary
-    )
+    page = upsert_simple(v, kind=WikiPageKind(kind), name=name, body=body, summary=summary)
     typer.echo(f"wrote {page.relative_path}")
 
 
@@ -122,8 +117,7 @@ def search_cmd(
         return
     for h in hits:
         typer.echo(
-            f"[{h.score:.2f} {h.matched_in:<8}] "
-            f"{h.page.kind.value}/{h.page.slug}\t{h.page.name}"
+            f"[{h.score:.2f} {h.matched_in:<8}] {h.page.kind.value}/{h.page.slug}\t{h.page.name}"
         )
 
 

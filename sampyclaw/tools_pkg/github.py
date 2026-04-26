@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import asyncio
 import os
-import shlex
 import shutil
 from dataclasses import dataclass, field
 
@@ -35,16 +34,12 @@ DEFAULT_ALLOWED_VERBS = (
 
 
 class _GhArgs(BaseModel):
-    verb: str = Field(
-        ..., description="Sub-command verb, e.g. 'issue list' or 'pr diff'."
-    )
+    verb: str = Field(..., description="Sub-command verb, e.g. 'issue list' or 'pr diff'.")
     args: list[str] = Field(
         default_factory=list,
         description="Positional + flag args appended after the verb.",
     )
-    cwd: str | None = Field(
-        None, description="Optional CWD (defaults to a tmpdir)."
-    )
+    cwd: str | None = Field(None, description="Optional CWD (defaults to a tmpdir).")
 
 
 @dataclass
@@ -86,10 +81,8 @@ def github_tool(config: GithubToolConfig | None = None) -> Tool:
         except FileNotFoundError as exc:
             return f"github error: {exc}"
         try:
-            out, err = await asyncio.wait_for(
-                proc.communicate(), timeout=cfg.timeout_seconds
-            )
-        except asyncio.TimeoutError:
+            out, err = await asyncio.wait_for(proc.communicate(), timeout=cfg.timeout_seconds)
+        except TimeoutError:
             proc.kill()
             return f"github error: timed out after {cfg.timeout_seconds}s"
         stdout = (out or b"").decode("utf-8", errors="replace")

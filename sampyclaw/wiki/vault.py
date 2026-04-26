@@ -15,8 +15,8 @@ Mirrors openclaw `memory-wiki/src/vault.ts`. Layout:
 from __future__ import annotations
 
 import time
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator
 
 from sampyclaw.wiki.markdown import parse_wiki_markdown, render_wiki_markdown
 from sampyclaw.wiki.models import (
@@ -56,12 +56,8 @@ class WikiVault:
             return None
         return parse_wiki_markdown(path.read_text(encoding="utf-8"))
 
-    def iter_pages(
-        self, *, kind: WikiPageKind | None = None
-    ) -> Iterator[WikiPage]:
-        kinds = [kind] if kind is not None else [
-            WikiPageKind(k) for k in WIKI_PAGE_KINDS
-        ]
+    def iter_pages(self, *, kind: WikiPageKind | None = None) -> Iterator[WikiPage]:
+        kinds = [kind] if kind is not None else [WikiPageKind(k) for k in WIKI_PAGE_KINDS]
         for k in kinds:
             sub = self._root / k.value
             if not sub.exists():

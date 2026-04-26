@@ -20,9 +20,7 @@ if TYPE_CHECKING:
     from sampyclaw.plugin_sdk.config_schema import RootConfig
 
 
-AccountLoader = Callable[
-    ["RootConfig", "SampyclawPaths"], dict[str, ChannelPlugin]
-]
+AccountLoader = Callable[["RootConfig", "SampyclawPaths"], dict[str, ChannelPlugin]]
 
 
 @dataclass(frozen=True)
@@ -50,9 +48,7 @@ class PluginEntry:
     def create(self, **kwargs: Any) -> ChannelPlugin:
         return self.factory(**kwargs)
 
-    def load_accounts(
-        self, config: RootConfig, paths: SampyclawPaths
-    ) -> dict[str, ChannelPlugin]:
+    def load_accounts(self, config: RootConfig, paths: SampyclawPaths) -> dict[str, ChannelPlugin]:
         if self.loader is None:
             return {}
         return self.loader(config, paths)

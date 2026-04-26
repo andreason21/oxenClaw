@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from sampyclaw.pi.tool_runtime import (
     DEFAULT_MAX_TOOL_RESULT_CHARS,
-    EffectiveToolPolicy,
     MIN_TOOL_RESULT_CHARS,
+    EffectiveToolPolicy,
     ToolContextGuardState,
     ToolNameAllowlist,
     ToolOverride,
@@ -56,26 +56,20 @@ def test_estimate_chars_handles_str_dict_list() -> None:
 def test_context_guard_halves_under_pressure() -> None:
     state = ToolContextGuardState()
     initial = state.current_max_chars
-    new = apply_context_guard(
-        state, used_tokens=80_000, model_context_tokens=100_000
-    )
+    new = apply_context_guard(state, used_tokens=80_000, model_context_tokens=100_000)
     assert new == initial // 2
     assert state.consecutive_pressure_turns == 1
 
 
 def test_context_guard_floor_at_min() -> None:
     state = ToolContextGuardState(current_max_chars=MIN_TOOL_RESULT_CHARS)
-    new = apply_context_guard(
-        state, used_tokens=99_000, model_context_tokens=100_000
-    )
+    new = apply_context_guard(state, used_tokens=99_000, model_context_tokens=100_000)
     assert new == MIN_TOOL_RESULT_CHARS
 
 
 def test_context_guard_grows_back_when_relieved() -> None:
     state = ToolContextGuardState(current_max_chars=2_048)
-    new = apply_context_guard(
-        state, used_tokens=10_000, model_context_tokens=100_000
-    )
+    new = apply_context_guard(state, used_tokens=10_000, model_context_tokens=100_000)
     assert new == min(DEFAULT_MAX_TOOL_RESULT_CHARS, 4_096)
     assert state.consecutive_pressure_turns == 0
 

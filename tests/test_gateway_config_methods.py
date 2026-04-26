@@ -22,9 +22,7 @@ async def test_get_empty_when_no_config(monkeypatch, tmp_path) -> None:  # type:
 
 async def test_reload_reads_written_file(monkeypatch, tmp_path) -> None:  # type: ignore[no-untyped-def]
     monkeypatch.setenv("SAMPYCLAW_HOME", str(tmp_path))
-    (tmp_path / "config.yaml").write_text(
-        "channels:\n  telegram:\n    dm_policy: open\n"
-    )
+    (tmp_path / "config.yaml").write_text("channels:\n  telegram:\n    dm_policy: open\n")
     router = Router()
     register_config_methods(router)
     resp = await router.dispatch({"jsonrpc": "2.0", "id": 1, "method": "config.reload"})

@@ -12,7 +12,6 @@ shape differs significantly from OpenAI/Anthropic:
 
 from __future__ import annotations
 
-import asyncio
 import json
 from collections.abc import AsyncIterator
 from typing import Any
@@ -56,9 +55,7 @@ def _serialize_user_parts(content: Any) -> list[dict[str, Any]]:
         if isinstance(block, TextContent):
             out.append({"text": block.text})
         elif isinstance(block, ImageContent):
-            out.append(
-                {"inlineData": {"mimeType": block.media_type, "data": block.data}}
-            )
+            out.append({"inlineData": {"mimeType": block.media_type, "data": block.data}})
     return out
 
 
@@ -68,9 +65,7 @@ def _serialize_assistant_parts(content: Any) -> list[dict[str, Any]]:
         if isinstance(block, TextContent):
             out.append({"text": block.text})
         elif isinstance(block, ToolUseBlock):
-            out.append(
-                {"functionCall": {"name": block.name, "args": block.input}}
-            )
+            out.append({"functionCall": {"name": block.name, "args": block.input}})
         elif isinstance(block, ThinkingBlock):
             out.append({"thought": True, "text": block.thinking})
     return out
@@ -116,9 +111,7 @@ def _serialize_messages(messages: list[Any]) -> tuple[str | None, list[dict[str,
         elif isinstance(msg, UserMessage):
             out.append({"role": "user", "parts": _serialize_user_parts(msg.content)})
         elif isinstance(msg, AssistantMessage):
-            out.append(
-                {"role": "model", "parts": _serialize_assistant_parts(msg.content)}
-            )
+            out.append({"role": "model", "parts": _serialize_assistant_parts(msg.content)})
         elif isinstance(msg, ToolResultMessage):
             out.append(_serialize_tool_response(msg))
         elif isinstance(msg, dict):
@@ -187,10 +180,7 @@ async def stream_google(
     }
     headers.update(ctx.api.extra_headers)
     base = ctx.api.base_url.rstrip("/")
-    url = (
-        f"{base}/v1beta/models/{ctx.model.id}:streamGenerateContent"
-        f"?alt=sse"
-    )
+    url = f"{base}/v1beta/models/{ctx.model.id}:streamGenerateContent?alt=sse"
     if ctx.api.api_key:
         url += f"&key={ctx.api.api_key}"
 
@@ -243,9 +233,7 @@ async def stream_google(
                             yield ToolUseStartEvent(id=tid, name=fc.get("name", ""))
                             yield ToolUseInputDeltaEvent(
                                 id=tid,
-                                input_delta=json.dumps(
-                                    fc.get("args") or {}, ensure_ascii=False
-                                ),
+                                input_delta=json.dumps(fc.get("args") or {}, ensure_ascii=False),
                             )
                             yield ToolUseEndEvent(id=tid)
 
@@ -259,10 +247,8 @@ async def stream_google(
                         yield UsageEvent(usage=usage)
                 if not stop_emitted:
                     yield StopEvent(reason="end_turn")
-        except (aiohttp.ClientConnectionError, asyncio.TimeoutError) as exc:
-            yield ErrorEvent(
-                message=f"connection error: {exc}", retryable=True, error=exc
-            )
+        except (TimeoutError, aiohttp.ClientConnectionError) as exc:
+            yield ErrorEvent(message=f"connection error: {exc}", retryable=True, error=exc)
 
 
 register_provider_stream("google", stream_google)

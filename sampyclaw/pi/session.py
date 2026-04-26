@@ -19,7 +19,6 @@ from typing import TYPE_CHECKING, Any, Protocol
 from uuid import uuid4
 
 if TYPE_CHECKING:
-    from sampyclaw.pi.messages import AgentMessage
     from sampyclaw.pi.models import Model
 
 
@@ -35,7 +34,7 @@ class AgentSession:
     agent_id: str = "default"
     model_id: str | None = None
     messages: list[Any] = field(default_factory=list)  # list[AgentMessage]
-    compactions: list["CompactionEntry"] = field(default_factory=list)
+    compactions: list[CompactionEntry] = field(default_factory=list)
     created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
     metadata: dict[str, Any] = field(default_factory=dict)

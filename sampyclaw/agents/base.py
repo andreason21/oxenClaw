@@ -33,6 +33,4 @@ class Agent(Protocol):
 
     id: str
 
-    def handle(
-        self, inbound: InboundEnvelope, ctx: AgentContext
-    ) -> AsyncIterator[SendParams]: ...
+    def handle(self, inbound: InboundEnvelope, ctx: AgentContext) -> AsyncIterator[SendParams]: ...

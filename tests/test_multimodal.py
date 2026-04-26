@@ -19,7 +19,6 @@ from sampyclaw.multimodal import (
 )
 from sampyclaw.plugin_sdk.channel_contract import MediaItem
 
-
 # ─── capability gate ─────────────────────────────────────────────────
 
 
@@ -64,9 +63,7 @@ async def test_normalize_data_uri_jpeg():
 async def test_normalize_data_uri_png():
     raw = b"\x89PNG\r\n\x1a\n" + b"x" * 32
     src = f"data:image/png;base64,{base64.b64encode(raw).decode()}"
-    img = await normalize_media_item(
-        MediaItem(kind="photo", source=src, mime_type="image/png")
-    )
+    img = await normalize_media_item(MediaItem(kind="photo", source=src, mime_type="image/png"))
     assert img.media_type == "image/png"
 
 
@@ -77,9 +74,7 @@ async def test_normalize_rejects_non_image_mime_after_sniff():
     raw = b"%PDF-1.4\n" + b"x" * 32
     src = f"data:image/png;base64,{base64.b64encode(raw).decode()}"
     with pytest.raises(MediaNormalizationError):
-        await normalize_media_item(
-            MediaItem(kind="photo", source=src, mime_type="image/png")
-        )
+        await normalize_media_item(MediaItem(kind="photo", source=src, mime_type="image/png"))
 
 
 @pytest.mark.asyncio
@@ -89,9 +84,7 @@ async def test_normalize_rejects_oversize_payload():
     raw = b"\x89PNG\r\n\x1a\n" + b"\x00" * (11 * 1024 * 1024)
     src = f"data:image/png;base64,{base64.b64encode(raw).decode()}"
     with pytest.raises(MediaNormalizationError):
-        await normalize_media_item(
-            MediaItem(kind="photo", source=src, mime_type="image/png")
-        )
+        await normalize_media_item(MediaItem(kind="photo", source=src, mime_type="image/png"))
 
 
 @pytest.mark.asyncio
@@ -121,8 +114,7 @@ async def test_normalize_inbound_images_collects_per_item_failures():
 @pytest.mark.asyncio
 async def test_normalize_inbound_images_caps_at_max_images():
     items = [
-        MediaItem(kind="photo", source=_data_uri_jpeg(), mime_type="image/jpeg")
-        for _ in range(15)
+        MediaItem(kind="photo", source=_data_uri_jpeg(), mime_type="image/jpeg") for _ in range(15)
     ]
     images, dropped = await normalize_inbound_images(items, max_images=10)
     assert len(images) == 10

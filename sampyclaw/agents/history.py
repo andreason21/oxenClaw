@@ -69,26 +69,19 @@ class ConversationHistory:
             return 0
         head_offset = (
             1
-            if preserve_system
-            and self._messages
-            and self._messages[0].get("role") == "system"
+            if preserve_system and self._messages and self._messages[0].get("role") == "system"
             else 0
         )
 
         def total() -> int:
-            return sum(
-                len(json.dumps(m, ensure_ascii=False)) for m in self._messages
-            )
+            return sum(len(json.dumps(m, ensure_ascii=False)) for m in self._messages)
 
         removed = 0
         while total() > max_chars and len(self._messages) > head_offset + 1:
             drop_idx = head_offset
             # If the next message is a tool result, drop it together with the
             # preceding assistant tool_calls so the loop stays well-formed.
-            while (
-                drop_idx < len(self._messages)
-                and self._messages[drop_idx].get("role") == "tool"
-            ):
+            while drop_idx < len(self._messages) and self._messages[drop_idx].get("role") == "tool":
                 self._messages.pop(drop_idx)
                 removed += 1
             if drop_idx < len(self._messages):

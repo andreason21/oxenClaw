@@ -20,6 +20,7 @@ distinct from connecting.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import hmac
 import json
 import os
@@ -58,9 +59,7 @@ class ApprovalManager:
         state_path: Path | None = None,
         approver_token: str | None = None,
     ) -> None:
-        self._pending: dict[
-            str, tuple[ApprovalRequest, asyncio.Future[ApprovalResult]]
-        ] = {}
+        self._pending: dict[str, tuple[ApprovalRequest, asyncio.Future[ApprovalResult]]] = {}
         self._on_event = on_event
         self._state_path = state_path
         self._approver_token = _resolve_approver_token(approver_token)
@@ -92,14 +91,10 @@ class ApprovalManager:
                 req = ApprovalRequest.model_validate(snap)
             except Exception:
                 continue
-            logger.info(
-                "approval %s carried over from previous run — will be TIMED_OUT", req.id
-            )
+            logger.info("approval %s carried over from previous run — will be TIMED_OUT", req.id)
         # Wipe the file; we no longer have anything live to track.
-        try:
+        with contextlib.suppress(OSError):
             self._state_path.unlink()
-        except OSError:
-            pass
 
     def _persist(self) -> None:
         if self._state_path is None:
@@ -118,9 +113,7 @@ class ApprovalManager:
     def _require_approver(self, offered_token: str | None) -> None:
         if self._approver_token is None:
             return
-        if offered_token is None or not hmac.compare_digest(
-            offered_token, self._approver_token
-        ):
+        if offered_token is None or not hmac.compare_digest(offered_token, self._approver_token):
             raise ApprovalAuthError("invalid or missing approver token")
 
     # ── public API ──
@@ -148,7 +141,7 @@ class ApprovalManager:
                 return await fut
             try:
                 return await asyncio.wait_for(fut, timeout=timeout)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 return ApprovalResult(id=req.id, status=ApprovalStatus.TIMED_OUT)
         finally:
             self._pending.pop(req.id, None)
@@ -225,9 +218,7 @@ class ApprovalManager:
             if fut.done():
                 continue
             fut.set_result(
-                ApprovalResult(
-                    id=request_id, status=ApprovalStatus.CANCELLED, reason=reason
-                )
+                ApprovalResult(id=request_id, status=ApprovalStatus.CANCELLED, reason=reason)
             )
             count += 1
         return count

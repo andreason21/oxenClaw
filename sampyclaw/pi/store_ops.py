@@ -13,14 +13,13 @@ same sqlite file so every gateway process sees the same lock.
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 import sqlite3
 import time
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from sampyclaw.pi.persistence import SQLiteSessionManager
 from sampyclaw.pi.session import AgentSession
@@ -48,9 +47,7 @@ class Migration:
     sql: str
 
 
-def apply_migrations(
-    conn: sqlite3.Connection, migrations: list[Migration]
-) -> list[int]:
+def apply_migrations(conn: sqlite3.Connection, migrations: list[Migration]) -> list[int]:
     """Apply each migration whose version is not yet recorded. Idempotent.
 
     Returns the list of versions applied this call.
@@ -65,8 +62,7 @@ def apply_migrations(
         try:
             conn.executescript(m.sql)
             conn.execute(
-                "INSERT INTO store_migrations (version, applied_at, description) "
-                "VALUES (?, ?, ?)",
+                "INSERT INTO store_migrations (version, applied_at, description) VALUES (?, ?, ?)",
                 (m.version, time.time(), m.description),
             )
             conn.commit()
@@ -88,10 +84,8 @@ def db_size_bytes(path: Path) -> int:
     for suffix in ("", "-wal", "-shm"):
         p = Path(str(path) + suffix)
         if p.exists():
-            try:
+            with suppress(OSError):
                 total += p.stat().st_size
-            except OSError:
-                pass
     return total
 
 
@@ -117,7 +111,7 @@ async def prune_by_age(
         by_agent.setdefault(entry.agent_id, []).append(entry)
 
     to_delete: list[str] = []
-    for agent_id, entries in by_agent.items():
+    for _agent_id, entries in by_agent.items():
         entries.sort(key=lambda e: e.updated_at, reverse=True)
         # Skip the keep_min most recent regardless of age.
         candidates = entries[keep_min:]
@@ -131,14 +125,10 @@ async def prune_by_age(
         if await sm.delete(sid):
             removed += 1
     after = db_size_bytes(sm._path)  # type: ignore[attr-defined]
-    return PruneResult(
-        sessions_removed=removed, bytes_freed_estimated=max(0, before - after)
-    )
+    return PruneResult(sessions_removed=removed, bytes_freed_estimated=max(0, before - after))
 
 
-async def prune_by_count(
-    sm: SQLiteSessionManager, *, max_sessions: int
-) -> PruneResult:
+async def prune_by_count(sm: SQLiteSessionManager, *, max_sessions: int) -> PruneResult:
     """Keep at most `max_sessions` total, dropping the oldest first."""
     listed = await sm.list()
     if len(listed) <= max_sessions:
@@ -151,9 +141,7 @@ async def prune_by_count(
         if await sm.delete(sid):
             removed += 1
     after = db_size_bytes(sm._path)  # type: ignore[attr-defined]
-    return PruneResult(
-        sessions_removed=removed, bytes_freed_estimated=max(0, before - after)
-    )
+    return PruneResult(sessions_removed=removed, bytes_freed_estimated=max(0, before - after))
 
 
 async def prune_by_disk_budget(
@@ -327,8 +315,7 @@ class StoreLock:
         now = time.time()
         with self._txn():
             cur = self.conn.execute(
-                "UPDATE store_locks SET expires_at = ? "
-                "WHERE name = ? AND holder = ?",
+                "UPDATE store_locks SET expires_at = ? WHERE name = ? AND holder = ?",
                 (now + self.ttl_seconds, self.name, self.holder),
             )
             return cur.rowcount > 0
@@ -413,8 +400,8 @@ class StoreReadCache:
 
 __all__ = [
     "LOCK_TABLE",
-    "LockBusy",
     "MIGRATIONS_TABLE",
+    "LockBusy",
     "MaintenanceConfig",
     "Migration",
     "PruneResult",

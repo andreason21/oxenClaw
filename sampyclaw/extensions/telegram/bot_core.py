@@ -124,9 +124,7 @@ async def _photo_to_media_item(
     elif raw[:4] == b"RIFF" and raw[8:12] == b"WEBP":
         mime = "image/webp"
     else:
-        logger.warning(
-            "photo %s has unrecognized format — dropping", photo.file_id
-        )
+        logger.warning("photo %s has unrecognized format — dropping", photo.file_id)
         return None
     b64 = base64.b64encode(raw).decode("ascii")
     return MediaItem(

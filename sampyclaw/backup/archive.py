@@ -37,7 +37,7 @@ class BackupManifest:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "BackupManifest":
+    def from_dict(cls, data: dict) -> BackupManifest:
         return cls(
             version=int(data["version"]),
             created_at=str(data["created_at"]),
@@ -209,17 +209,14 @@ def verify_backup(archive: Path) -> BackupManifest:
             try:
                 member = tar.getmember(f"sampyclaw-backup/{rel}")
             except KeyError as exc:
-                raise ValueError(
-                    f"manifest references missing file: {rel}"
-                ) from exc
+                raise ValueError(f"manifest references missing file: {rel}") from exc
             fh = tar.extractfile(member)
             if fh is None:
                 raise ValueError(f"non-regular file in archive: {rel}")
             actual = hashlib.sha256(fh.read()).hexdigest()
             if actual != expected:
                 raise ValueError(
-                    f"checksum mismatch for {rel}: "
-                    f"expected {expected[:12]}…, got {actual[:12]}…"
+                    f"checksum mismatch for {rel}: expected {expected[:12]}…, got {actual[:12]}…"
                 )
     return manifest
 
@@ -244,9 +241,7 @@ def restore_backup(
     result = RestoreResult(target=target)
 
     if target.exists() and any(target.iterdir()) and not overwrite and not dry_run:
-        raise FileExistsError(
-            f"target {target} is not empty — pass overwrite=True to merge in"
-        )
+        raise FileExistsError(f"target {target} is not empty — pass overwrite=True to merge in")
 
     if dry_run:
         result.restored_files = list(manifest.files.keys())

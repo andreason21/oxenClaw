@@ -23,9 +23,7 @@ DEFAULT_ENV_KEY = "SLACK_BOT_TOKEN"
 
 
 class SlackTokenResolver:
-    def __init__(
-        self, store: CredentialStore, *, env_key: str = DEFAULT_ENV_KEY
-    ) -> None:
+    def __init__(self, store: CredentialStore, *, env_key: str = DEFAULT_ENV_KEY) -> None:
         self._store = store
         self._env_key = env_key
 

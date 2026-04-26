@@ -18,17 +18,16 @@ from __future__ import annotations
 import hashlib
 import re
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from sampyclaw.pi.session import AgentSession
 from sampyclaw.pi.thinking import ThinkingLevel
 
-
 # ─── Chat type ───────────────────────────────────────────────────────
 
 
-class SessionChatType(str, Enum):
+class SessionChatType(StrEnum):
     """The *kind* of conversation context.
 
     - `dm`: a direct one-on-one with the user.
@@ -49,7 +48,7 @@ class SessionChatType(str, Enum):
 # ─── Send policy ─────────────────────────────────────────────────────
 
 
-class SendMode(str, Enum):
+class SendMode(StrEnum):
     """Decides whether the agent should reply to a given inbound."""
 
     DM_ONLY = "dm_only"  # Reply only in DMs; ignore groups.

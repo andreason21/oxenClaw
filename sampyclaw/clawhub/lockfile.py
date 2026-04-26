@@ -49,9 +49,7 @@ class Lockfile(BaseModel):
     def save(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         tmp = path.with_suffix(path.suffix + ".tmp")
-        tmp.write_text(
-            self.model_dump_json(indent=2, exclude_none=False), encoding="utf-8"
-        )
+        tmp.write_text(self.model_dump_json(indent=2, exclude_none=False), encoding="utf-8")
         os.replace(tmp, path)
 
     def upsert(self, slug: str, version: str, *, installed_at: float | None = None) -> None:
@@ -90,7 +88,5 @@ class OriginMetadata(BaseModel):
     def save(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         tmp = path.with_suffix(path.suffix + ".tmp")
-        tmp.write_text(
-            self.model_dump_json(indent=2, exclude_none=True), encoding="utf-8"
-        )
+        tmp.write_text(self.model_dump_json(indent=2, exclude_none=True), encoding="utf-8")
         os.replace(tmp, path)

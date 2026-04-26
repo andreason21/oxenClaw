@@ -325,6 +325,20 @@ jobs:
         with:
           name: linux-ubuntu24.04
           path: release-assets/
+      - name: List downloaded artifacts (diagnostics)
+        # Print the staged release-assets/ tree so a future "release page
+        # is empty" failure mode is debuggable from the CI log alone.
+        working-directory: release-assets
+        run: |
+          echo "::group::release-assets/ tree"
+          ls -la
+          echo "::endgroup::"
+          echo "::group::counts by extension"
+          for ext in whl tar.gz msi exe deb AppImage sig json txt; do
+            n=$(ls -1 *.${ext} 2>/dev/null | wc -l)
+            echo "  *.${ext}: ${n}"
+          done
+          echo "::endgroup::"
       - name: Combine SHA256SUMS
         working-directory: release-assets
         run: |
@@ -388,6 +402,9 @@ jobs:
           body_path: NOTES.md
           draft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
+          # Hard-fail if no files match — silent empty-release was the
+          # exact bug we hit on rc.4 (job green, GitHub Release page empty).
+          fail_on_unmatched_files: true
           files: |
             release-assets/*.whl
             release-assets/*.tar.gz

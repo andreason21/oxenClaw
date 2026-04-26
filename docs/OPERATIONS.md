@@ -341,8 +341,17 @@ Recommended cadence: run a 4h soak in CI before each release.
 | `/healthz` | open | k8s liveness, systemd watchdog |
 | `/readyz` | open | k8s readiness |
 | `/metrics` | open | Prometheus scrape |
-| `/` `/dashboard` `/app.html` `/static/*` | open (assets) | Bundled web dashboard SPA. Loads anonymously; the JS renders an in-app login gate when no token is found and uses it for the WS connect. |
-| WS upgrade | **token** | Real auth boundary. Token via `Authorization: Bearer`, `?token=` on the WS URL, or the `sampyclaw_token` cookie. |
+| `/` `/dashboard` `/app.html` `/static/*` | open (assets) | Bundled web dashboard SPA (now with right-side **canvas panel** for CV-1 output). Loads anonymously; JS renders an in-app login gate when no token is found and uses it for the WS connect. |
+| WS upgrade | **token** | Real auth boundary. Token via `Authorization: Bearer`, `?token=` on the WS URL, or the `sampyclaw_token` cookie. Canvas push events ride the same WS. |
+
+### Optional toolsets
+
+| Env var | Effect | Doc |
+|---|---|---|
+| `SAMPYCLAW_ENABLE_BROWSER=1` | Register the BR-1 browser tools (`browser_navigate`, `_snapshot`, `_screenshot`, `_click`, `_fill`) on every new agent. Requires `pip install 'sampyclaw[browser]' && playwright install chromium`. Combine with `SAMPYCLAW_NET_ALLOW_HOSTS=...` to widen the closed-by-default policy. | [`BROWSER.md`](./BROWSER.md) |
+| `SAMPYCLAW_ENABLE_CANVAS=1` | Register the CV-1 canvas tools (`canvas_present`, `canvas_hide`) on every new agent. The dashboard panel + RPCs are always wired; this env-var only governs *agent-side* tool injection. | [`CANVAS.md`](./CANVAS.md) |
+| `SAMPYCLAW_NET_ALLOW_HOSTS` | Comma-separated host allowlist for the shared `NetPolicy` (used by web tool, browser tool, MCP HTTP transports). | [`SECURITY.md`](./SECURITY.md) |
+| `SAMPYCLAW_AUDIT_OUTBOUND=1` | Log every outbound HTTP from `aiohttp` *and* the browser route handler into `~/.sampyclaw/outbound-audit.db`. | [`SECURITY.md`](./SECURITY.md) |
 
 ### First-run token bootstrap
 

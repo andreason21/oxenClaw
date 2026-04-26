@@ -92,7 +92,7 @@ Only start after B exit criteria met.
 
 **A.1** — Real agent harness (tool registry, provider SDKs: Anthropic + OpenAI).
 **A.2** — Second channel (Discord or Slack) to validate SDK generality.
-**A.3** — Canvas host runtime (if needed).
+**A.3** — Canvas host runtime (if needed). **Superseded by CV-1** below — collapsed onto the dashboard SPA.
 **A.4** — Gateway protocol completion (all RPC methods, event framing).
 **A.5** — Cron scheduling, approval prompts.
 **A.6** — Plugin discovery from third-party packages (entry points via `importlib.metadata`).

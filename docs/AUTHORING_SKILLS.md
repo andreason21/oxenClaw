@@ -286,6 +286,53 @@ If you're authoring a **channel plugin** that delivers images, populate
   no extra round-trip), or
 - an `http(s)://` URL the gateway can fetch with NetPolicy applied.
 
+### Browser automation (Playwright, opt-in)
+
+If your skill needs to drive a real browser — read a public page, take a
+screenshot, click through a form — register the BR-1 tool bundle:
+
+```python
+from sampyclaw.browser.policy import BrowserPolicy
+from sampyclaw.tools_pkg.browser import default_browser_tools
+from sampyclaw.security.net.policy import NetPolicy
+
+policy = BrowserPolicy(
+    net=NetPolicy(allowed_hostnames=("example.com", "*.docs.io")),
+)
+agent_tools.register_all(default_browser_tools(policy=policy))
+```
+
+You inherit the `security/net/` chokepoint plus a Chromium-level dead
+proxy + DNS rebind defense + per-page sandbox. The closed default
+refuses every host until you extend the policy. Five always-safe tools
+ship in the bundle (`navigate`, `snapshot`, `screenshot`, `click`,
+`fill`); `browser_evaluate` and `browser_download` are opt-in.
+
+Architecture + perf rationale: [`docs/BROWSER.md`](./BROWSER.md).
+
+### Canvas (dashboard HTML rendering, opt-in)
+
+If your skill needs to *show* something to the user — chart, card,
+mini-game, dashboard widget — use the CV-1 canvas tools:
+
+```python
+from sampyclaw.canvas import get_default_canvas_bus, get_default_canvas_store
+from sampyclaw.tools_pkg.canvas import default_canvas_tools
+
+agent_tools.register_all(default_canvas_tools(
+    agent_id="my-agent",
+    store=get_default_canvas_store(),
+    bus=get_default_canvas_bus(),
+))
+```
+
+The HTML you produce lands inside the dashboard's right-side panel in a
+sandboxed iframe (`srcdoc=`, no `allow-same-origin`). 256 KiB tool-side
+cap, 1 MiB hard ceiling. `canvas_eval` is opt-in for skills that wired
+a `message` listener in their HTML.
+
+Architecture + security model: [`docs/CANVAS.md`](./CANVAS.md).
+
 ### Memory recall
 
 Inject the agent's memory retriever and your tool can pull relevant

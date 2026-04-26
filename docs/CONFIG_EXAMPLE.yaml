@@ -55,3 +55,23 @@ clawhub:
     - name: public
       url: https://clawhub.ai
       trust: official
+
+# Optional toolsets — both are gated by env vars rather than this file
+# so operators can flip them per shell without touching disk. Listed
+# here for visibility.
+#
+# Browser tools (BR-1, headless Playwright):
+#   SAMPYCLAW_ENABLE_BROWSER=1
+#   SAMPYCLAW_NET_ALLOW_HOSTS=example.com,*.docs.io
+#   pip install 'sampyclaw[browser]' && playwright install chromium
+#   See docs/BROWSER.md
+#
+# Canvas tools (CV-1, dashboard-embedded HTML rendering):
+#   SAMPYCLAW_ENABLE_CANVAS=1
+#   (No extras required; the dashboard panel + RPCs are always wired.)
+#   See docs/CANVAS.md
+#
+# Outbound HTTP audit (across web tool, browser tool, MCP HTTP):
+#   SAMPYCLAW_AUDIT_OUTBOUND=1   # writes ~/.sampyclaw/outbound-audit.db
+#   SAMPYCLAW_AUDIT_OUTBOUND_BODY=1
+#   SAMPYCLAW_AUDIT_OUTBOUND_SAMPLE=0.5

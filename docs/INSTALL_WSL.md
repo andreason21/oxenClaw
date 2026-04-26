@@ -181,7 +181,7 @@ Run the test suite (takes ~10 seconds):
 
 ```bash
 pytest -q
-# 898 passed, 9 skipped
+# 1035 passed, 10 skipped
 ```
 
 ---
@@ -414,7 +414,7 @@ sampyclaw paths
 sampyclaw config validate
 
 pytest -q
-# 898 passed, 9 skipped
+# 1035 passed, 10 skipped
 ```
 
 ### 7. 설정 + 실행

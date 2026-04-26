@@ -333,6 +333,10 @@ TelegramChannelConfigSchema = {
 
 **Phase A — Core expansion:** agents, canvas host, more channels.
 
+**BR-1 — Browser tools (shipped 2026-04-26):** thin `sampyclaw/browser/` package wrapping Playwright with the existing `security/net/` SSRF/pinning/audit primitives. Closed-by-default `BrowserPolicy`, layered egress (URL preflight + per-request route + DNS rebind defense + dead proxy), `default_browser_tools` bundle of 5 always-safe tools. See [`BROWSER.md`](./BROWSER.md).
+
+**CV-1 — Dashboard canvas (shipped 2026-04-26):** `sampyclaw/canvas/` package + `gateway/canvas_methods.py` + `tools_pkg/canvas.py` + dashboard SPA additions. Dashboard-only output via sandboxed `<iframe srcdoc>` — no native node, no Tailscale, no live-reload watcher, no external URL fetch. Empirically gated on `gemma4:latest` 25/25 before commit. See [`CANVAS.md`](./CANVAS.md).
+
 **Guiding principles:**
 - Preserve manifest-first plugin loading.
 - Keep SDK contract in its own package.

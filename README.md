@@ -283,13 +283,18 @@ Highlights:
 | Core gateway, agent runtime, Telegram channel | ✅ Production-ready |
 | Memory + sessions + wiki | ✅ |
 | MCP **client** (import existing servers) | ✅ |
+| Browser tools (BR-1, fail-closed Playwright) | ✅ Opt-in via `SAMPYCLAW_ENABLE_BROWSER=1` |
+| Canvas tools (CV-1, dashboard-embedded HTML) | ✅ Opt-in via `SAMPYCLAW_ENABLE_CANVAS=1` |
 | MCP **server** (expose sampyClaw to other clients) | ⏳ Future phase |
 | 5 additional channels (Discord, Slack, …) | ⏳ Future phase |
 | Native mobile / desktop apps | ❌ Out of scope |
 | Full React web UI | ❌ Bundled single-page dashboard only |
 
-**Test suite: 898 pass / 9 skip.** See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
-for the full module map.
+**Test suite: 1035 pass / 10 skip** unit + **9 pass** live `gemma4:latest`
+integration. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the
+full module map, [`docs/BROWSER.md`](docs/BROWSER.md) for the browser
+tool surface, and [`docs/CANVAS.md`](docs/CANVAS.md) for the canvas
+panel.
 
 ---
 
@@ -302,6 +307,8 @@ for the full module map.
 | [`docs/PORTING_PLAN.md`](docs/PORTING_PLAN.md) | Phased roadmap (D → B → A → M → PROD) |
 | [`docs/SUBSYSTEM_MAP.md`](docs/SUBSYSTEM_MAP.md) | What's ported / partial / out-of-scope |
 | [`docs/AUTHORING_SKILLS.md`](docs/AUTHORING_SKILLS.md) | Build your own tools and skills |
+| [`docs/BROWSER.md`](docs/BROWSER.md) | Headless-Chromium tool surface (BR-1) — fail-closed egress |
+| [`docs/CANVAS.md`](docs/CANVAS.md) | Dashboard-embedded canvas (CV-1) — sandboxed iframe |
 | [`docs/SECURITY.md`](docs/SECURITY.md) | Threat model + layered defenses |
 | [`docs/OPERATIONS.md`](docs/OPERATIONS.md) | Install, run, observe, backup, recover |
 | [`docs/CONFIG_EXAMPLE.yaml`](docs/CONFIG_EXAMPLE.yaml) | Annotated config sample |
@@ -567,12 +574,14 @@ discord = "my_pkg.discord_plugin:DISCORD_PLUGIN"
 | 코어 게이트웨이, 에이전트 런타임, Telegram | ✅ 프로덕션 가능 |
 | 메모리 + 세션 + 위키 | ✅ |
 | MCP **클라이언트** (외부 서버 흡수) | ✅ |
+| 브라우저 도구 (BR-1, fail-closed Playwright) | ✅ `SAMPYCLAW_ENABLE_BROWSER=1` 옵트인 |
+| 캔버스 도구 (CV-1, dashboard 임베드 HTML) | ✅ `SAMPYCLAW_ENABLE_CANVAS=1` 옵트인 |
 | MCP **서버** (sampyClaw를 외부 클라이언트에 노출) | ⏳ 차후 |
 | 추가 채널 5종 (Discord, Slack, …) | ⏳ 차후 |
 | 네이티브 모바일·데스크톱 앱 | ❌ 범위 외 |
 | 풀 React 웹 UI | ❌ 번들 단일 페이지 대시보드만 |
 
-**테스트: 898 pass / 9 skip.**
+**테스트: 1035 pass / 10 skip** (단위) + **9 pass** (live `gemma4:latest` 통합).
 
 ### 문서
 
@@ -583,6 +592,8 @@ discord = "my_pkg.discord_plugin:DISCORD_PLUGIN"
 | [`docs/PORTING_PLAN.md`](docs/PORTING_PLAN.md) | 단계별 로드맵 (D → B → A → M → PROD) |
 | [`docs/SUBSYSTEM_MAP.md`](docs/SUBSYSTEM_MAP.md) | 포팅 / 부분 / 범위외 분류 |
 | [`docs/AUTHORING_SKILLS.md`](docs/AUTHORING_SKILLS.md) | 자기 도구·스킬 작성 가이드 |
+| [`docs/BROWSER.md`](docs/BROWSER.md) | 헤드리스 Chromium 도구 (BR-1) — egress fail-closed |
+| [`docs/CANVAS.md`](docs/CANVAS.md) | dashboard 임베드 캔버스 (CV-1) — sandboxed iframe |
 | [`docs/SECURITY.md`](docs/SECURITY.md) | 위협 모델 + 다층 방어 |
 | [`docs/OPERATIONS.md`](docs/OPERATIONS.md) | 설치 · 실행 · 관측 · 백업 · 복구 |
 | [`docs/CONFIG_EXAMPLE.yaml`](docs/CONFIG_EXAMPLE.yaml) | 주석 달린 설정 샘플 |

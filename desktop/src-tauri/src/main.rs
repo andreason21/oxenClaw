@@ -108,12 +108,79 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
+// ─── Diagnostic panic hook ───────────────────────────────────────────
+//
+// Release builds set `windows_subsystem = "windows"` (no console), so a
+// Tauri Builder panic exits silently — exactly the symptom users see
+// when *anything* in plugin init or `generate_context!()` fails. Install
+// a panic hook *before* Tauri's Builder runs so any startup panic is
+// persisted to disk under `%LOCALAPPDATA%\oxenClaw\panic.log` (or
+// `~/.local/share/oxenclaw/panic.log` on Linux). The file is appended
+// to so multiple crashes are preserved.
+
+fn install_panic_hook() {
+    let original = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let log_path = panic_log_path();
+        let body = format!(
+            "==== oxenClaw panic at {ts} ====\n{info}\nbacktrace:\n{bt}\n\n",
+            ts = chrono_now_string(),
+            info = info,
+            bt = std::backtrace::Backtrace::capture(),
+        );
+        if let Some(path) = log_path.as_ref() {
+            let _ = std::fs::create_dir_all(path.parent().unwrap_or(std::path::Path::new(".")));
+            let _ = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(path)
+                .and_then(|mut f| std::io::Write::write_all(&mut f, body.as_bytes()));
+        }
+        // Still defer to the default handler so dev (debug) builds with a
+        // console see the message in stderr.
+        original(info);
+    }));
+}
+
+fn panic_log_path() -> Option<std::path::PathBuf> {
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(local) = std::env::var("LOCALAPPDATA") {
+            return Some(std::path::PathBuf::from(local).join("oxenClaw").join("panic.log"));
+        }
+    }
+    #[cfg(target_os = "linux")]
+    {
+        if let Ok(home) = std::env::var("HOME") {
+            return Some(
+                std::path::PathBuf::from(home)
+                    .join(".local")
+                    .join("share")
+                    .join("oxenclaw")
+                    .join("panic.log"),
+            );
+        }
+    }
+    None
+}
+
+fn chrono_now_string() -> String {
+    // Avoid pulling in chrono — use std::time + a manual UTC format.
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    format!("epoch_secs={secs}")
+}
+
 // ─── App entry ───────────────────────────────────────────────────────
 
 fn main() {
+    install_panic_hook();
     env_logger::init();
 
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_autostart::init(
@@ -145,12 +212,40 @@ fn main() {
                     let _ = window.hide();
                 }
             }
-        })
-        .build(tauri::generate_context!())
-        .expect("failed to build tauri app")
-        .run(|_app, event| {
-            if let RunEvent::ExitRequested { .. } = event {
-                // Allow exit when explicitly requested from the tray.
-            }
         });
+
+    let app = match builder.build(tauri::generate_context!()) {
+        Ok(a) => a,
+        Err(e) => {
+            // Persist the build error so users have something concrete
+            // to share — mirrors the panic hook surface.
+            if let Some(path) = panic_log_path() {
+                let _ = std::fs::create_dir_all(
+                    path.parent().unwrap_or(std::path::Path::new(".")),
+                );
+                let _ = std::fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(&path)
+                    .and_then(|mut f| {
+                        std::io::Write::write_all(
+                            &mut f,
+                            format!(
+                                "==== oxenClaw Builder.build failed at {ts} ====\n{err}\n\n",
+                                ts = chrono_now_string(),
+                                err = e,
+                            )
+                            .as_bytes(),
+                        )
+                    });
+            }
+            std::process::exit(1);
+        }
+    };
+
+    app.run(|_app, event| {
+        if let RunEvent::ExitRequested { .. } = event {
+            // Allow exit when explicitly requested from the tray.
+        }
+    });
 }

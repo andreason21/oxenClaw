@@ -241,14 +241,19 @@ jobs:
             patchelf \
             file
       - run: cargo install tauri-cli --version "^2.0" --locked
-      - name: Build .deb + .AppImage
+      - name: Build .deb (AppImage temporarily disabled)
         working-directory: desktop
         env:
-          # Same updater signing as Windows — produces *.AppImage.sig
-          # which the auto-updater uses to verify Linux deltas.
           TAURI_SIGNING_PRIVATE_KEY:          ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: cargo tauri build --bundles deb appimage
+        # AppImage build is currently broken upstream — Tauri's bundler
+        # tries to fetch AppRun-x86_64 from
+        # `tauri-apps/binary-releases/releases/download/apprun-old/...`
+        # which returns HTTP 502 (the `apprun-old` tag was reorganised).
+        # Track tauri-apps/tauri#XXXX; once the bundler URL is patched
+        # in a tauri-cli release, restore `--bundles deb appimage` and
+        # re-add the AppImage staging block + latest.json linux entry.
+        run: cargo tauri build --bundles deb
       - name: Stage linux artifacts (suffixed with distro tag)
         shell: bash
         env:
@@ -263,13 +268,8 @@ jobs:
             cp "$f"          "linux-dist/${base}_${TAG}.deb"
             [ -f "${f}.sig" ] && cp "${f}.sig" "linux-dist/${base}_${TAG}.deb.sig" || true
           done
-          for f in desktop/src-tauri/target/release/bundle/appimage/*.AppImage; do
-            base=$(basename "$f" .AppImage)
-            cp "$f"          "linux-dist/${base}_${TAG}.AppImage"
-            [ -f "${f}.sig" ] && cp "${f}.sig" "linux-dist/${base}_${TAG}.AppImage.sig" || true
-          done
           cd linux-dist
-          sha256sum *.deb *.AppImage | tee SHA256SUMS.${TAG}.txt
+          sha256sum *.deb | tee SHA256SUMS.${TAG}.txt
       - uses: actions/upload-artifact@v4
         with:
           name: linux-${{ matrix.tag }}
@@ -349,19 +349,14 @@ jobs:
         env:
           VERSION: ${{ needs.version-check.outputs.version }}
         run: |
-          # Auto-updater on Linux is delivered via AppImage, not .deb
-          # (.deb updates need apt; AppImage is a single signed file).
-          # We pin to the 24.04 AppImage as the canonical Linux delta —
-          # an AppImage built on 24.04 runs on 22.04 too because it
-          # bundles its own webkit2gtk.
-          # On Windows we point the updater at the .msi (matches the
-          # primary install path users go through). NSIS .exe is still
-          # attached to the release for ad-hoc installs and corp
-          # environments that prefer per-user installs.
+          # Auto-updater on Windows points at the .msi (matches the primary
+          # install path). NSIS .exe is still attached to the release for
+          # ad-hoc installs.
+          # Linux entry temporarily omitted — the AppImage path is offline
+          # while the upstream Tauri bundler download URL is broken (see
+          # the linux-build job comment). `.deb` users upgrade via apt.
           MSI=$(ls *.msi | head -1)
-          APPIMG=$(ls *_ubuntu24.04.AppImage | head -1 || ls *.AppImage | head -1)
           MSI_SIG=$(cat "${MSI}.sig" 2>/dev/null || echo "")
-          APPIMG_SIG=$(cat "${APPIMG}.sig" 2>/dev/null || echo "")
           BASE="https://github.com/andreason21/sampyClaw/releases/download/v${VERSION}"
           PUB_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           cat > latest.json <<JSON
@@ -370,8 +365,7 @@ jobs:
             "notes": "See https://github.com/andreason21/sampyClaw/releases/tag/v${VERSION}",
             "pub_date": "${PUB_DATE}",
             "platforms": {
-              "windows-x86_64": { "signature": "${MSI_SIG}",    "url": "${BASE}/${MSI}" },
-              "linux-x86_64":   { "signature": "${APPIMG_SIG}", "url": "${BASE}/${APPIMG}" }
+              "windows-x86_64": { "signature": "${MSI_SIG}",    "url": "${BASE}/${MSI}" }
             }
           }
           JSON
@@ -411,7 +405,6 @@ jobs:
             release-assets/*.msi
             release-assets/*.exe
             release-assets/*.deb
-            release-assets/*.AppImage
             release-assets/*.sig
             release-assets/latest.json
             release-assets/SHA256SUMS.txt

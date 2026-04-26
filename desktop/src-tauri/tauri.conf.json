@@ -1,0 +1,75 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "sampyClaw",
+  "version": "0.1.0",
+  "identifier": "ai.sampyclaw.desktop",
+  "build": {
+    "frontendDist": "../web",
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "",
+    "beforeBuildCommand": ""
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "sampyClaw",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 720,
+        "minHeight": 480,
+        "resizable": true,
+        "decorations": true,
+        "transparent": false,
+        "alwaysOnTop": false,
+        "fullscreen": false,
+        "visible": true,
+        "focus": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self' tauri:; script-src 'self' tauri: 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self' tauri: ws://localhost:* http://localhost:* ws://127.0.0.1:* http://127.0.0.1:*; img-src 'self' data: blob:; font-src 'self' data:",
+      "freezePrototype": true
+    },
+    "trayIcon": {
+      "iconPath": "icons/icon.png",
+      "iconAsTemplate": false,
+      "menuOnLeftClick": false,
+      "tooltip": "sampyClaw"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["msi", "nsis"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/icon.ico"
+    ],
+    "category": "DeveloperTool",
+    "shortDescription": "sampyClaw native desktop app",
+    "longDescription": "Connect to a sampyClaw gateway with Credential-Manager-backed token storage, native Windows toast notifications with action buttons, and a system tray icon.",
+    "windows": {
+      "wix": {
+        "language": "en-US",
+        "upgradeCode": "9C9F62C5-3B4A-4E4F-8B7A-3B8B5F3A4E60"
+      },
+      "nsis": {
+        "installMode": "currentUser"
+      },
+      "webviewInstallMode": {
+        "type": "embedBootstrapper",
+        "silent": true
+      }
+    }
+  },
+  "plugins": {
+    "notification": {},
+    "store": {},
+    "autostart": {},
+    "shell": {
+      "open": true
+    },
+    "os": {}
+  }
+}

@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>sampyClaw</title>
+  <style>
+    :root { color-scheme: dark light; font: 14px/1.5 -apple-system, "Segoe UI", sans-serif; }
+    html, body { height: 100%; margin: 0; background: #0b0c0e; color: #e6e8ee; }
+    main { display: flex; align-items: center; justify-content: center; height: 100%; }
+    .card {
+      width: min(440px, 92vw);
+      background: #131418; border: 1px solid #2a2d34; border-radius: 10px;
+      padding: 28px; box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    }
+    h1 { margin: 0 0 4px; font-size: 18px; color: #ffb84a; }
+    p  { margin: 4px 0 16px; color: #b6bac4; font-size: 13px; }
+    label { display: block; font-size: 11px; color: #6e7280; margin: 12px 0 4px; }
+    input { width: 100%; padding: 8px 10px; background: #1a1c21; border: 1px solid #2a2d34;
+            border-radius: 6px; color: #e6e8ee; font: 13px ui-monospace, monospace; box-sizing: border-box; }
+    input:focus { outline: 2px solid #ffb84a; }
+    button { width: 100%; margin-top: 16px; padding: 10px 14px; border: 0; border-radius: 6px;
+             background: #ffb84a; color: #1a1500; font-weight: 600; cursor: pointer; }
+    button.secondary { background: transparent; color: #b6bac4; border: 1px solid #2a2d34; margin-top: 8px; }
+    .err { color: #e15c5c; font-size: 12px; margin-top: 8px; min-height: 1em; }
+    .pill { display: inline-block; background: rgba(255,184,74,0.12); color: #ffce80;
+            padding: 2px 8px; border-radius: 999px; font-size: 11px; margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+<main>
+  <div class="card" id="setup-card">
+    <span class="pill">native desktop</span>
+    <h1>Connect to sampyClaw</h1>
+    <p>Bearer token is stored in Windows Credential Manager (DPAPI-encrypted) — never localStorage, never the WebView state.</p>
+
+    <label for="url">Gateway URL</label>
+    <input id="url" type="text" value="http://localhost:7331" spellcheck="false" />
+
+    <label for="tok">Bearer token</label>
+    <input id="tok" type="password" placeholder="SAMPYCLAW_GATEWAY_TOKEN" autocomplete="off" />
+
+    <button id="go">Save and connect</button>
+    <button id="forget" class="secondary">Forget stored token</button>
+    <div class="err" id="err"></div>
+  </div>
+</main>
+
+<script>
+  const inv = (cmd, args) => window.__TAURI__.core.invoke(cmd, args || {});
+  const $ = (id) => document.getElementById(id);
+  const errBox = $("err");
+  function err(msg) { errBox.textContent = msg || ""; }
+
+  async function tryAutoConnect() {
+    try {
+      const info = await inv("connection_info");
+      if (info.token_set) {
+        $("url").value = info.gateway_url;
+        const url = await inv("connect_url");
+        location.replace(url);
+      }
+    } catch (e) {
+      // No stored token yet — show the setup form.
+    }
+  }
+
+  $("go").addEventListener("click", async () => {
+    err("");
+    const gateway_url = $("url").value.trim();
+    const token = $("tok").value.trim();
+    if (!gateway_url || !token) { err("URL and token are both required"); return; }
+    try {
+      await inv("save_token", { token, gatewayUrl: gateway_url, gateway_url });
+      const url = await inv("connect_url");
+      location.replace(url);
+    } catch (e) { err(String(e)); }
+  });
+
+  $("forget").addEventListener("click", async () => {
+    try { await inv("forget_token"); $("tok").value = ""; err("token forgotten"); }
+    catch (e) { err(String(e)); }
+  });
+
+  tryAutoConnect();
+</script>
+</body>
+</html>

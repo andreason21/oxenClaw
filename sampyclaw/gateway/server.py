@@ -175,6 +175,32 @@ def _resolve_auth_token(explicit: str | None) -> str | None:
     return None
 
 
+def _resolve_allowed_origins(
+    explicit: list[str] | None,
+) -> frozenset[str] | None:
+    """Resolve the WS Origin allowlist.
+
+    Precedence: explicit kwarg → `SAMPYCLAW_ALLOWED_ORIGINS` env var
+    (comma-separated) → None (no Origin filtering, default for
+    non-browser clients and existing browser-bookmark setups).
+
+    Whitespace and trailing slashes are stripped so a literal like
+    `"http://localhost:7331/"` matches the browser-emitted
+    `"http://localhost:7331"`.
+    """
+    raw: list[str] | None = explicit
+    if raw is None:
+        env = os.environ.get("SAMPYCLAW_ALLOWED_ORIGINS")
+        if env:
+            raw = [item for item in env.split(",")]
+    if raw is None:
+        return None
+    cleaned = {o.strip().rstrip("/") for o in raw if o and o.strip()}
+    if not cleaned:
+        return None
+    return frozenset(cleaned)
+
+
 # HTTP routes that are deliberately unauthenticated:
 #  - /healthz, /readyz, /metrics, /health (operational probes hit by
 #    orchestrators that don't carry the gateway token).
@@ -287,6 +313,7 @@ class GatewayServer:
         *,
         static_routes: dict[str, StaticHandler] | None = None,
         auth_token: str | None = None,
+        allowed_origins: list[str] | None = None,
         max_message_size: int = DEFAULT_MAX_MESSAGE_SIZE,
         outbound_queue_size: int = DEFAULT_OUTBOUND_QUEUE_SIZE,
         per_connection_concurrency: int = DEFAULT_PER_CONN_CONCURRENCY,
@@ -302,6 +329,16 @@ class GatewayServer:
             else dict(static_routes)
         )
         self._auth_token = _resolve_auth_token(auth_token)
+        # Origin allowlist for WS upgrades. Resolved precedence:
+        #   1. explicit `allowed_origins=` kwarg
+        #   2. `SAMPYCLAW_ALLOWED_ORIGINS` env var (comma-separated)
+        #   3. None — no Origin check (back-compat for non-browser clients
+        #      and existing browser-bookmark setups).
+        # When set, browser-based WS upgrades MUST present an Origin header
+        # whose value is in this set; non-browser clients (no Origin
+        # header at all) still pass — Origin filtering is a CSRF defence,
+        # not a substitute for the bearer token.
+        self._allowed_origins = _resolve_allowed_origins(allowed_origins)
         self._max_message_size = max_message_size
         self._outbound_queue_size = outbound_queue_size
         self._per_conn_concurrency = per_connection_concurrency
@@ -313,6 +350,11 @@ class GatewayServer:
             logger.warning(
                 "gateway started WITHOUT auth — set SAMPYCLAW_GATEWAY_TOKEN "
                 "or pass auth_token= to require Authorization: Bearer on connect"
+            )
+        if self._allowed_origins is not None:
+            logger.info(
+                "WS Origin allowlist active: %s",
+                ", ".join(sorted(self._allowed_origins)),
             )
 
     @property
@@ -393,9 +435,17 @@ class GatewayServer:
     async def _process_request(
         self, connection: ServerConnection, request: Request
     ) -> Response | None:
-        # WebSocket upgrade requests: enforce auth here so we reject before
-        # the handshake completes.
+        # WebSocket upgrade requests: enforce auth + Origin here so we
+        # reject before the handshake completes.
         if _is_websocket_upgrade(request):
+            if not self._origin_ok(request):
+                origin = (
+                    request.headers.get("Origin")
+                    or request.headers.get("origin")
+                    or "(none)"
+                )
+                logger.warning("rejecting WS upgrade: Origin %r not allowed", origin)
+                return connection.respond(HTTPStatus.FORBIDDEN, "origin not allowed\n")
             if not self._auth_ok(request):
                 logger.warning("rejecting WS upgrade: missing/invalid bearer token")
                 return connection.respond(HTTPStatus.UNAUTHORIZED, "unauthorized\n")
@@ -436,6 +486,24 @@ class GatewayServer:
         if offered is None:
             return False
         return hmac.compare_digest(offered, self._auth_token)
+
+    def _origin_ok(self, request: Request) -> bool:
+        """Allow when no allowlist is configured, or the request has no
+        Origin (non-browser clients), or Origin is in the allowlist.
+
+        Origin filtering only protects against CSRF-style cross-origin
+        WebSocket attacks from browsers. It is NOT a token substitute —
+        an attacker on the same machine can simply omit the Origin
+        header. Use it together with the bearer token, never alone.
+        """
+        if self._allowed_origins is None:
+            return True
+        origin = request.headers.get("Origin") or request.headers.get("origin")
+        if not origin:
+            # No Origin header → non-browser client (curl, websockets-py,
+            # native app without WebView). Defer to bearer-token check.
+            return True
+        return origin.rstrip("/") in self._allowed_origins
 
     async def _on_connect(self, ws: ServerConnection) -> None:
         from sampyclaw.observability import METRICS

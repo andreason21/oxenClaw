@@ -1,0 +1,68 @@
+name: desktop-build
+
+# Builds the Windows .msi for the Tauri desktop app on tag push and on
+# every PR that touches `desktop/`. Code-signing is intentionally NOT
+# in the workflow: signing requires the org's authenticode certificate
+# (.pfx) which lives in a secret store outside this repo. To sign,
+# download the artifact and run signtool locally — see
+# `desktop/README.md` and `docs/WINDOWS_DESKTOP.md`.
+
+on:
+  push:
+    tags: ["v*"]
+    paths:
+      - "desktop/**"
+      - "sampyclaw/static/**"
+      - ".github/workflows/desktop-build.yml"
+  pull_request:
+    paths:
+      - "desktop/**"
+      - ".github/workflows/desktop-build.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: desktop-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            desktop/src-tauri/target
+          key: cargo-${{ runner.os }}-${{ hashFiles('desktop/src-tauri/Cargo.toml') }}
+
+      - name: Install Tauri CLI
+        run: cargo install tauri-cli --version "^2.0" --locked
+
+      - name: Build .msi
+        working-directory: desktop
+        run: cargo tauri build
+
+      - name: Upload .msi artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sampyclaw-desktop-msi
+          path: desktop/src-tauri/target/release/bundle/msi/*.msi
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload NSIS installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sampyclaw-desktop-nsis
+          path: desktop/src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
+          retention-days: 30

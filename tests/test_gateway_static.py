@@ -487,3 +487,128 @@ async def test_ws_upgrade_still_requires_token_when_auth_configured(
             await task
         except asyncio.CancelledError:
             pass
+
+
+# ─── Origin allowlist (CSRF defence on WS upgrade) ────────────────────
+
+
+async def test_ws_upgrade_rejected_for_unlisted_origin(router: Router) -> None:
+    """When `allowed_origins` is set, a browser-style WS upgrade with a
+    foreign Origin must be rejected with 403 — even if the bearer token
+    is correct."""
+    from websockets.asyncio.client import connect as ws_connect
+    from websockets.exceptions import InvalidStatus
+
+    server = GatewayServer(
+        router,
+        auth_token="secret123",
+        allowed_origins=["tauri://localhost"],
+    )
+    port = _pick_port()
+    task = asyncio.create_task(server.serve(host="127.0.0.1", port=port))
+    try:
+        await asyncio.sleep(0.1)
+        # Foreign origin → 403 even with the right token.
+        with pytest.raises((InvalidStatus, ConnectionError, OSError)):
+            async with ws_connect(
+                f"ws://127.0.0.1:{port}/?token=secret123",
+                additional_headers=[("Origin", "https://evil.example")],
+            ):
+                pass
+        # Allowed origin → upgrade succeeds.
+        async with ws_connect(
+            f"ws://127.0.0.1:{port}/?token=secret123",
+            additional_headers=[("Origin", "tauri://localhost")],
+        ) as ws:
+            await ws.send(
+                json.dumps(
+                    {
+                        "jsonrpc": "2.0", "id": 1, "method": "chat.send",
+                        "params": {
+                            "channel": "telegram", "account_id": "main",
+                            "chat_id": "1", "text": "hi",
+                        },
+                    }
+                )
+            )
+            await asyncio.wait_for(ws.recv(), timeout=2.0)
+    finally:
+        task.cancel()
+        try: await task
+        except asyncio.CancelledError: pass
+
+
+async def test_ws_upgrade_without_origin_passes_when_allowlist_set(router: Router) -> None:
+    """Non-browser clients (no Origin header at all) must still pass the
+    Origin check — Origin filtering is a CSRF defence, not a token
+    substitute. Native apps and `curl` don't send Origin."""
+    from websockets.asyncio.client import connect as ws_connect
+
+    server = GatewayServer(
+        router,
+        auth_token="secret123",
+        allowed_origins=["tauri://localhost"],
+    )
+    port = _pick_port()
+    task = asyncio.create_task(server.serve(host="127.0.0.1", port=port))
+    try:
+        await asyncio.sleep(0.1)
+        # No Origin header at all + valid token → upgrade succeeds.
+        async with ws_connect(f"ws://127.0.0.1:{port}/?token=secret123") as ws:
+            await ws.send(json.dumps({"jsonrpc": "2.0", "id": 1, "method": "chat.send",
+                "params": {"channel": "t", "account_id": "m", "chat_id": "1", "text": "x"}}))
+            await asyncio.wait_for(ws.recv(), timeout=2.0)
+    finally:
+        task.cancel()
+        try: await task
+        except asyncio.CancelledError: pass
+
+
+async def test_allowed_origins_normalise_trailing_slash(router: Router) -> None:
+    """Allowlist entries `'http://localhost:7331/'` should match the browser-emitted
+    `'http://localhost:7331'` — the resolver strips trailing slashes."""
+    from websockets.asyncio.client import connect as ws_connect
+
+    server = GatewayServer(
+        router,
+        auth_token="secret123",
+        allowed_origins=["http://localhost:7331/  "],   # space + slash, both stripped
+    )
+    port = _pick_port()
+    task = asyncio.create_task(server.serve(host="127.0.0.1", port=port))
+    try:
+        await asyncio.sleep(0.1)
+        async with ws_connect(
+            f"ws://127.0.0.1:{port}/?token=secret123",
+            additional_headers=[("Origin", "http://localhost:7331")],
+        ) as ws:
+            await ws.send(json.dumps({"jsonrpc": "2.0", "id": 1, "method": "chat.send",
+                "params": {"channel": "t", "account_id": "m", "chat_id": "1", "text": "x"}}))
+            await asyncio.wait_for(ws.recv(), timeout=2.0)
+    finally:
+        task.cancel()
+        try: await task
+        except asyncio.CancelledError: pass
+
+
+def test_allowed_origins_resolved_from_env(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """`SAMPYCLAW_ALLOWED_ORIGINS` env feeds the allowlist when the kwarg
+    isn't passed."""
+    monkeypatch.setenv("SAMPYCLAW_ALLOWED_ORIGINS", "tauri://localhost, http://localhost:7331")
+    from sampyclaw.gateway.server import _resolve_allowed_origins
+    out = _resolve_allowed_origins(None)
+    assert out == frozenset({"tauri://localhost", "http://localhost:7331"})
+
+
+def test_allowed_origins_explicit_kwarg_overrides_env(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    monkeypatch.setenv("SAMPYCLAW_ALLOWED_ORIGINS", "ignored://from-env")
+    from sampyclaw.gateway.server import _resolve_allowed_origins
+    out = _resolve_allowed_origins(["only://this"])
+    assert out == frozenset({"only://this"})
+
+
+def test_allowed_origins_empty_means_no_check() -> None:
+    from sampyclaw.gateway.server import _resolve_allowed_origins
+    assert _resolve_allowed_origins(None) is None
+    assert _resolve_allowed_origins([]) is None
+    assert _resolve_allowed_origins(["", "   "]) is None

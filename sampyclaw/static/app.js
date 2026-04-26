@@ -1795,6 +1795,102 @@ const Palette = (() => {
 // ─────────────────────────────────────────────────────────────────────────
 // Bootstrap
 // ─────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────
+// Native notifications — Tauri (Action Center) when running inside the
+// desktop app, Web Notifications API as the browser fallback. Both
+// paths require user permission once; Tauri grants it at install time
+// so there's no popup.
+// ─────────────────────────────────────────────────────────────────────────
+const Notify = (() => {
+  const isTauri = !!(globalThis.__TAURI__ && globalThis.__TAURI__.core);
+  let webPermAsked = false;
+
+  // Dedup: don't re-notify the same agent reply / approval twice if
+  // the dashboard is already focused.
+  const seen = new Set();
+  function key(kind, id) { return `${kind}:${id}`; }
+
+  async function ensureWebPermission() {
+    if (typeof Notification === "undefined") return false;
+    if (Notification.permission === "granted") return true;
+    if (Notification.permission === "denied") return false;
+    if (webPermAsked) return Notification.permission === "granted";
+    webPermAsked = true;
+    try {
+      const r = await Notification.requestPermission();
+      return r === "granted";
+    } catch { return false; }
+  }
+
+  async function show({ kind, title, body, correlation_id, actions }) {
+    const k = correlation_id ? key(kind, correlation_id) : null;
+    if (k && seen.has(k)) return;
+    if (k) seen.add(k);
+
+    if (isTauri) {
+      try {
+        await globalThis.__TAURI__.core.invoke("show_notification", {
+          payload: { kind, title, body, correlation_id, actions: actions || [] },
+        });
+        return;
+      } catch (e) { /* fall back to web */ }
+    }
+    if (!(await ensureWebPermission())) return;
+    try {
+      const n = new Notification(title, { body, tag: k || undefined });
+      n.onclick = () => { window.focus(); n.close(); };
+    } catch { /* swallow — notifications are advisory */ }
+  }
+
+  return { show, isTauri };
+})();
+
+function bindEventNotifications() {
+  // Don't notify when the user is actively looking at the dashboard.
+  function visible() { return document.visibilityState === "visible" && document.hasFocus(); }
+
+  Rpc.onEvent((evt) => {
+    if (!evt || typeof evt !== "object") return;
+    const body = evt.body || {};
+    const kind = body.kind || evt.kind;
+    if (!kind) return;
+
+    // Per-event-kind notification mapping. The Rpc bus delivers
+    // every server-pushed EventFrame; we filter to the ones a
+    // human alert is useful for.
+    if (kind === "approval_requested" || kind === "approval") {
+      // Always notify — explicit human approval is required.
+      Notify.show({
+        kind: "approval",
+        title: "Approval needed",
+        body: body.prompt || body.message || "Tool execution awaiting approval",
+        correlation_id: body.id || body.request_id,
+        actions: ["Approve", "Deny"],
+      });
+      return;
+    }
+    if (kind === "reply" || kind === "reply_complete") {
+      if (visible()) return;        // user is already looking
+      Notify.show({
+        kind: "reply",
+        title: `Reply from ${body.agent_id || "agent"}`,
+        body: (body.text || body.summary || "").slice(0, 200) || "(empty reply)",
+        correlation_id: body.message_id,
+      });
+      return;
+    }
+    if (kind === "cron_fired") {
+      if (visible()) return;
+      Notify.show({
+        kind: "cron",
+        title: "Cron job fired",
+        body: body.prompt || body.id || "",
+        correlation_id: body.id,
+      });
+    }
+  });
+}
+
 function boot() {
   bindConnectionState();
 
@@ -1819,6 +1915,7 @@ function boot() {
   bindShortcuts();
   bindLoginGate();
   bindCanvasPanel();
+  bindEventNotifications();
 
   Rpc.connect($("ws-url").value);
   // Token has been captured into the WS URL + (server-set) cookie; clean

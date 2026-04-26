@@ -111,6 +111,16 @@ def start(
             "If neither is set, auth is DISABLED with a warning."
         ),
     ),
+    allowed_origins: str | None = typer.Option(
+        None,
+        "--allowed-origins",
+        help=(
+            "Comma-separated CSRF Origin allowlist for browser WS upgrades "
+            "(e.g. 'http://localhost:7331,tauri://localhost'). "
+            "Falls back to SAMPYCLAW_ALLOWED_ORIGINS env. When unset, no "
+            "Origin check (back-compat)."
+        ),
+    ),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Debug logging."),
     skip_preflight: bool = typer.Option(
         False,
@@ -168,6 +178,7 @@ def start(
             api_key=api_key,
             system_prompt=system_prompt,
             auth_token=auth_token,
+            allowed_origins=allowed_origins,
         )
     )
 
@@ -261,6 +272,7 @@ async def _run_gateway(
     api_key: str | None = None,
     system_prompt: str | None = None,
     auth_token: str | None = None,
+    allowed_origins: str | None = None,
 ) -> None:
     config = load_config()
     paths = default_paths()
@@ -349,7 +361,17 @@ async def _run_gateway(
         cron_scheduler=cron_scheduler,
         memory=memory_retriever,
     )
-    server = GatewayServer(router, auth_token=auth_token, readiness=readiness)
+    parsed_origins = (
+        [o.strip() for o in allowed_origins.split(",") if o.strip()]
+        if allowed_origins
+        else None
+    )
+    server = GatewayServer(
+        router,
+        auth_token=auth_token,
+        allowed_origins=parsed_origins,
+        readiness=readiness,
+    )
 
     install_signal_handlers(server)
 

@@ -1,0 +1,149 @@
+// Hide the Windows console window in release builds.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+mod notify;
+mod token;
+mod wsl;
+
+use serde::{Deserialize, Serialize};
+use tauri::{
+    menu::{Menu, MenuItem},
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    AppHandle, Manager, RunEvent, WindowEvent,
+};
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+struct ConnectionInfo {
+    pub gateway_url: String,
+    pub token_set: bool,
+}
+
+// ─── IPC commands exposed to the renderer ─────────────────────────────
+
+#[tauri::command]
+fn save_token(token: String, gateway_url: String) -> Result<(), String> {
+    token::save(&token::StoredToken { token, gateway_url })
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn forget_token() -> Result<(), String> {
+    token::forget().map_err(|e| e.to_string())
+}
+
+/// Returns the configured URL with `?token=...` appended so the
+/// renderer can navigate to it without ever seeing the raw token.
+#[tauri::command]
+fn connect_url() -> Result<String, String> {
+    let stored = token::load().map_err(|e| e.to_string())?;
+    let s = stored.ok_or("no token stored — run setup")?;
+    let sep = if s.gateway_url.contains('?') { '&' } else { '?' };
+    Ok(format!(
+        "{}{}token={}",
+        s.gateway_url.trim_end_matches('/'),
+        sep,
+        s.token
+    ))
+}
+
+#[tauri::command]
+fn connection_info() -> Result<ConnectionInfo, String> {
+    let stored = token::load().map_err(|e| e.to_string())?;
+    Ok(ConnectionInfo {
+        gateway_url: stored
+            .as_ref()
+            .map(|s| s.gateway_url.clone())
+            .unwrap_or_default(),
+        token_set: stored.is_some(),
+    })
+}
+
+#[tauri::command]
+fn show_notification(app: AppHandle, payload: notify::NotifyPayload) -> Result<(), String> {
+    notify::show(&app, payload)
+}
+
+#[tauri::command]
+fn launch_wsl_gateway(opts: wsl::WslLaunchOptions) -> Result<(), String> {
+    wsl::launch(&opts).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn focus_main_window(app: AppHandle) {
+    notify::focus_main(&app);
+}
+
+// ─── Tray ────────────────────────────────────────────────────────────
+
+fn build_tray(app: &AppHandle) -> tauri::Result<()> {
+    let show = MenuItem::with_id(app, "show", "Show sampyClaw", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+    let menu = Menu::with_items(app, &[&show, &quit])?;
+    TrayIconBuilder::with_id("main")
+        .menu(&menu)
+        .show_menu_on_left_click(false)
+        .on_menu_event(|app, event| match event.id.as_ref() {
+            "show" => notify::focus_main(app),
+            "quit" => app.exit(0),
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+            // Single-click on the tray icon brings the window forward.
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                notify::focus_main(tray.app_handle());
+            }
+        })
+        .build(app)?;
+    Ok(())
+}
+
+// ─── App entry ───────────────────────────────────────────────────────
+
+fn main() {
+    env_logger::init();
+
+    tauri::Builder::default()
+        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_store::Builder::default().build())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
+        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_os::init())
+        .invoke_handler(tauri::generate_handler![
+            save_token,
+            forget_token,
+            connect_url,
+            connection_info,
+            show_notification,
+            launch_wsl_gateway,
+            focus_main_window,
+        ])
+        .setup(|app| {
+            build_tray(app.handle())?;
+            Ok(())
+        })
+        .on_window_event(|window, event| {
+            // Closing the main window minimises to the tray instead of
+            // exiting — the tray Quit item is the explicit shutdown.
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == "main" {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
+        })
+        .build(tauri::generate_context!())
+        .expect("failed to build tauri app")
+        .run(|_app, event| {
+            if let RunEvent::ExitRequested { .. } = event {
+                // Allow exit when explicitly requested from the tray.
+            }
+        });
+}

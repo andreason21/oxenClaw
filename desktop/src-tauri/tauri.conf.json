@@ -42,7 +42,9 @@
     "active": true,
     "targets": [
       "msi",
-      "nsis"
+      "nsis",
+      "deb",
+      "appimage"
     ],
     "icon": [
       "icons/32x32.png",
@@ -51,7 +53,7 @@
     ],
     "category": "DeveloperTool",
     "shortDescription": "sampyClaw native desktop app",
-    "longDescription": "Connect to a sampyClaw gateway with Credential-Manager-backed token storage, native Windows toast notifications with action buttons, and a system tray icon.",
+    "longDescription": "Connect to a sampyClaw gateway with native OS keychain token storage, Action Center / freedesktop notifications with action buttons, and a system tray icon.",
     "windows": {
       "wix": {
         "language": "en-US",
@@ -63,6 +65,16 @@
       "webviewInstallMode": {
         "type": "embedBootstrapper",
         "silent": true
+      }
+    },
+    "linux": {
+      "deb": {
+        "depends": [
+          "libwebkit2gtk-4.1-0",
+          "libayatana-appindicator3-1",
+          "libgtk-3-0"
+        ],
+        "section": "utils"
       }
     }
   },

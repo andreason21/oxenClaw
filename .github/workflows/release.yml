@@ -152,10 +152,8 @@ jobs:
           Get-ChildItem desktop\src-tauri\target\release\bundle\nsis\*.exe |
             ForEach-Object { & $signtool sign /f $pfx /p "$env:WINDOWS_CERT_PASSWORD" /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 $_.FullName }
           Remove-Item $pfx -Force
-      - name: Stage windows artifacts + updater manifest + checksums
+      - name: Stage windows artifacts + checksums
         shell: bash
-        env:
-          VERSION: ${{ needs.version-check.outputs.version }}
         run: |
           mkdir -p windows-dist
           cp desktop/src-tauri/target/release/bundle/msi/*.msi windows-dist/
@@ -165,33 +163,83 @@ jobs:
           cp desktop/src-tauri/target/release/bundle/nsis/*.exe.sig windows-dist/ 2>/dev/null || true
           cd windows-dist
           sha256sum *.msi *.exe | tee SHA256SUMS.windows.txt
-          # Build the auto-updater manifest the desktop app polls.
-          # The endpoint URL pinned in tauri.conf.json points at
-          # `releases/latest/download/latest.json`, which GitHub
-          # rewrites to whichever release this artifact lands in.
-          MSI=$(ls *.msi | head -1)
-          NSIS=$(ls *.exe | head -1)
-          MSI_SIG=$(cat "${MSI}.sig" 2>/dev/null || echo "")
-          NSIS_SIG=$(cat "${NSIS}.sig" 2>/dev/null || echo "")
-          MSI_URL="https://github.com/andreason21/sampyClaw/releases/download/v${VERSION}/${MSI}"
-          NSIS_URL="https://github.com/andreason21/sampyClaw/releases/download/v${VERSION}/${NSIS}"
-          PUB_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          cat > latest.json <<JSON
-          {
-            "version": "${VERSION}",
-            "notes": "See https://github.com/andreason21/sampyClaw/releases/tag/v${VERSION}",
-            "pub_date": "${PUB_DATE}",
-            "platforms": {
-              "windows-x86_64": { "signature": "${NSIS_SIG}", "url": "${NSIS_URL}" }
-            }
-          }
-          JSON
-          echo '--- latest.json ---'
-          cat latest.json
       - uses: actions/upload-artifact@v4
         with:
           name: windows-dist
           path: windows-dist/
+          if-no-files-found: error
+
+  # ─── 4b. Linux .deb (Ubuntu 22.04 + 24.04) + .AppImage ────────────
+  linux-build:
+    needs: [version-check, test]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - distro: ubuntu-22.04
+            tag:    ubuntu22.04
+            # Ubuntu 22.04 ships webkit2gtk-4.1 in updates; pull from
+            # that pocket explicitly so apt resolves it.
+            extra:  "libwebkit2gtk-4.1-dev"
+          - distro: ubuntu-24.04
+            tag:    ubuntu24.04
+            extra:  "libwebkit2gtk-4.1-dev"
+    runs-on: ${{ matrix.distro }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            desktop/src-tauri/target
+          key: cargo-${{ matrix.distro }}-${{ hashFiles('desktop/src-tauri/Cargo.toml') }}
+      - name: Install Tauri Linux build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ${{ matrix.extra }} \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libsoup-3.0-dev \
+            libssl-dev \
+            patchelf \
+            file
+      - run: cargo install tauri-cli --version "^2.0" --locked
+      - name: Build .deb + .AppImage
+        working-directory: desktop
+        env:
+          # Same updater signing as Windows — produces *.AppImage.sig
+          # which the auto-updater uses to verify Linux deltas.
+          TAURI_SIGNING_PRIVATE_KEY:          ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: cargo tauri build --bundles deb appimage
+      - name: Stage linux artifacts (suffixed with distro tag)
+        shell: bash
+        env:
+          TAG: ${{ matrix.tag }}
+        run: |
+          mkdir -p linux-dist
+          # Tauri names the bundles `<productName>_<version>_<arch>.<ext>`.
+          # We append the distro tag because deb glibc/webkit ABIs differ
+          # between 22.04 and 24.04.
+          for f in desktop/src-tauri/target/release/bundle/deb/*.deb; do
+            base=$(basename "$f" .deb)
+            cp "$f"          "linux-dist/${base}_${TAG}.deb"
+            [ -f "${f}.sig" ] && cp "${f}.sig" "linux-dist/${base}_${TAG}.deb.sig" || true
+          done
+          for f in desktop/src-tauri/target/release/bundle/appimage/*.AppImage; do
+            base=$(basename "$f" .AppImage)
+            cp "$f"          "linux-dist/${base}_${TAG}.AppImage"
+            [ -f "${f}.sig" ] && cp "${f}.sig" "linux-dist/${base}_${TAG}.AppImage.sig" || true
+          done
+          cd linux-dist
+          sha256sum *.deb *.AppImage | tee SHA256SUMS.${TAG}.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-${{ matrix.tag }}
+          path: linux-dist/
           if-no-files-found: error
 
   # ─── 5. Publish to PyPI (trusted publishing — no API token) ───────
@@ -219,7 +267,7 @@ jobs:
   # ─── 6. GitHub Release ────────────────────────────────────────────
   github-release:
     runs-on: ubuntu-latest
-    needs: [version-check, python-build, windows-build]
+    needs: [version-check, python-build, windows-build, linux-build]
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }     # need history for the changelog
@@ -231,9 +279,48 @@ jobs:
         with:
           name: windows-dist
           path: release-assets/
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-ubuntu22.04
+          path: release-assets/
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-ubuntu24.04
+          path: release-assets/
       - name: Combine SHA256SUMS
         working-directory: release-assets
-        run: cat SHA256SUMS.python.txt SHA256SUMS.windows.txt > SHA256SUMS.txt
+        run: |
+          cat SHA256SUMS.python.txt SHA256SUMS.windows.txt \
+              SHA256SUMS.ubuntu22.04.txt SHA256SUMS.ubuntu24.04.txt > SHA256SUMS.txt
+      - name: Build the Tauri auto-updater manifest (latest.json)
+        working-directory: release-assets
+        env:
+          VERSION: ${{ needs.version-check.outputs.version }}
+        run: |
+          # Auto-updater on Linux is delivered via AppImage, not .deb
+          # (.deb updates need apt; AppImage is a single signed file).
+          # We pin to the 24.04 AppImage as the canonical Linux delta —
+          # an AppImage built on 24.04 runs on 22.04 too because it
+          # bundles its own webkit2gtk.
+          NSIS=$(ls *.exe | head -1)
+          APPIMG=$(ls *_ubuntu24.04.AppImage | head -1 || ls *.AppImage | head -1)
+          NSIS_SIG=$(cat "${NSIS}.sig" 2>/dev/null || echo "")
+          APPIMG_SIG=$(cat "${APPIMG}.sig" 2>/dev/null || echo "")
+          BASE="https://github.com/andreason21/sampyClaw/releases/download/v${VERSION}"
+          PUB_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          cat > latest.json <<JSON
+          {
+            "version": "${VERSION}",
+            "notes": "See https://github.com/andreason21/sampyClaw/releases/tag/v${VERSION}",
+            "pub_date": "${PUB_DATE}",
+            "platforms": {
+              "windows-x86_64": { "signature": "${NSIS_SIG}",   "url": "${BASE}/${NSIS}" },
+              "linux-x86_64":   { "signature": "${APPIMG_SIG}", "url": "${BASE}/${APPIMG}" }
+            }
+          }
+          JSON
+          echo '--- latest.json ---'
+          cat latest.json
       - name: Generate release notes
         id: notes
         run: |
@@ -264,6 +351,8 @@ jobs:
             release-assets/*.tar.gz
             release-assets/*.msi
             release-assets/*.exe
+            release-assets/*.deb
+            release-assets/*.AppImage
             release-assets/*.sig
             release-assets/latest.json
             release-assets/SHA256SUMS.txt

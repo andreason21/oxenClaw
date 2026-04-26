@@ -117,5 +117,6 @@ values; the token only ever hits Credential Manager.
   --rotate`); the desktop app picks up the new value on its next
   reconnect, prompting the user to paste it.
 
-See `docs/WINDOWS_DESKTOP.md` for end-user install + first-run
-instructions, and `docs/SECURITY.md` for the full threat model.
+See `docs/DESKTOP_APP.md` for end-user install + first-run
+instructions across Windows and Ubuntu, and `docs/SECURITY.md` for
+the full threat model.

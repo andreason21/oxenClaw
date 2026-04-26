@@ -11,8 +11,11 @@ and a Windows `.msi` attached to a GitHub Release.
 | `sampyclaw-X.Y.Z.tar.gz` (sdist) | PyPI + GitHub Release | same |
 | `sampyclaw_X.Y.Z_x64_en-US.msi` | GitHub Release | `cargo tauri build` on `windows-latest`, optional signtool |
 | `sampyclaw_X.Y.Z_x64-setup.exe` (NSIS) | GitHub Release | same |
-| `*.msi.sig` / `*.exe.sig` | GitHub Release | Tauri updater signature, when `TAURI_SIGNING_PRIVATE_KEY` is set |
-| `latest.json` (auto-updater manifest) | GitHub Release | derived in CI; pointed at by `tauri.conf.json:plugins.updater.endpoints` |
+| `sampyclaw_X.Y.Z_amd64_ubuntu22.04.deb` | GitHub Release | `cargo tauri build --bundles deb` on `ubuntu-22.04` |
+| `sampyclaw_X.Y.Z_amd64_ubuntu24.04.deb` | GitHub Release | same on `ubuntu-24.04` |
+| `sampyclaw_X.Y.Z_amd64_*.AppImage` | GitHub Release | `cargo tauri build --bundles appimage` |
+| `*.msi.sig` / `*.exe.sig` / `*.AppImage.sig` | GitHub Release | Tauri updater Ed25519 signature, when `TAURI_SIGNING_PRIVATE_KEY` is set |
+| `latest.json` (auto-updater manifest) | GitHub Release | derived in CI from the NSIS .exe (Windows) + 24.04 AppImage (Linux) — both signed |
 | winget manifest | microsoft/winget-pkgs PR | `vedantmgoyal9/winget-releaser` (when `WINGET_TOKEN` secret set) |
 | `SHA256SUMS.txt` | GitHub Release | `sha256sum` over every artifact |
 

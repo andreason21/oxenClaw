@@ -1,4 +1,6 @@
 [package]
+# version is kept in sync with pyproject.toml via scripts/bump_version.py.
+# The release workflow refuses to ship if the three files disagree.
 name = "sampyclaw-desktop"
 version = "0.1.0"
 description = "sampyClaw native desktop app"

@@ -1,0 +1,230 @@
+name: release
+
+# End-to-end release pipeline. Triggered by pushing a `v*` tag (e.g.
+# `v0.2.0`). Six-step pipeline:
+#
+#   1. version-check  — refuse to ship if the three version files
+#                       disagree or don't match the tag.
+#   2. test           — run pytest one more time on the tag commit.
+#   3. python-build   — produce wheel + sdist + SHA256SUMS.
+#   4. windows-build  — produce .msi + .exe (NSIS) + SHA256SUMS.
+#                       Optional: signtool with $WINDOWS_CERT_PFX.
+#   5. pypi-publish   — upload the wheel/sdist to PyPI via
+#                       trusted publishing (OIDC, no token secret).
+#   6. github-release — create a GH Release, attach all artifacts.
+#
+# Code-signing is best-effort: if the WINDOWS_CERT_PFX +
+# WINDOWS_CERT_PASSWORD secrets are set, the .msi/.exe are signed.
+# Otherwise the artifacts are published unsigned.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to (re)release, e.g. v0.2.0"
+        required: true
+        type: string
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write       # create release + upload assets
+  id-token: write       # PyPI trusted publishing OIDC
+
+jobs:
+  # ─── 1. version sanity ────────────────────────────────────────────
+  version-check:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.derive.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: derive
+        run: |
+          set -e
+          REF="${GITHUB_REF_NAME:-}"
+          if [ -z "$REF" ] && [ -n "${{ inputs.tag }}" ]; then
+            REF="${{ inputs.tag }}"
+          fi
+          if [ -z "$REF" ]; then
+            echo "no tag in GITHUB_REF_NAME or inputs.tag" >&2; exit 1
+          fi
+          if [[ ! "$REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
+            echo "tag $REF must look like vMAJOR.MINOR.PATCH" >&2; exit 1
+          fi
+          VERSION="${REF#v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Releasing version $VERSION"
+      - name: Verify all three files agree on the tag version
+        run: |
+          set -e
+          python3 scripts/bump_version.py --check
+          PYV=$(python3 -c "import re,sys; print(re.search(r'^version\s*=\s*\"([^\"]+)\"', open('pyproject.toml').read(), re.M).group(1))")
+          if [ "$PYV" != "${{ steps.derive.outputs.version }}" ]; then
+            echo "pyproject.toml version $PYV != tag ${{ steps.derive.outputs.version }}" >&2
+            echo "Run: python scripts/bump_version.py ${{ steps.derive.outputs.version }} && git commit -am 'Release ${{ steps.derive.outputs.version }}' && git tag v${{ steps.derive.outputs.version }}" >&2
+            exit 1
+          fi
+
+  # ─── 2. tests on the tag ──────────────────────────────────────────
+  test:
+    runs-on: ubuntu-latest
+    needs: version-check
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install --upgrade pip
+      - run: pip install -e .[dev]
+      - run: pytest -q
+
+  # ─── 3. Python wheel + sdist ──────────────────────────────────────
+  python-build:
+    runs-on: ubuntu-latest
+    needs: [version-check, test]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: python -m pip install --upgrade pip build
+      - run: python -m build
+      - name: SHA256SUMS for python artifacts
+        working-directory: dist
+        run: sha256sum *.whl *.tar.gz | tee SHA256SUMS.python.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: python-dist
+          path: |
+            dist/*.whl
+            dist/*.tar.gz
+            dist/SHA256SUMS.python.txt
+          if-no-files-found: error
+
+  # ─── 4. Windows .msi + .exe ───────────────────────────────────────
+  windows-build:
+    runs-on: windows-latest
+    needs: [version-check, test]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with: { targets: x86_64-pc-windows-msvc }
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            desktop/src-tauri/target
+          key: cargo-${{ runner.os }}-${{ hashFiles('desktop/src-tauri/Cargo.toml') }}
+      - run: cargo install tauri-cli --version "^2.0" --locked
+      - name: Build .msi + .exe
+        working-directory: desktop
+        run: cargo tauri build
+      - name: Optional code-signing
+        # Run only when WINDOWS_CERT_PFX secret is present. Skipping
+        # produces unsigned artifacts — Windows SmartScreen will warn,
+        # but the bundle still installs.
+        if: ${{ env.WINDOWS_CERT_PFX != '' }}
+        env:
+          WINDOWS_CERT_PFX:      ${{ secrets.WINDOWS_CERT_PFX }}
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        shell: pwsh
+        run: |
+          $cert = [Convert]::FromBase64String($env:WINDOWS_CERT_PFX)
+          $pfx = "$env:RUNNER_TEMP\codesign.pfx"
+          [IO.File]::WriteAllBytes($pfx, $cert)
+          $signtool = (Resolve-Path "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" |
+                       Sort-Object -Descending | Select-Object -First 1).Path
+          Get-ChildItem desktop\src-tauri\target\release\bundle\msi\*.msi |
+            ForEach-Object { & $signtool sign /f $pfx /p "$env:WINDOWS_CERT_PASSWORD" /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 $_.FullName }
+          Get-ChildItem desktop\src-tauri\target\release\bundle\nsis\*.exe |
+            ForEach-Object { & $signtool sign /f $pfx /p "$env:WINDOWS_CERT_PASSWORD" /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 $_.FullName }
+          Remove-Item $pfx -Force
+      - name: SHA256SUMS for windows artifacts
+        shell: bash
+        run: |
+          mkdir -p windows-dist
+          cp desktop/src-tauri/target/release/bundle/msi/*.msi windows-dist/
+          cp desktop/src-tauri/target/release/bundle/nsis/*.exe windows-dist/
+          cd windows-dist
+          sha256sum *.msi *.exe | tee SHA256SUMS.windows.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-dist
+          path: windows-dist/
+          if-no-files-found: error
+
+  # ─── 5. Publish to PyPI (trusted publishing — no API token) ───────
+  pypi-publish:
+    runs-on: ubuntu-latest
+    needs: [python-build]
+    environment:
+      name: pypi
+      url: https://pypi.org/p/sampyclaw
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: python-dist
+          path: dist/
+      - name: Drop the SHA256SUMS file before upload
+        run: rm -f dist/SHA256SUMS.python.txt
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # Trusted publishing: configure the project on PyPI to trust
+          # this repo + workflow + environment. No API token needed.
+          # Docs: https://docs.pypi.org/trusted-publishers/
+          packages-dir: dist/
+          skip-existing: true
+
+  # ─── 6. GitHub Release ────────────────────────────────────────────
+  github-release:
+    runs-on: ubuntu-latest
+    needs: [version-check, python-build, windows-build]
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }     # need history for the changelog
+      - uses: actions/download-artifact@v4
+        with:
+          name: python-dist
+          path: release-assets/
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-dist
+          path: release-assets/
+      - name: Combine SHA256SUMS
+        working-directory: release-assets
+        run: cat SHA256SUMS.python.txt SHA256SUMS.windows.txt > SHA256SUMS.txt
+      - name: Generate release notes
+        id: notes
+        run: |
+          PREV=$(git tag --sort=-creatordate | grep -E "^v[0-9]" | sed -n '2p')
+          if [ -n "$PREV" ]; then
+            echo "## Changes since ${PREV}" > NOTES.md
+            git log --pretty=format:"- %s (%h)" "${PREV}..${GITHUB_REF_NAME}" >> NOTES.md
+          else
+            echo "## Initial release" > NOTES.md
+            git log --pretty=format:"- %s (%h)" >> NOTES.md
+          fi
+          echo "" >> NOTES.md
+          echo "" >> NOTES.md
+          echo "### Install" >> NOTES.md
+          echo '```' >> NOTES.md
+          echo "pip install sampyclaw==${GITHUB_REF_NAME#v}" >> NOTES.md
+          echo '```' >> NOTES.md
+          echo "" >> NOTES.md
+          echo "Windows desktop app: download the \`.msi\` below or use the NSIS \`.exe\`." >> NOTES.md
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          body_path: NOTES.md
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          files: |
+            release-assets/*.whl
+            release-assets/*.tar.gz
+            release-assets/*.msi
+            release-assets/*.exe
+            release-assets/SHA256SUMS.txt

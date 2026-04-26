@@ -518,6 +518,7 @@ def _build_router(
             ),
             sender_id="cli",
             text=p.text,
+            media=list(p.media),
             received_at=0.0,
         )
         outcome = await dispatcher.dispatch_with_outcome(envelope)

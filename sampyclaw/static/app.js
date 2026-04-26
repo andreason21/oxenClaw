@@ -446,7 +446,78 @@ const ChatView = {
     const textarea = el("textarea", { placeholder: "type a message…\nCtrl+Enter to send" });
     const sendBtn = el("button", { class: "btn btn-primary" }, "Send");
     const clearBtn = el("button", { class: "btn btn-danger btn-sm", onclick: () => clearHistory() }, "Clear");
-    compose.append(textarea, sendBtn);
+
+    // Image attach: hidden file input + 📎 button + thumbnail strip.
+    // Files are read as data URIs (`data:image/...;base64,...`) and shipped
+    // verbatim as MediaItem.source — `multimodal/inbound.py` accepts that
+    // shape with a 10 MiB cap. Keeping it client-side with no upload step
+    // means the gateway doesn't need an /upload route and we don't add a
+    // new attack surface.
+    const MAX_FILE_BYTES = 10 * 1024 * 1024;   // matches server-side cap
+    let pendingMedia = [];                     // [{kind, source, mime_type, filename}]
+    const attachInput = el("input", {
+      type: "file",
+      accept: "image/jpeg,image/png,image/gif,image/webp",
+      multiple: true,
+      style: "display:none",
+    });
+    const attachBtn = el("button", {
+      type: "button",
+      class: "btn btn-ghost",
+      title: "Attach image(s)",
+      onclick: () => attachInput.click(),
+    }, "📎");
+    const thumbs = el("div", { class: "chat-thumbs" });
+    function renderThumbs() {
+      thumbs.innerHTML = "";
+      if (!pendingMedia.length) { thumbs.style.display = "none"; return; }
+      thumbs.style.display = "flex";
+      pendingMedia.forEach((m, idx) => {
+        const t = el("div", { class: "chat-thumb" });
+        t.append(
+          el("img", { src: m.source, alt: m.filename || "" }),
+          el("button", {
+            type: "button",
+            class: "chat-thumb__remove",
+            title: "Remove",
+            onclick: () => { pendingMedia.splice(idx, 1); renderThumbs(); },
+          }, "×"),
+        );
+        thumbs.append(t);
+      });
+    }
+    attachInput.addEventListener("change", async () => {
+      const files = Array.from(attachInput.files || []);
+      attachInput.value = "";
+      for (const f of files) {
+        if (f.size > MAX_FILE_BYTES) {
+          Toast.error("file too large", `${f.name}: ${(f.size/1024/1024).toFixed(1)} MiB > 10 MiB`);
+          continue;
+        }
+        if (!/^image\//.test(f.type)) {
+          Toast.error("not an image", `${f.name}: ${f.type || "unknown"}`);
+          continue;
+        }
+        const dataUri = await new Promise((res, rej) => {
+          const fr = new FileReader();
+          fr.onload = () => res(fr.result);
+          fr.onerror = () => rej(fr.error);
+          fr.readAsDataURL(f);
+        }).catch((e) => { Toast.error("read failed", String(e)); return null; });
+        if (!dataUri) continue;
+        pendingMedia.push({
+          kind: "photo",
+          source: dataUri,
+          mime_type: f.type || null,
+          filename: f.name || null,
+        });
+      }
+      renderThumbs();
+    });
+
+    compose.append(attachInput, attachBtn, textarea, sendBtn);
+    right.insertBefore(thumbs, compose);
+    renderThumbs();
     actions.append(clearBtn);
 
     function labelled(name, input) {
@@ -460,9 +531,14 @@ const ChatView = {
 
     async function send() {
       const text = textarea.value.trim();
-      if (!text || !ChatState.chatId) return;
+      const media = pendingMedia.slice();
+      // A turn is valid if there's text OR at least one attachment.
+      if ((!text && !media.length) || !ChatState.chatId) return;
       sendBtn.disabled = true;
       textarea.value = "";
+      // Clear thumbs immediately so the user sees the send happen.
+      pendingMedia = [];
+      renderThumbs();
       try {
         const result = await safeRpc("chat.send", {
           channel: ChatState.channel,
@@ -470,15 +546,18 @@ const ChatView = {
           chat_id: ChatState.chatId,
           thread_id: ChatState.threadId || null,
           text,
+          media,
         });
         if (result && result.status === "dropped") {
-          // Real drop: no agent ran. Restore text so user can retry.
+          // Real drop: no agent ran. Restore text + attachments so user can retry.
           Toast.error(
             "message dropped",
             result.reason || "no agent matched the channel",
             6000,
           );
           textarea.value = text;
+          pendingMedia = media;
+          renderThumbs();
         } else if (result && result.message_id === "local" && result.reason) {
           // Agent replied to history (chat.history poll renders it) but
           // wire delivery failed — informational only.
@@ -564,6 +643,23 @@ const ChatView = {
         if (m.role === "system") continue; // hide system prompt from chat UI
         const wrap = el("div", { class: `chat-msg ${m.role || "system"}` });
         wrap.append(el("div", { class: "role" }, m.role || "?"));
+        // Render image blocks inline. Three shapes seen in history:
+        //  - OpenAI shim:    {type:"image_url", image_url:{url:"data:..."}}
+        //  - Anthropic:      {type:"image",     source:{type:"base64", media_type, data}}
+        //  - pi ImageContent: {type:"image",    image:{url:"data:..."}}
+        const imgs = imagesIn(m.content);
+        if (imgs.length) {
+          const row = el("div", { class: "chat-msg__images" });
+          for (const url of imgs) {
+            row.append(el("img", {
+              class: "chat-msg__img",
+              src: url,
+              alt: "image",
+              onclick: () => window.open(url, "_blank", "noopener"),
+            }));
+          }
+          wrap.append(row);
+        }
         const body = el("div", { class: "body" });
         const text = textOf(m.content);
         if (m.role === "assistant" || m.role === "user") {
@@ -571,7 +667,7 @@ const ChatView = {
         } else {
           body.textContent = text;
         }
-        wrap.append(body);
+        if (text) wrap.append(body);
         // Tool calls inline summary.
         if (Array.isArray(m.content)) {
           for (const b of m.content) {
@@ -583,6 +679,23 @@ const ChatView = {
         stream.append(wrap);
       }
       stream.scrollTop = stream.scrollHeight;
+    }
+
+    function imagesIn(content) {
+      if (!Array.isArray(content)) return [];
+      const out = [];
+      for (const b of content) {
+        if (!b || typeof b !== "object") continue;
+        if (b.type === "image_url" && b.image_url && b.image_url.url) {
+          out.push(b.image_url.url);
+        } else if (b.type === "image" && b.source && b.source.type === "base64" &&
+                   b.source.data && b.source.media_type) {
+          out.push(`data:${b.source.media_type};base64,${b.source.data}`);
+        } else if (b.type === "image" && b.image && b.image.url) {
+          out.push(b.image.url);
+        }
+      }
+      return out;
     }
 
     function textOf(content) {

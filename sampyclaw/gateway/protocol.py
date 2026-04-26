@@ -11,6 +11,8 @@ from typing import Annotated, Any, Literal, Union
 
 from pydantic import BaseModel, ConfigDict, Field, RootModel
 
+from sampyclaw.plugin_sdk.channel_contract import MediaItem
+
 PROTOCOL_VERSION = 1
 
 
@@ -101,6 +103,11 @@ class ChatSendParams(BaseModel):
     text: str
     thread_id: str | None = None
     reply_to_message_id: str | None = None
+    # Optional media attachments. Each item's `source` may be a
+    # `data:image/...;base64,...` URI or a public `http(s)://` URL —
+    # `multimodal/inbound.py:normalize_media_item()` validates and
+    # decodes both shapes (10 MiB cap, MIME sniff).
+    media: list[MediaItem] = Field(default_factory=list)
 
 
 class ChatSendResult(BaseModel):

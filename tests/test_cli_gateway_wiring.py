@@ -134,6 +134,58 @@ async def test_chat_send_runs_dispatcher_through_channel_router(
     assert mocked_bot_factory[0].send_message.call_args.kwargs["text"] == "echo: hello"
 
 
+async def test_chat_send_passes_media_into_inbound_envelope(
+    tmp_path, mocked_bot_factory, monkeypatch
+) -> None:  # type: ignore[no-untyped-def]
+    """Dashboard image-upload path: `chat.send` accepts a `media` array
+    and the items reach the dispatcher's InboundEnvelope unchanged."""
+    router, _, _, _, _ = _setup_gateway(tmp_path, mocked_bot_factory)
+
+    # Capture the envelope the dispatcher receives. Patch on the
+    # Dispatcher class so we don't need to dig out the live instance.
+    captured = {}
+    from sampyclaw.agents.dispatch import Dispatcher
+
+    real = Dispatcher.dispatch_with_outcome
+
+    async def _spy(self, envelope):  # type: ignore[no-untyped-def]
+        captured["envelope"] = envelope
+        return await real(self, envelope)
+
+    monkeypatch.setattr(Dispatcher, "dispatch_with_outcome", _spy)
+
+    tiny_jpeg = "data:image/jpeg;base64,/9j/4AAQSkZJRg=="  # not a real JPEG, just shape
+    resp = await router.dispatch(
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "chat.send",
+            "params": {
+                "channel": "telegram",
+                "account_id": "main",
+                "chat_id": "42",
+                "text": "describe",
+                "media": [
+                    {
+                        "kind": "photo",
+                        "source": tiny_jpeg,
+                        "mime_type": "image/jpeg",
+                        "filename": "snap.jpg",
+                    }
+                ],
+            },
+        }
+    )
+    assert resp.error is None
+    env = captured.get("envelope")
+    assert env is not None
+    assert len(env.media) == 1
+    assert env.media[0].kind == "photo"
+    assert env.media[0].source == tiny_jpeg
+    assert env.media[0].mime_type == "image/jpeg"
+    assert env.media[0].filename == "snap.jpg"
+
+
 async def test_chat_send_unrouted_returns_local_ok_with_warning(
     tmp_path, mocked_bot_factory
 ) -> None:  # type: ignore[no-untyped-def]

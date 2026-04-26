@@ -9,8 +9,9 @@ use serde::{Deserialize, Serialize};
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Manager, RunEvent, WindowEvent,
+    AppHandle, Emitter, Manager, RunEvent, WindowEvent,
 };
+use tauri_plugin_updater::UpdaterExt;
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 struct ConnectionInfo {
@@ -73,6 +74,102 @@ fn focus_main_window(app: AppHandle) {
     notify::focus_main(&app);
 }
 
+/// IPC: ask the renderer-side UI to trigger an update check now.
+/// Spawns the async checker and emits `updater_status` events with
+/// `{ status: "no-update" | "available" | "downloading" | "installed" | "error", ... }`
+/// so the SPA can render progress without polling.
+#[tauri::command]
+async fn check_for_updates(app: AppHandle) -> Result<(), String> {
+    spawn_update_check(app, true);
+    Ok(())
+}
+
+#[derive(Debug, Serialize, Clone)]
+struct UpdaterStatus {
+    status: &'static str,
+    version: Option<String>,
+    notes: Option<String>,
+    error: Option<String>,
+    progress: Option<u64>,
+    total: Option<u64>,
+}
+
+fn spawn_update_check(app: AppHandle, user_initiated: bool) {
+    tauri::async_runtime::spawn(async move {
+        let updater = match app.updater() {
+            Ok(u) => u,
+            Err(e) => {
+                let _ = app.emit("updater_status", UpdaterStatus {
+                    status: "error", version: None, notes: None,
+                    error: Some(format!("updater unavailable: {e}")),
+                    progress: None, total: None,
+                });
+                return;
+            }
+        };
+        match updater.check().await {
+            Ok(Some(update)) => {
+                let v = update.version.clone();
+                let notes = update.body.clone();
+                let _ = app.emit("updater_status", UpdaterStatus {
+                    status: "available",
+                    version: Some(v.clone()),
+                    notes: notes.clone(),
+                    error: None, progress: None, total: None,
+                });
+                // Auto-download for both startup and user-initiated checks;
+                // the SPA gets a final `installed` event and prompts for restart.
+                let mut downloaded: u64 = 0;
+                let app2 = app.clone();
+                let result = update.download_and_install(
+                    move |chunk_len, content_length| {
+                        downloaded += chunk_len as u64;
+                        let _ = app2.emit("updater_status", UpdaterStatus {
+                            status: "downloading",
+                            version: Some(v.clone()),
+                            notes: None, error: None,
+                            progress: Some(downloaded),
+                            total: content_length,
+                        });
+                    },
+                    || {},
+                ).await;
+                match result {
+                    Ok(()) => {
+                        let _ = app.emit("updater_status", UpdaterStatus {
+                            status: "installed",
+                            version: update.version.into(),
+                            notes, error: None, progress: None, total: None,
+                        });
+                    }
+                    Err(e) => {
+                        let _ = app.emit("updater_status", UpdaterStatus {
+                            status: "error", version: None, notes: None,
+                            error: Some(format!("install failed: {e}")),
+                            progress: None, total: None,
+                        });
+                    }
+                }
+            }
+            Ok(None) => {
+                if user_initiated {
+                    let _ = app.emit("updater_status", UpdaterStatus {
+                        status: "no-update", version: None, notes: None,
+                        error: None, progress: None, total: None,
+                    });
+                }
+            }
+            Err(e) => {
+                let _ = app.emit("updater_status", UpdaterStatus {
+                    status: "error", version: None, notes: None,
+                    error: Some(format!("check failed: {e}")),
+                    progress: None, total: None,
+                });
+            }
+        }
+    });
+}
+
 // ─── Tray ────────────────────────────────────────────────────────────
 
 fn build_tray(app: &AppHandle) -> tauri::Result<()> {
@@ -116,6 +213,8 @@ fn main() {
         ))
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_os::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .invoke_handler(tauri::generate_handler![
             save_token,
             forget_token,
@@ -124,9 +223,13 @@ fn main() {
             show_notification,
             launch_wsl_gateway,
             focus_main_window,
+            check_for_updates,
         ])
         .setup(|app| {
             build_tray(app.handle())?;
+            // Background update check on launch — silent unless an
+            // update is actually found.
+            spawn_update_check(app.handle().clone(), false);
             Ok(())
         })
         .on_window_event(|window, event| {

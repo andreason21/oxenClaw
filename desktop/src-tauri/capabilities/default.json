@@ -18,6 +18,13 @@
     "autostart:allow-disable",
     "autostart:allow-is-enabled",
     "shell:allow-open",
-    "os:allow-platform"
+    "os:allow-platform",
+    "updater:default",
+    "updater:allow-check",
+    "updater:allow-download",
+    "updater:allow-install",
+    "updater:allow-download-and-install",
+    "process:default",
+    "process:allow-restart"
   ]
 }

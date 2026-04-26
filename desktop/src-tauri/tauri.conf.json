@@ -73,6 +73,16 @@
     "shell": {
       "open": true
     },
-    "os": {}
+    "os": {},
+    "updater": {
+      "endpoints": [
+        "https://github.com/andreason21/sampyClaw/releases/latest/download/latest.json"
+      ],
+      "pubkey": "PLACEHOLDER_REPLACE_WITH_TAURI_SIGNING_PUBLIC_KEY",
+      "windows": {
+        "installerArgs": [],
+        "installMode": "passive"
+      }
+    }
   }
 }

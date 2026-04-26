@@ -11,10 +11,16 @@ and a Windows `.msi` attached to a GitHub Release.
 | `sampyclaw-X.Y.Z.tar.gz` (sdist) | PyPI + GitHub Release | same |
 | `sampyclaw_X.Y.Z_x64_en-US.msi` | GitHub Release | `cargo tauri build` on `windows-latest`, optional signtool |
 | `sampyclaw_X.Y.Z_x64-setup.exe` (NSIS) | GitHub Release | same |
+| `*.msi.sig` / `*.exe.sig` | GitHub Release | Tauri updater signature, when `TAURI_SIGNING_PRIVATE_KEY` is set |
+| `latest.json` (auto-updater manifest) | GitHub Release | derived in CI; pointed at by `tauri.conf.json:plugins.updater.endpoints` |
+| winget manifest | microsoft/winget-pkgs PR | `vedantmgoyal9/winget-releaser` (when `WINGET_TOKEN` secret set) |
 | `SHA256SUMS.txt` | GitHub Release | `sha256sum` over every artifact |
 
 The whole pipeline runs from `.github/workflows/release.yml` and
-triggers on `v*` tag push (or manual `workflow_dispatch`).
+triggers on `v*` tag push (or manual `workflow_dispatch`). End users
+who already installed the desktop app **don't need to download
+anything** — the in-app updater polls `latest.json` and applies the
+new version on next launch.
 
 ## One-time setup
 
@@ -35,6 +41,51 @@ The release workflow's `pypi-publish` job is gated on the `pypi`
 environment, which both makes the OIDC mapping work and lets you add
 a manual approval step on the environment if you want a human
 checkpoint before every PyPI upload.
+
+### Tauri updater signing (recommended for desktop releases)
+
+The auto-updater verifies every downloaded bundle against an Ed25519
+signature before applying it. Generate the keypair once locally:
+
+```bash
+cd desktop
+cargo tauri signer generate -w ./tauri.key
+# prints PUBLIC KEY (~ 60 chars) — paste into tauri.conf.json:
+#   "plugins.updater.pubkey": "<PUBLIC>"
+# saves PRIVATE KEY to ./tauri.key (NEVER commit)
+```
+
+Add the *contents of `tauri.key`* (not the path) as a GitHub secret:
+
+- `TAURI_SIGNING_PRIVATE_KEY` — paste the file contents
+- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` — the passphrase you set during generate
+
+The release workflow's `windows-build` step picks them up
+automatically. Skipping these secrets keeps the build green but the
+auto-updater rejects the unsigned bundle (so users get no auto
+updates — they'd need to download the new MSI manually).
+
+### winget-pkgs submission (optional)
+
+For users to run `winget install sampyClaw.sampyClaw`, the workflow
+opens a PR against [`microsoft/winget-pkgs`](https://github.com/microsoft/winget-pkgs)
+on every stable release. Microsoft moderators auto-merge most PRs in
+under an hour.
+
+Setup:
+
+1. Create a GitHub PAT (classic) with `public_repo` scope.
+2. Add it as repo secret `WINGET_TOKEN`.
+3. Fork `microsoft/winget-pkgs` to your account (one-time, the action
+   pushes its branch there before opening the PR).
+
+Without `WINGET_TOKEN` set, the `winget-submit` job is skipped — no
+failure. Pre-release tags (`v0.2.0-rc.1`) are also skipped because
+winget-pkgs rejects pre-releases.
+
+First-release note: the very first submission needs a manual review +
+approval by the Microsoft moderators (it adds your `Publisher` to
+their index). Subsequent versions are usually auto-merged.
 
 ### Windows code-signing (optional)
 

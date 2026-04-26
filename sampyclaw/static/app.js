@@ -1845,6 +1845,39 @@ const Notify = (() => {
   return { show, isTauri };
 })();
 
+// ─────────────────────────────────────────────────────────────────────────
+// Tauri auto-updater status — only meaningful inside the desktop app.
+// The Rust side emits `updater_status` events with shape
+// { status, version?, notes?, error?, progress?, total? } as it
+// progresses through check → download → install. We surface them as
+// toasts so the user knows when a restart is needed.
+// ─────────────────────────────────────────────────────────────────────────
+function bindUpdaterStatus() {
+  if (!(globalThis.__TAURI__ && globalThis.__TAURI__.event)) return;
+  const { listen } = globalThis.__TAURI__.event;
+  listen("updater_status", (evt) => {
+    const p = (evt && evt.payload) || {};
+    switch (p.status) {
+      case "available":
+        Toast.info("Update available",
+          `sampyClaw ${p.version} — downloading in the background.`);
+        break;
+      case "installed":
+        Toast.success("Update installed",
+          `Restart sampyClaw to use ${p.version || "the new version"}.`,
+          12000);
+        break;
+      case "no-update":
+        Toast.info("Up to date", "You're on the latest version.");
+        break;
+      case "error":
+        Toast.error("Updater error", p.error || "(no detail)");
+        break;
+      // "downloading" status fires per chunk; suppress to avoid spam.
+    }
+  });
+}
+
 function bindEventNotifications() {
   // Don't notify when the user is actively looking at the dashboard.
   function visible() { return document.visibilityState === "visible" && document.hasFocus(); }
@@ -1916,6 +1949,7 @@ function boot() {
   bindLoginGate();
   bindCanvasPanel();
   bindEventNotifications();
+  bindUpdaterStatus();
 
   Rpc.connect($("ws-url").value);
   // Token has been captured into the WS URL + (server-set) cookie; clean

@@ -13,7 +13,7 @@ from sampyclaw.agents.anthropic_agent import AnthropicAgent
 from sampyclaw.agents.base import Agent
 from sampyclaw.agents.builtin_tools import default_tools
 from sampyclaw.agents.echo import EchoAgent
-from sampyclaw.agents.local_agent import LocalAgent
+from sampyclaw.agents.local_agent import VLLM_DEFAULT_BASE_URL, LocalAgent
 from sampyclaw.agents.pi_agent import PiAgent
 from sampyclaw.agents.tools import Tool, ToolRegistry
 
@@ -67,7 +67,9 @@ class UnknownProvider(ValueError):
 
 # `pi` is the new pi-embedded-runner-backed agent — full streaming, tool
 # loop, compaction, cache observability, multi-provider.
-SUPPORTED_PROVIDERS: tuple[str, ...] = ("pi", "local", "echo", "anthropic")
+# `vllm` is a thin alias of `local` with strict-OpenAI payload (no Ollama
+# extras) and warmup off; defaults to vLLM's canonical 127.0.0.1:8000/v1.
+SUPPORTED_PROVIDERS: tuple[str, ...] = ("pi", "local", "vllm", "echo", "anthropic")
 
 
 def build_agent(
@@ -106,7 +108,7 @@ def build_agent(
         if memory is not None:
             kwargs["memory"] = memory
         return PiAgent(**kwargs)
-    if provider in ("anthropic", "local"):
+    if provider in ("anthropic", "local", "vllm"):
         resolved_tools = tools
         if resolved_tools is None:
             resolved_tools = ToolRegistry()
@@ -128,8 +130,11 @@ def build_agent(
             kwargs["memory"] = memory
         if provider == "anthropic":
             return AnthropicAgent(**kwargs)
-        # provider == "local"
-        if base_url is not None:
+        # provider in ("local", "vllm")
+        if provider == "vllm":
+            kwargs["flavor"] = "vllm"
+            kwargs["base_url"] = base_url if base_url is not None else VLLM_DEFAULT_BASE_URL
+        elif base_url is not None:
             kwargs["base_url"] = base_url
         if api_key is not None:
             kwargs["api_key"] = api_key

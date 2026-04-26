@@ -72,7 +72,12 @@ def start(
     provider: str = typer.Option(
         "local",
         "--provider",
-        help="Agent provider: 'local' (Ollama / OpenAI-compatible server, default), 'echo', or 'anthropic'.",
+        help=(
+            "Agent provider: 'local' (Ollama / OpenAI-compatible, default), "
+            "'vllm' (internal vLLM server, strict-OpenAI payload, base_url "
+            "defaults to http://127.0.0.1:8000/v1), 'pi' (multi-provider via "
+            "pi catalog), 'echo', or 'anthropic'."
+        ),
     ),
     model: str | None = typer.Option(
         None, "--model", help="Model id (provider-specific)."
@@ -81,12 +86,18 @@ def start(
         None,
         "--base-url",
         help=(
-            "Override base URL (local provider only). "
-            "Default: http://127.0.0.1:11434/v1 (Ollama)."
+            "Override base URL (local/vllm providers only). "
+            "Defaults: http://127.0.0.1:11434/v1 (local/Ollama), "
+            "http://127.0.0.1:8000/v1 (vllm)."
         ),
     ),
     api_key: str | None = typer.Option(
-        None, "--api-key", help="API key (local provider; most local servers don't need one)."
+        None,
+        "--api-key",
+        help=(
+            "API key for local/vllm provider. Most Ollama setups don't "
+            "need one; vLLM uses it when started with `--api-key`."
+        ),
     ),
     system_prompt: str | None = typer.Option(
         None, "--system-prompt", help="Override the agent's system prompt."

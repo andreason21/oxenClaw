@@ -76,4 +76,31 @@ def test_unknown_provider_raises() -> None:
 
 
 def test_supported_providers_contains_known() -> None:
-    assert set(SUPPORTED_PROVIDERS) >= {"echo", "anthropic", "local"}
+    assert set(SUPPORTED_PROVIDERS) >= {"echo", "anthropic", "local", "vllm"}
+
+
+def test_build_vllm_uses_strict_openai_flavor_and_default_port() -> None:
+    """`--provider vllm` lands on LocalAgent in vllm flavor, defaulting to
+    vLLM's canonical 8000 port instead of Ollama's 11434."""
+    agent = build_agent(agent_id="a", provider="vllm", model="meta-llama/Llama-3.1-8B-Instruct")
+    assert isinstance(agent, LocalAgent)
+    assert agent._flavor == "vllm"
+    assert agent._base_url == "http://127.0.0.1:8000/v1"
+    assert agent._model == "meta-llama/Llama-3.1-8B-Instruct"
+    # vLLM has weights resident — no warmup ping needed.
+    assert agent._warmup_pending is False
+
+
+def test_build_vllm_custom_endpoint_and_api_key() -> None:
+    """Internal vLLM box: custom URL + bearer token override the defaults."""
+    agent = build_agent(
+        agent_id="a",
+        provider="vllm",
+        model="qwen2.5:32b",
+        base_url="http://internal-vllm.lan:8000/v1",
+        api_key="sk-internal",
+    )
+    assert isinstance(agent, LocalAgent)
+    assert agent._flavor == "vllm"
+    assert agent._base_url == "http://internal-vllm.lan:8000/v1"
+    assert agent._api_key == "sk-internal"

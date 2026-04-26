@@ -509,6 +509,51 @@ async def test_bad_json_args_self_correct(tmp_path) -> None:  # type: ignore[no-
     assert "not valid JSON" in tool_msgs[0]["content"]
 
 
+async def test_payload_omits_num_predict_for_vllm_flavor(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """vLLM enforces strict OpenAI schema; never send the Ollama `num_predict` extra."""
+
+    class _FakeResponse:
+        status = 200
+
+        def __init__(self, data):  # type: ignore[no-untyped-def]
+            self._data = data
+
+        async def __aenter__(self):  # type: ignore[no-untyped-def]
+            return self
+
+        async def __aexit__(self, *a):  # type: ignore[no-untyped-def]
+            return False
+
+        def raise_for_status(self):  # type: ignore[no-untyped-def]
+            return None
+
+        async def json(self):  # type: ignore[no-untyped-def]
+            return self._data
+
+    captured: dict = {}
+
+    class _FakeSession:
+        async def close(self) -> None:
+            return None
+
+        def post(self, url, **kwargs):  # type: ignore[no-untyped-def]
+            captured["payload"] = kwargs.get("json")
+            return _FakeResponse(_response_text("ok"))
+
+    agent = LocalAgent(
+        paths=_paths(tmp_path),
+        http_session=_FakeSession(),  # type: ignore[arg-type]
+        max_tokens=512,
+        flavor="vllm",
+        stream=False,
+    )
+    # Default warmup must be off when flavor=vllm (vLLM has weights loaded).
+    assert agent._warmup_pending is False
+    await _collect(agent, _inbound("hi"))
+    assert captured["payload"]["max_tokens"] == 512
+    assert "num_predict" not in captured["payload"]
+
+
 async def test_payload_includes_num_predict_alias(tmp_path) -> None:  # type: ignore[no-untyped-def]
     """Ollama's OpenAI shim respects num_predict; ensure we send it alongside max_tokens."""
 

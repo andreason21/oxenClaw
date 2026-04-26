@@ -72,6 +72,34 @@ Override the model with `--model <id>`. Tested models:
 You can run sampyClaw with no LLM (RPC + tools only) by using
 `--provider echo` for testing.
 
+#### Internal vLLM server
+
+If your team runs an internal vLLM (`vllm serve …`) box, point the
+gateway at it directly — no Ollama required:
+
+```bash
+sampyclaw gateway start \
+    --provider vllm \
+    --base-url http://internal-vllm.lan:8000/v1 \
+    --model meta-llama/Llama-3.1-8B-Instruct \
+    --api-key "$VLLM_API_KEY"   # only if vLLM was started with --api-key
+```
+
+`--provider vllm` is a strict-OpenAI-shape variant of `local` (no Ollama
+extras like `num_predict`, no warmup ping). `--base-url` defaults to
+`http://127.0.0.1:8000/v1`. `--api-key` is optional — pass it when vLLM
+was started with its own `--api-key`. The same shape works in
+`config.yaml`:
+
+```yaml
+agents:
+  default:
+    provider: vllm
+    model: meta-llama/Llama-3.1-8B-Instruct
+    base_url: http://internal-vllm.lan:8000/v1
+    api_key: ${VLLM_API_KEY}
+```
+
 ---
 
 ## Quick start
@@ -84,7 +112,7 @@ Create `~/.sampyclaw/config.yaml`:
 channels: {}     # populate per channel below
 agents:
   default:
-    provider: local              # local | anthropic | pi | echo
+    provider: local              # local | vllm | anthropic | pi | echo
     model: gemma4:latest
     system_prompt: |
       You are a helpful assistant.
@@ -373,6 +401,33 @@ ollama pull gemma4:latest
 | `mistral-nemo:12b` | 128K | 느리지만 verbose. |
 
 LLM 없이 RPC + 도구만 테스트하려면 `--provider echo` 사용.
+
+#### 내부 vLLM 서버 사용
+
+팀 내부에 `vllm serve …`로 띄운 vLLM 박스가 있다면 Ollama 없이 바로 그쪽으로
+붙일 수 있다:
+
+```bash
+sampyclaw gateway start \
+    --provider vllm \
+    --base-url http://internal-vllm.lan:8000/v1 \
+    --model meta-llama/Llama-3.1-8B-Instruct \
+    --api-key "$VLLM_API_KEY"   # vLLM을 --api-key로 띄운 경우만
+```
+
+`--provider vllm`은 `local`의 strict-OpenAI 변종 — Ollama 전용 필드
+(`num_predict`)나 워머핑 핑을 보내지 않는다. `--base-url` 기본값은
+`http://127.0.0.1:8000/v1`. `--api-key`는 선택 — vLLM을 `--api-key`로
+시작한 경우에만 필요. `config.yaml`도 같은 형태로 동작한다:
+
+```yaml
+agents:
+  default:
+    provider: vllm
+    model: meta-llama/Llama-3.1-8B-Instruct
+    base_url: http://internal-vllm.lan:8000/v1
+    api_key: ${VLLM_API_KEY}
+```
 
 ### 빠른 시작
 

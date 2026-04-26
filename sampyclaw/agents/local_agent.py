@@ -27,7 +27,7 @@ import asyncio
 import json
 import random
 from collections.abc import AsyncIterator
-from typing import Any
+from typing import Any, Literal
 
 import aiohttp
 
@@ -48,6 +48,19 @@ DEFAULT_BASE_URL = "http://127.0.0.1:11434/v1"  # Ollama default
 # tool support; gemma4:latest restores native function calling. Override
 # per deployment if you prefer qwen2.5, llama3.x, etc.
 DEFAULT_MODEL = "gemma4:latest"
+# vLLM canonical default (`vllm serve --port 8000` lands here). Override
+# with `--base-url http://internal-vllm:8000/v1` for a remote server.
+VLLM_DEFAULT_BASE_URL = "http://127.0.0.1:8000/v1"
+
+# Provider "flavor" tells the agent which OpenAI-shape quirks to honour.
+# - "ollama"  → send `num_predict` alongside `max_tokens`; one-shot warmup
+#   ping default-on (model load latency).
+# - "vllm"    → strict-OpenAI; skip `num_predict` (vLLM ignores most
+#   extras but some deployments enable strict schemas); skip warmup
+#   (vLLM has the weights resident).
+# - "openai"  → strict-OpenAI; same as vllm but kept distinct so future
+#   provider-specific knobs (eg. cache headers) don't bleed.
+FlavorLiteral = Literal["ollama", "vllm", "openai"]
 DEFAULT_SYSTEM_PROMPT = (
     "You are sampyClaw, a helpful assistant reached via chat channels. "
     "Be concise. Use tools when helpful."
@@ -116,8 +129,9 @@ class LocalAgent:
         max_retries: int = DEFAULT_MAX_RETRIES,
         backoff_initial: float = DEFAULT_BACKOFF_INITIAL,
         backoff_max: float = DEFAULT_BACKOFF_MAX,
-        warmup: bool = True,
+        warmup: bool | None = None,
         stream: bool = True,
+        flavor: FlavorLiteral = "ollama",
     ) -> None:
         if max_tool_iterations < 1:
             raise ValueError("max_tool_iterations must be >= 1")
@@ -150,6 +164,11 @@ class LocalAgent:
         self._max_retries = max_retries
         self._backoff_initial = backoff_initial
         self._backoff_max = backoff_max
+        self._flavor: FlavorLiteral = flavor
+        # Warmup default depends on flavor: Ollama needs it (cold load),
+        # vLLM/openai already have weights resident.
+        if warmup is None:
+            warmup = flavor == "ollama"
         self._warmup_pending = warmup
         self._warmup_lock = asyncio.Lock()
         self._stream = stream
@@ -540,13 +559,14 @@ class LocalAgent:
             "model": self._model,
             "messages": messages,
             "max_tokens": self._max_tokens,
-            # Ollama's OpenAI shim accepts this alias and uses it as the
-            # generation cap; harmless on real OpenAI / vLLM (extra field
-            # ignored unless `strict` mode is on).
-            "num_predict": self._max_tokens,
             "temperature": self._temperature,
             "stream": stream,
         }
+        if self._flavor == "ollama":
+            # Ollama's OpenAI shim accepts this alias and uses it as the
+            # generation cap. vLLM / OpenAI strict schemas reject it, so
+            # we only send it on Ollama.
+            payload["num_predict"] = self._max_tokens
         if stream:
             # Ask for usage in the final SSE chunk where supported.
             payload["stream_options"] = {"include_usage": True}

@@ -112,6 +112,7 @@ Create `~/.sampyclaw/config.yaml`:
 channels: {}     # populate per channel below
 agents:
   default:
+    id: default
     provider: local              # local | vllm | anthropic | pi | echo
     model: gemma4:latest
     system_prompt: |
@@ -439,6 +440,7 @@ agents:
 channels: {}
 agents:
   default:
+    id: default
     provider: local
     model: gemma4:latest
     system_prompt: |

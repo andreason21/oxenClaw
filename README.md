@@ -20,7 +20,7 @@ and run it as a long-lived service with production-grade observability.
 
 | | |
 |---|---|
-| 🦙 **Bring your own model** | Default is local Ollama (`gemma4:latest` — tool-capable, lightweight, **multimodal**). Anthropic, OpenAI-compatible, Bedrock, Google, Groq, DeepSeek, Mistral, Together, Fireworks, … 22 providers via `pi`. |
+| 🦙 **Bring your own model** | Local Ollama by default (any tool-capable model). Anthropic, OpenAI-compatible, Bedrock, Google, Groq, DeepSeek, Mistral, Together, Fireworks, … 22 providers via `pi`. |
 | 🖼️ **Multimodal in/out of the box** | Send a photo through Telegram and a vision-capable model (gemma4 / Claude 3+ / GPT-4o / Gemini 1.5+ / llava / etc.) sees it. Models without vision get a dropped-image notice in their text context. |
 | 🔌 **Open by design** | Plugin SDK + entry-point discovery. New channels and skills install with `pip install`. |
 | 🛡️ **Production-grade security** | NetPolicy + DNS pinning + SSRF guards, sandboxed tool execution (RLIMIT + bwrap), human-in-the-loop approval gating, dangerous-env stripping for subprocess MCP servers. |
@@ -51,31 +51,23 @@ sampyclaw config validate
 
 **Linux / macOS / WSL2** are supported. Requires Python **3.11+**. The
 default LLM backend is [Ollama](https://ollama.ai/)
-running on `127.0.0.1:11434` — install Ollama and pull the recommended
-default model:
+running on `127.0.0.1:11434` — install Ollama and pull a tool-capable
+model, e.g.:
 
 ```bash
 ollama pull gemma4:latest
 ```
 
-`gemma4:latest` is the recommended default: native function calling,
-small enough to run on a laptop, and the sampyClaw provider catalog
-ships with a 32K context window entry for it. Other tested models —
-override with `--model <id>`:
+Override the model with `--model <id>`. Tested models:
 
 | Model | Context | Notes |
 |---|---|---|
-| `gemma4:latest` (= `e4b`) | **128K** | **Recommended default.** Multimodal (text+image), native function calling, ~9.6 GB. |
+| `gemma4:latest` (= `e4b`) | 128K | Multimodal (text+image), native function calling, ~9.6 GB. |
 | `gemma4:e2b` | 128K | Lighter (~7.2 GB) — same family, smaller. |
-| `gemma4:26b` / `31b` | **256K** | Heavier MoE variants when you have the RAM. |
-| `qwen2.5:7b-instruct` | 32K | Strong tool calling alternative. |
+| `gemma4:26b` / `31b` | 256K | Heavier MoE variants when you have the RAM. |
+| `qwen2.5:7b-instruct` | 32K | Strong tool calling. |
 | `llama3.1:8b` | 128K | Broadly capable. |
 | `mistral-nemo:12b` | 128K | Slower, more verbose. |
-
-> **There is no `gemma4:9b` tag.** Gemma 4's size variants are `e2b` /
-> `e4b` / `26b` / `31b`. `gemma4:latest` resolves to `e4b` (effective 4B
-> parameters). Avoid `gemma3:4b` — earlier-gemma tool support is
-> unreliable (catalog marks it `supports_tools=False`).
 
 You can run sampyClaw with no LLM (RPC + tools only) by using
 `--provider echo` for testing.
@@ -336,7 +328,7 @@ MIT.
 
 | | |
 |---|---|
-| 🦙 **모델 자유** | 기본은 로컬 Ollama (`gemma4:latest` — 도구 호출 + **멀티모달** 지원, 경량). Anthropic, OpenAI 호환, Bedrock, Google, Groq, DeepSeek, Mistral, Together, Fireworks 등 `pi` 통해 22개 프로바이더 지원. |
+| 🦙 **모델 자유** | 기본은 로컬 Ollama (도구 호출 가능한 모델 아무거나). Anthropic, OpenAI 호환, Bedrock, Google, Groq, DeepSeek, Mistral, Together, Fireworks 등 `pi` 통해 22개 프로바이더 지원. |
 | 🖼️ **멀티모달 기본 지원** | Telegram에서 사진 보내면 vision 가능 모델(gemma4 / Claude 3+ / GPT-4o / Gemini 1.5+ / llava 등)이 그 자리에서 본다. Vision 미지원 모델은 텍스트 컨텍스트에 "이미지 N장 드롭됨" 안내가 자동으로 들어간다. |
 | 🔌 **개방형 설계** | Plugin SDK + entry-point 자동 디스커버리. 새 채널·스킬은 `pip install`로 끝. |
 | 🛡️ **프로덕션급 보안** | NetPolicy + DNS pinning + SSRF 가드, 도구 격리 실행 (RLIMIT + bwrap), 사람 승인 게이트, 서브프로세스 MCP 서버용 위험 env 스트립. |
@@ -363,29 +355,22 @@ sampyclaw config validate
 
 **Linux / macOS / WSL2** 지원. Python **3.11+** 필요. 기본 LLM 백엔드는
 [Ollama](https://ollama.ai/)
-(`127.0.0.1:11434`). Ollama 설치 후 권장 기본 모델 받기:
+(`127.0.0.1:11434`). Ollama 설치 후 도구 호출 가능한 모델을 받는다, 예:
 
 ```bash
 ollama pull gemma4:latest
 ```
 
-`gemma4:latest`이 권장 기본: 네이티브 함수 호출 지원, 노트북에서도 무난히
-돌아가는 크기, sampyClaw 프로바이더 카탈로그에 32K 컨텍스트 윈도우로
-등록됨. 다른 검증된 모델 — `--model <id>`로 오버라이드:
+기본값은 `--model <id>`로 오버라이드. 검증된 모델:
 
 | 모델 | 컨텍스트 | 비고 |
 |---|---|---|
-| `gemma4:latest` (= `e4b`) | **128K** | **권장 기본.** 멀티모달(text+image), 네이티브 함수 호출, 약 9.6 GB. |
+| `gemma4:latest` (= `e4b`) | 128K | 멀티모달(text+image), 네이티브 함수 호출, 약 9.6 GB. |
 | `gemma4:e2b` | 128K | 더 가벼움 (약 7.2 GB) — 같은 계열의 작은 변종. |
-| `gemma4:26b` / `31b` | **256K** | 고RAM 환경용 MoE 변종. |
-| `qwen2.5:7b-instruct` | 32K | 강한 도구 호출 대안. |
+| `gemma4:26b` / `31b` | 256K | 고RAM 환경용 MoE 변종. |
+| `qwen2.5:7b-instruct` | 32K | 강한 도구 호출. |
 | `llama3.1:8b` | 128K | 범용성 좋음. |
 | `mistral-nemo:12b` | 128K | 느리지만 verbose. |
-
-> **`gemma4:9b` 태그는 존재하지 않음.** Gemma 4의 사이즈 변종은 `e2b` /
-> `e4b` / `26b` / `31b`. `gemma4:latest`는 `e4b` (effective 4B 파라미터)로
-> 리졸브된다. `gemma3:4b`는 피하기 — 이전 gemma 도구 지원이 불안정
-> (카탈로그에 `supports_tools=False`로 등록).
 
 LLM 없이 RPC + 도구만 테스트하려면 `--provider echo` 사용.
 

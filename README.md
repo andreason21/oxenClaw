@@ -195,7 +195,6 @@ sampyclaw message send --agent default "summarize today's news headlines"
    │  - PiAgent     (22 hosted providers, incl. Anthropic / GPT  │
    │                 / Gemini / Bedrock / Groq …)                │
    │  - EchoAgent   (test fixture)                               │
-   │ `--provider anthropic` → PiAgent pinned to claude-sonnet-4-6│
    └───────────────────────────┬─────────────────────────────────┘
                                │
    ┌───────────────────────────┴──────────────────────────────┐
@@ -541,7 +540,6 @@ sampyclaw message send --agent default "오늘 뉴스 헤드라인 요약해줘"
    │  - PiAgent     (22개 호스티드 프로바이더 — Anthropic / GPT /  │
    │                 Gemini / Bedrock / Groq …)                    │
    │  - EchoAgent   (테스트용)                                     │
-   │ `--provider anthropic` → PiAgent + claude-sonnet-4-6 기본값   │
    └───────────────────────────┬───────────────────────────────────┘
                                │
    ┌───────────────────────────┴───────────────────────────────┐

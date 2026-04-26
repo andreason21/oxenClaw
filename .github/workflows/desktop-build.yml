@@ -41,9 +41,38 @@ jobs:
       - name: Install Tauri CLI
         run: cargo install tauri-cli --version "^2.0" --locked
 
-      - name: Build .msi
+      - name: Install WiX 3.11 toolset (required for .msi)
+        # Tauri 2.x doesn't auto-install WiX. Without this step the
+        # bundler silently skips msi and only NSIS .exe is produced.
+        shell: pwsh
+        run: |
+          choco install -y wixtoolset --version=3.11.2
+          $wixBin = "${env:ProgramFiles(x86)}\WiX Toolset v3.11\bin"
+          if (-Not (Test-Path $wixBin)) {
+            $wixBin = "$env:ProgramFiles\WiX Toolset v3.11\bin"
+          }
+          if (-Not (Test-Path "$wixBin\candle.exe")) {
+            Write-Error "WiX install did not produce candle.exe at $wixBin"
+            exit 1
+          }
+          echo $wixBin | Out-File -FilePath $env:GITHUB_PATH -Append
+          echo "WIX=$wixBin" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Build .msi + NSIS .exe
         working-directory: desktop
-        run: cargo tauri build
+        run: cargo tauri build --bundles msi nsis
+
+      - name: Verify .msi was produced
+        shell: bash
+        run: |
+          shopt -s nullglob
+          msi_files=( desktop/src-tauri/target/release/bundle/msi/*.msi )
+          if [ ${#msi_files[@]} -eq 0 ]; then
+            echo "::error::No .msi produced — WiX install or tauri-bundler msi step failed"
+            ls -la desktop/src-tauri/target/release/bundle/ || true
+            exit 1
+          fi
+          echo "MSI built: ${msi_files[*]}"
 
       - name: Upload preview artifacts
         # PR previews retained for 7 days; full release artifacts

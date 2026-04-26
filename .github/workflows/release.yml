@@ -7,7 +7,7 @@ name: release
 #                       disagree or don't match the tag.
 #   2. test           — run pytest one more time on the tag commit.
 #   3. python-build   — produce wheel + sdist + SHA256SUMS.
-#   4. windows-build  — produce .msi + .exe (NSIS) + SHA256SUMS.
+#   4. windows-build  — produce .msi (WiX) + .exe (NSIS) + SHA256SUMS.
 #                       Optional: signtool with $WINDOWS_CERT_PFX.
 #   5. pypi-publish   — upload the wheel/sdist to PyPI via
 #                       trusted publishing (OIDC, no token secret).
@@ -104,7 +104,7 @@ jobs:
             dist/SHA256SUMS.python.txt
           if-no-files-found: error
 
-  # ─── 4. Windows .msi + .exe ───────────────────────────────────────
+  # ─── 4. Windows .msi (WiX) + .exe (NSIS) ──────────────────────────
   windows-build:
     runs-on: windows-latest
     needs: [version-check, test]
@@ -122,7 +122,28 @@ jobs:
             desktop/src-tauri/target
           key: cargo-${{ runner.os }}-${{ hashFiles('desktop/src-tauri/Cargo.toml') }}
       - run: cargo install tauri-cli --version "^2.0" --locked
-      - name: Build .msi + .exe (with updater signing if key set)
+      - name: Install WiX 3.11 toolset (required for .msi)
+        # Tauri 2.x doesn't auto-install WiX. Without this step
+        # `cargo tauri build` silently skips the msi bundle and only
+        # NSIS .exe ships. We install WiX 3.x via Chocolatey (the
+        # `windows-latest` runner has it preinstalled) and add its
+        # bin dir to PATH so `candle.exe`/`light.exe` are visible to
+        # tauri-bundler.
+        shell: pwsh
+        run: |
+          choco install -y wixtoolset --version=3.11.2
+          $wixBin = "${env:ProgramFiles(x86)}\WiX Toolset v3.11\bin"
+          if (-Not (Test-Path $wixBin)) {
+            $wixBin = "$env:ProgramFiles\WiX Toolset v3.11\bin"
+          }
+          if (-Not (Test-Path "$wixBin\candle.exe")) {
+            Write-Error "WiX install did not produce candle.exe at $wixBin"
+            exit 1
+          }
+          echo $wixBin | Out-File -FilePath $env:GITHUB_PATH -Append
+          echo "WIX=$wixBin" | Out-File -FilePath $env:GITHUB_ENV -Append
+          & "$wixBin\candle.exe" -? | Select-Object -First 1
+      - name: Build .msi + NSIS .exe (with updater signing if key set)
         working-directory: desktop
         env:
           # When set, `cargo tauri build` produces .sig files alongside
@@ -131,11 +152,24 @@ jobs:
           # pair locally with: `cargo tauri signer generate -w ./tauri.key`.
           TAURI_SIGNING_PRIVATE_KEY:          ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: cargo tauri build
+        run: cargo tauri build --bundles msi nsis
+      - name: Verify .msi was produced
+        # Hard-fail if the msi bundle is missing — silent skip is the
+        # exact bug we hit on rc.1 and the reason WiX is now explicit.
+        shell: bash
+        run: |
+          shopt -s nullglob
+          msi_files=( desktop/src-tauri/target/release/bundle/msi/*.msi )
+          if [ ${#msi_files[@]} -eq 0 ]; then
+            echo "::error::No .msi produced — WiX install or tauri-bundler msi step failed"
+            ls -la desktop/src-tauri/target/release/bundle/ || true
+            exit 1
+          fi
+          echo "MSI built: ${msi_files[*]}"
       - name: Optional code-signing
         # Run only when WINDOWS_CERT_PFX secret is present. Skipping
         # produces unsigned artifacts — Windows SmartScreen will warn,
-        # but the bundle still installs.
+        # but the bundles still install.
         if: ${{ env.WINDOWS_CERT_PFX != '' }}
         env:
           WINDOWS_CERT_PFX:      ${{ secrets.WINDOWS_CERT_PFX }}
@@ -302,9 +336,13 @@ jobs:
           # We pin to the 24.04 AppImage as the canonical Linux delta —
           # an AppImage built on 24.04 runs on 22.04 too because it
           # bundles its own webkit2gtk.
-          NSIS=$(ls *.exe | head -1)
+          # On Windows we point the updater at the .msi (matches the
+          # primary install path users go through). NSIS .exe is still
+          # attached to the release for ad-hoc installs and corp
+          # environments that prefer per-user installs.
+          MSI=$(ls *.msi | head -1)
           APPIMG=$(ls *_ubuntu24.04.AppImage | head -1 || ls *.AppImage | head -1)
-          NSIS_SIG=$(cat "${NSIS}.sig" 2>/dev/null || echo "")
+          MSI_SIG=$(cat "${MSI}.sig" 2>/dev/null || echo "")
           APPIMG_SIG=$(cat "${APPIMG}.sig" 2>/dev/null || echo "")
           BASE="https://github.com/andreason21/sampyClaw/releases/download/v${VERSION}"
           PUB_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -314,7 +352,7 @@ jobs:
             "notes": "See https://github.com/andreason21/sampyClaw/releases/tag/v${VERSION}",
             "pub_date": "${PUB_DATE}",
             "platforms": {
-              "windows-x86_64": { "signature": "${NSIS_SIG}",   "url": "${BASE}/${NSIS}" },
+              "windows-x86_64": { "signature": "${MSI_SIG}",    "url": "${BASE}/${MSI}" },
               "linux-x86_64":   { "signature": "${APPIMG_SIG}", "url": "${BASE}/${APPIMG}" }
             }
           }

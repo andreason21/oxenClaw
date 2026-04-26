@@ -31,7 +31,7 @@ desktop/
 ├── README.md                 # this file
 ├── src-tauri/
 │   ├── Cargo.toml            # Rust crate; depends on tauri + plugins
-│   ├── tauri.conf.json       # Tauri build + bundle config (.msi)
+│   ├── tauri.conf.json       # Tauri build + bundle config (.msi / .exe / .deb / .AppImage)
 │   ├── build.rs              # Tauri build script
 │   ├── capabilities/
 │   │   └── default.json      # IPC allowlist (deny-by-default)
@@ -69,27 +69,38 @@ cd desktop
 cargo tauri dev
 ```
 
-Build a release `.msi` for Windows (cross-build supported from Linux too):
+Build a release `.msi` (and NSIS `.exe`) for Windows. WiX 3.11 must
+be on `PATH` (`choco install wixtoolset --version=3.11.2` then add
+`%ProgramFiles(x86)%\WiX Toolset v3.11\bin`). Cross-building MSI from
+Linux is not supported — run on Windows or in CI.
 
 ```bash
 cd desktop
-cargo tauri build
-# output: desktop/src-tauri/target/release/bundle/msi/sampyclaw-desktop_*_x64_en-US.msi
+cargo tauri build --bundles msi nsis
+# output:
+#   desktop/src-tauri/target/release/bundle/msi/sampyclaw_*_x64_en-US.msi
+#   desktop/src-tauri/target/release/bundle/nsis/sampyClaw_*_x64-setup.exe
 ```
 
-## Code-signing the `.msi`
+> **Why both?** MSI is the primary distribution format (system-wide
+> install, group-policy / SCCM friendly, what `winget` ships). NSIS
+> `.exe` is included for ad-hoc per-user installs that don't need
+> admin rights.
 
-For corporate distribution, sign the bundle:
+## Code-signing the bundles
+
+For corporate distribution, sign both:
 
 ```powershell
 signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 \
-              /a sampyclaw-desktop_*_x64_en-US.msi
+              /a sampyclaw_*_x64_en-US.msi
+signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 \
+              /a sampyClaw_*_x64-setup.exe
 ```
 
 CI: `.github/workflows/desktop-build.yml` builds the unsigned `.msi`
-on every tag push (`v*`); signing happens manually with the org cert
-(can be wired into the workflow if a `WINDOWS_CERT_PFX` secret is
-provided).
++ `.exe` on every PR touching `desktop/`; signing happens in
+`release.yml` on tag push when the `WINDOWS_CERT_PFX` secret is set.
 
 ## Runtime configuration
 

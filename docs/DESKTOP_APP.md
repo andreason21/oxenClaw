@@ -5,9 +5,10 @@ a Linux server, the same Linux box running the desktop app, or a
 remote host), and a native desktop client connects to it. The same
 Tauri source ships:
 
-- **Windows 11** — `.msi` and NSIS `.exe`. Token in Credential Manager
-  (DPAPI-encrypted). Action Center toasts with action buttons.
-  Optional WSL auto-launch.
+- **Windows 11** — `.msi` (system-wide, MSI-managed via group policy /
+  SCCM / winget) and NSIS `.exe` (per-user, no admin). Token in
+  Credential Manager (DPAPI-encrypted). Action Center toasts with
+  action buttons. Optional WSL auto-launch.
 - **Ubuntu 22.04 + 24.04** — `.deb` (one per distro because of
   glibc/webkit ABI differences) and a single `.AppImage` that runs
   on both. Token in libsecret (gnome-keyring / KWallet).
@@ -38,6 +39,10 @@ or download a new bundle.
 - WSL2 with a Linux distro for the agent (Ubuntu 24.04 tested). `wsl --install -d Ubuntu-24.04`.
 - Python 3.11+ inside the distro: `sudo apt install python3 python3-venv`.
 - Edge WebView2 runtime (preinstalled on Win11; the Tauri installer also bundles a bootstrapper).
+- (build-host only) **WiX 3.11 toolset** for `.msi` packaging:
+  `choco install wixtoolset --version=3.11.2`. Tauri 2.x does **not**
+  auto-install WiX — without it `cargo tauri build` silently drops
+  the `.msi` and only ships the NSIS `.exe`.
 
 ### Ubuntu (22.04 / 24.04)
 - libwebkit2gtk-4.1, libayatana-appindicator3, libgtk-3 — the `.deb`
@@ -107,7 +112,7 @@ Pick the matching artifact from the latest release page:
 | Platform | File | Install |
 |---|---|---|
 | Windows 11 | `sampyclaw_X.Y.Z_x64_en-US.msi` | double-click; or `winget install sampyClaw.sampyClaw` after the first winget-pkgs PR merges |
-| Windows 11 | `sampyclaw_X.Y.Z_x64-setup.exe` (NSIS) | double-click; per-user install, no admin |
+| Windows 11 | `sampyClaw_X.Y.Z_x64-setup.exe` (NSIS) | double-click; per-user install, no admin |
 | Ubuntu 22.04 | `sampyclaw_X.Y.Z_amd64_ubuntu22.04.deb` | `sudo apt install ./sampyclaw_*.deb` |
 | Ubuntu 24.04 | `sampyclaw_X.Y.Z_amd64_ubuntu24.04.deb` | `sudo apt install ./sampyclaw_*.deb` |
 | Any Linux | `sampyclaw_X.Y.Z_amd64_*.AppImage` | `chmod +x *.AppImage && ./sampyclaw_*.AppImage` |
@@ -126,11 +131,15 @@ cd desktop
 cargo tauri dev
 ```
 
-Release on Windows:
+Release on Windows. WiX 3.11 must be on PATH (see prereqs above);
+without it the .msi step is silently skipped:
 
 ```powershell
-cargo tauri build
-# desktop\src-tauri\target\release\bundle\{msi,nsis}\sampyclaw_<version>_x64_*.{msi,exe}
+choco install -y wixtoolset --version=3.11.2
+$env:Path += ";${env:ProgramFiles(x86)}\WiX Toolset v3.11\bin"
+cargo tauri build --bundles msi nsis
+# desktop\src-tauri\target\release\bundle\msi\sampyclaw_<version>_x64_en-US.msi
+# desktop\src-tauri\target\release\bundle\nsis\sampyClaw_<version>_x64-setup.exe
 ```
 
 Release on Ubuntu (after installing `libwebkit2gtk-4.1-dev`,
@@ -150,6 +159,8 @@ locally:
 ```powershell
 signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 \
               /a sampyclaw_*_x64_en-US.msi
+signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 \
+              /a sampyClaw_*_x64-setup.exe
 ```
 
 ## Step 3 — First run

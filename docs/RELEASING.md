@@ -9,13 +9,13 @@ and a Windows `.msi` attached to a GitHub Release.
 |---|---|---|
 | `sampyclaw-X.Y.Z-py3-none-any.whl` | PyPI + GitHub Release | trusted publishing (OIDC) + `softprops/action-gh-release` |
 | `sampyclaw-X.Y.Z.tar.gz` (sdist) | PyPI + GitHub Release | same |
-| `sampyclaw_X.Y.Z_x64_en-US.msi` | GitHub Release | `cargo tauri build` on `windows-latest`, optional signtool |
-| `sampyclaw_X.Y.Z_x64-setup.exe` (NSIS) | GitHub Release | same |
+| `sampyclaw_X.Y.Z_x64_en-US.msi` | GitHub Release | `cargo tauri build --bundles msi nsis` on `windows-latest` after `choco install wixtoolset --version=3.11.2`, optional signtool |
+| `sampyClaw_X.Y.Z_x64-setup.exe` (NSIS) | GitHub Release | same build step, NSIS bundle |
 | `sampyclaw_X.Y.Z_amd64_ubuntu22.04.deb` | GitHub Release | `cargo tauri build --bundles deb` on `ubuntu-22.04` |
 | `sampyclaw_X.Y.Z_amd64_ubuntu24.04.deb` | GitHub Release | same on `ubuntu-24.04` |
 | `sampyclaw_X.Y.Z_amd64_*.AppImage` | GitHub Release | `cargo tauri build --bundles appimage` |
 | `*.msi.sig` / `*.exe.sig` / `*.AppImage.sig` | GitHub Release | Tauri updater Ed25519 signature, when `TAURI_SIGNING_PRIVATE_KEY` is set |
-| `latest.json` (auto-updater manifest) | GitHub Release | derived in CI from the NSIS .exe (Windows) + 24.04 AppImage (Linux) — both signed |
+| `latest.json` (auto-updater manifest) | GitHub Release | derived in CI from the .msi (Windows) + 24.04 AppImage (Linux) — both signed |
 | winget manifest | microsoft/winget-pkgs PR | `vedantmgoyal9/winget-releaser` (when `WINGET_TOKEN` secret set) |
 | `SHA256SUMS.txt` | GitHub Release | `sha256sum` over every artifact |
 
@@ -183,4 +183,5 @@ and announce in the release notes that `v0.2.0` should be uninstalled.
 | `pypi-publish` fails: "OIDC token not granted" | The `pypi` environment isn't configured on PyPI's trusted publishers, or the workflow filename / job name doesn't match what's on PyPI's side. |
 | `windows-build` fails on `cargo tauri build` | Tauri 2.x ABI break; check `desktop/src-tauri/Cargo.toml` against the current Tauri release. |
 | `.msi` installs but SmartScreen warns "unrecognised app" | Code-signing didn't run (no `WINDOWS_CERT_PFX` secret) or cert is untrusted. Check signtool output in the build log. |
+| Release published but no `.msi` attached | WiX 3.11 didn't install on the runner. Check the `Install WiX 3.11 toolset` step output, then the `Verify .msi was produced` step which now hard-fails the job instead of letting it pass with NSIS-only. |
 | CI runs forever / GitHub auto-cancels | Two tags pushed in quick succession; `concurrency: cancel-in-progress: false` keeps both runs alive. Wait for the first to finish or cancel manually. |

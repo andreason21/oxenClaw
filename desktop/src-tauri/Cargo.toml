@@ -19,7 +19,7 @@ tauri-plugin-store = "2"
 tauri-plugin-autostart = "2"
 tauri-plugin-shell = "2"
 tauri-plugin-os = "2"
-# Auto-updater: signed MSI/EXE delta delivery from the GitHub Release.
+# Auto-updater: signed MSI / AppImage delta delivery from the GitHub Release.
 # The release workflow signs each bundle with $TAURI_SIGNING_PRIVATE_KEY;
 # the desktop app verifies with the public key embedded in tauri.conf.json
 # before applying. See docs/RELEASING.md.

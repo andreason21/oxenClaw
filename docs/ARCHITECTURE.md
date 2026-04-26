@@ -1,6 +1,6 @@
 # OpenClaw Architecture Analysis — oxenClaw Port Reference
 
-> This document is the **frozen spec** for porting openclaw (TypeScript monorepo) to oxenClaw (Python). It was produced from a deep read of `/home/andrew21son/1.work/1.git/openclaw/` on 2026-04-24. Cross-reference the TS source as authoritative when this doc and the code disagree; then update this doc.
+> This document is the **frozen spec** for porting openclaw (TypeScript monorepo) to oxenClaw (Python). It was produced from a deep read of the upstream `openclaw/` source tree on 2026-04-24. Cross-reference the TS source as authoritative when this doc and the code disagree; then update this doc.
 
 ## 1. Top-Level Module Map
 

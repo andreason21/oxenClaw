@@ -399,6 +399,9 @@ have to reimplement it as a sampyClaw skill. sampyClaw includes an MCP
 **client** (M1 phase, `sampyclaw/pi/mcp/`) that connects to MCP servers
 and surfaces their tools as if they were native sampyClaw tools.
 
+> For a worked end-to-end example using `yfmcp` (Yahoo Finance over
+> stdio), see [`docs/MCP_YAHOO_FINANCE.md`](MCP_YAHOO_FINANCE.md).
+
 ### Configure
 
 Drop a config at `~/.sampyclaw/mcp.json` using the standard shape (the

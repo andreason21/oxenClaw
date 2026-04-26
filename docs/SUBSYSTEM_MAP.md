@@ -25,7 +25,7 @@ Scope re-confirmation before continuing the port. Rough LOC column = non-test `.
 | `tasks/` | 35 | — | **TBD** | P1 | gateway task tracking |
 | `commands/` | 325 | — (absorbed by `cli/` + `gateway/chat_methods`) | **Partial** | P1 | native-command registry is per-extension in openclaw; decide global vs extension |
 | `auto-reply/` | 306 | — | **TBD** | P1 | substantial — agent-driven auto-replies; may be partially covered by `agents/` |
-| `mcp/` | 8 | `pi/mcp/` | **Partial (M1: client only)** | P2 | MCP client phase shipped 2026-04-25 — stdio + HTTP/SSE transports, name dedup, factory wiring via `load_mcp_tools()`. M2 (sampyClaw as MCP server) not yet started. |
+| `mcp/` | 8 | `pi/mcp/` | **Partial (M1: client only)** | P2 | MCP client phase shipped 2026-04-25 — stdio + HTTP/SSE transports, name dedup, factory wiring via `load_mcp_tools()`. M2 (sampyClaw as MCP server) not yet started. Worked example: `docs/MCP_YAHOO_FINANCE.md`. |
 | `hooks/` | 34 | — | **Out** | P2 | Claude Code hook integration, JS-specific |
 | `secrets/` | 63 | — | **TBD** | P1 | credential encryption layer; currently plaintext in `config/credentials.py` |
 | `shared/` | 63 | — | **Partial** | P1 | utility grab-bag; port on demand |

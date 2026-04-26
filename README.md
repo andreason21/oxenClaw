@@ -252,12 +252,20 @@ Full guide: [`docs/AUTHORING_SKILLS.md`](docs/AUTHORING_SKILLS.md).
     "filesystem": {
       "command": "npx",
       "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+    },
+    "yfinance": {
+      "command": "/home/you/yfmcp-venv/bin/yfmcp",
+      "args": [],
+      "transport": "stdio"
     }
   }
 }
 ```
 
-The server's tools become first-class tools the agent can call.
+The server's tools become first-class tools the agent can call. For a
+verified end-to-end walkthrough (Yahoo Finance via `yfmcp`, including
+configure → connect → direct call → agent wiring), see
+[`docs/MCP_YAHOO_FINANCE.md`](docs/MCP_YAHOO_FINANCE.md).
 
 ### Schedule recurring work
 
@@ -571,12 +579,19 @@ def ticket_lookup_tool():
     "filesystem": {
       "command": "npx",
       "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+    },
+    "yfinance": {
+      "command": "/home/you/yfmcp-venv/bin/yfmcp",
+      "args": [],
+      "transport": "stdio"
     }
   }
 }
 ```
 
-서버의 도구가 sampyClaw 네이티브 도구처럼 노출된다.
+서버의 도구가 sampyClaw 네이티브 도구처럼 노출된다. 전체 시나리오
+(설치 → 연결 → 직접 호출 → 에이전트 연결까지)를 검증한 예제는
+[`docs/MCP_YAHOO_FINANCE.md`](docs/MCP_YAHOO_FINANCE.md) 참고.
 
 #### 반복 작업 스케줄링
 

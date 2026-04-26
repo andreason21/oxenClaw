@@ -17,12 +17,15 @@ from __future__ import annotations
 from oxenclaw.pi.context_engine.types import (
     AssembleResult,
     BootstrapResult,
+    CompactionTarget,
     CompactResult,
     ContextEngineInfo,
     ContextEngineMaintenanceResult,
     ContextEngineRuntimeContext,
     IngestBatchResult,
     IngestResult,
+    SubagentEndReason,
+    SubagentSpawnPreparation,
 )
 from oxenclaw.pi.messages import AgentMessage
 from oxenclaw.pi.tokens import estimate_tokens
@@ -56,7 +59,7 @@ class LegacyContextEngine:
         session_key: str | None = None,
         runtime_context: ContextEngineRuntimeContext | None = None,
     ) -> ContextEngineMaintenanceResult:
-        return ContextEngineMaintenanceResult(ok=True)
+        return ContextEngineMaintenanceResult(changed=False)
 
     async def ingest(
         self,
@@ -118,11 +121,50 @@ class LegacyContextEngine:
         current_token_count: int | None = None,
         session_file: str | None = None,
         force: bool = False,
+        compaction_target: CompactionTarget = "threshold",
         runtime_context: ContextEngineRuntimeContext | None = None,
     ) -> CompactResult:
-        # Delegation kept here (rather than calling maybe_compact
-        # directly) so an engine that subclasses LegacyContextEngine
-        # can override `compact` without re-implementing the full path.
+        # Two paths:
+        #  - Session-aware: PiAgent passes the live `AgentSession` via
+        #    `runtime_context.extra["session"]`. We call `maybe_compact`
+        #    on it so `session.messages` AND `session.compactions` are
+        #    updated atomically — matches pre-rc.16 inline behavior.
+        #  - Stateless: no session in context, fall back to the
+        #    delegate path (decide → apply, returns the rewritten
+        #    message list inside the CompactResult; caller is expected
+        #    to splice it back).
+        session = None
+        summarizer = None
+        keep_tail_turns: int | None = None
+        if runtime_context is not None and isinstance(runtime_context.extra, dict):
+            session = runtime_context.extra.get("session")
+            summarizer = runtime_context.extra.get("summarizer")
+            keep_tail_turns = runtime_context.extra.get("keep_tail_turns")
+        if session is not None:
+            from oxenclaw.pi.compaction import maybe_compact, truncating_summarizer
+
+            compacted = await maybe_compact(
+                session,
+                model_context_tokens=token_budget or 32_000,
+                summarizer=summarizer or truncating_summarizer,
+                keep_tail_turns=keep_tail_turns or 6,
+                force=force,
+            )
+            if not compacted:
+                return CompactResult(
+                    ok=True,
+                    compacted=False,
+                    reason="below threshold",
+                )
+            entry = session.compactions[-1]
+            return CompactResult(
+                ok=True,
+                compacted=True,
+                reason=entry.reason,
+                summary=entry.summary or None,
+                tokens_before=entry.tokens_before,
+                tokens_after=entry.tokens_after,
+            )
         from oxenclaw.pi.context_engine.delegate import delegate_compaction_to_runtime
 
         return await delegate_compaction_to_runtime(
@@ -132,6 +174,26 @@ class LegacyContextEngine:
             current_token_count=current_token_count,
             force=force,
         )
+
+    async def prepare_subagent_spawn(
+        self,
+        *,
+        parent_session_id: str,
+        child_session_key: str,
+        runtime_context: ContextEngineRuntimeContext | None = None,
+    ) -> SubagentSpawnPreparation | None:
+        return None
+
+    async def on_subagent_ended(
+        self,
+        *,
+        child_session_key: str,
+        reason: SubagentEndReason,
+    ) -> None:
+        return None
+
+    async def dispose(self) -> None:
+        return None
 
 
 def _message_text(message: AgentMessage) -> str:

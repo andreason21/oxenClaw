@@ -115,10 +115,36 @@ def list_slots() -> list[str]:
     return sorted(_REGISTRY.keys())
 
 
+def clear_context_engines_for_owner(owner: str) -> list[str]:
+    """Drop every registration owned by `owner`. Returns the slot ids
+    that were removed.
+
+    Mirrors openclaw `clearContextEnginesForOwner`. Plugins call this
+    on unload so a re-loaded plugin doesn't double-register.
+    """
+    cleared = [slot for slot, (current_owner, _) in _REGISTRY.items() if current_owner == owner]
+    for slot in cleared:
+        _REGISTRY.pop(slot, None)
+    return cleared
+
+
+def get_context_engine_factory(slot: str) -> ContextEngineFactory | None:
+    """Return the raw factory for `slot` without instantiating.
+
+    Counterpart to `resolve_context_engine`, which calls the factory.
+    Useful for callers (tests, lifecycle hooks) that need to inspect
+    or wrap the factory without paying instantiation cost.
+    """
+    entry = _REGISTRY.get(slot)
+    return entry[1] if entry is not None else None
+
+
 __all__ = [
     "ContextEngineFactory",
     "ContextEngineRegistrationResult",
+    "clear_context_engines_for_owner",
     "ensure_context_engines_initialized",
+    "get_context_engine_factory",
     "list_slots",
     "register_context_engine",
     "register_context_engine_for_owner",

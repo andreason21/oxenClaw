@@ -42,7 +42,12 @@ from oxenclaw.pi import (
     resolve_api,
 )
 from oxenclaw.pi.cache_observability import CacheObserver, should_apply_cache_markers
-from oxenclaw.pi.compaction import maybe_compact, truncating_summarizer
+from oxenclaw.pi.compaction import truncating_summarizer
+from oxenclaw.pi.context_engine import (
+    ContextEngine,
+    ContextEngineRuntimeContext,
+    LegacyContextEngine,
+)
 from oxenclaw.pi.run import RuntimeConfig, run_agent_turn
 from oxenclaw.pi.system_prompt import (
     assemble_system_prompt,
@@ -84,6 +89,7 @@ class PiAgent:
         chunk_limit: int = 4_000,
         thinking: ThinkingLevel | str | None = None,
         compact_keep_tail_turns: int = 6,
+        context_engine: ContextEngine | None = None,
     ) -> None:
         self.id = agent_id
         self._registry = registry or default_registry()
@@ -108,6 +114,11 @@ class PiAgent:
         # the dispatcher's session_key.
         self._observers: dict[str, CacheObserver] = {}
         self._session_ids: dict[str, str] = {}
+
+        # Context engine — defaults to the pass-through `LegacyContextEngine`
+        # so behaviour matches pre-rc.16 PiAgent byte-for-byte. Operators
+        # opt into a custom strategy by injecting it here.
+        self._engine: ContextEngine = context_engine or LegacyContextEngine()
 
     # ─── system prompt assembly ─────────────────────────────────────
 
@@ -194,6 +205,15 @@ class PiAgent:
         session = await self._ensure_session(ctx.session_key)
         session.messages.append(UserMessage(content=user_content))
 
+        # Engine ingest — single-message hook for the user turn just
+        # appended. LegacyContextEngine no-ops; custom engines can index
+        # the message into their own store before the model call.
+        await self._engine.ingest(
+            session_id=session.id,
+            session_key=ctx.session_key,
+            message=session.messages[-1],
+        )
+
         api = await resolve_api(self._model, self._auth)
         system = await self._system_for(text)
 
@@ -210,11 +230,27 @@ class PiAgent:
             }
         )
 
+        # Engine assemble — lets custom engines reshape the history (e.g.
+        # active-memory injects retrieved memories) and prepend extra
+        # system-prompt content. Legacy passes through unchanged.
+        assembled = await self._engine.assemble(
+            session_id=session.id,
+            session_key=ctx.session_key,
+            messages=session.messages,
+            token_budget=self._model.context_window,
+            available_tools=set(self._tools._tools.keys()),
+        )
+        history = assembled.messages
+        if assembled.system_prompt_addition:
+            system = f"{assembled.system_prompt_addition}\n\n{system}"
+
+        pre_prompt_count = len(session.messages)
+
         result = await run_agent_turn(
             model=self._model,
             api=api,
             system=system,
-            history=session.messages,
+            history=history,
             tools=list(self._tools._tools.values()),
             config=turn_runtime,
         )
@@ -222,12 +258,41 @@ class PiAgent:
         # Persist the appended messages back to the session.
         session.messages.extend(result.appended_messages)
         observer.record(result.usage_total or {})
-        await maybe_compact(
-            session,
-            model_context_tokens=self._model.context_window,
-            summarizer=truncating_summarizer,
-            keep_tail_turns=self._compact_keep_tail,
+
+        # Engine ingest_batch + after_turn — give the engine the new
+        # messages from this turn as a unit so it can index / persist /
+        # decide on background work.
+        if result.appended_messages:
+            await self._engine.ingest_batch(
+                session_id=session.id,
+                session_key=ctx.session_key,
+                messages=result.appended_messages,
+            )
+        await self._engine.after_turn(
+            session_id=session.id,
+            session_key=ctx.session_key,
+            messages=session.messages,
+            pre_prompt_message_count=pre_prompt_count,
+            token_budget=self._model.context_window,
         )
+
+        # Engine compact — pass the session through `runtime_context.extra`
+        # so `LegacyContextEngine.compact` can mutate it via the existing
+        # `maybe_compact` path. Custom engines that own their own message
+        # store ignore the session and operate on `messages`.
+        await self._engine.compact(
+            session_id=session.id,
+            messages=session.messages,
+            token_budget=self._model.context_window,
+            runtime_context=ContextEngineRuntimeContext(
+                extra={
+                    "session": session,
+                    "summarizer": truncating_summarizer,
+                    "keep_tail_turns": self._compact_keep_tail,
+                }
+            ),
+        )
+
         await self._sessions.save(session)
 
         # Emit final text chunked for channel limits.

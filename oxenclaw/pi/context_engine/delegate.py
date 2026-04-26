@@ -29,15 +29,21 @@ async def delegate_compaction_to_runtime(
     token_budget: int | None = None,
     current_token_count: int | None = None,
     force: bool = False,
+    compaction_target: str = "threshold",
 ) -> CompactResult:
     """Run pi.compaction.{decide,apply} for an engine that wants the
     stock behaviour. Returns a `CompactResult` reporting what happened.
+
+    `compaction_target="budget"` lowers the threshold ratio so the plan
+    drops more aggressively (manual `/compact` UX); `"threshold"` keeps
+    the default 0.85 high-water mark.
     """
     budget = token_budget or _DEFAULT_TOKEN_BUDGET
+    threshold_ratio = 0.5 if compaction_target == "budget" else _DEFAULT_THRESHOLD_RATIO
     plan = decide_compaction(
         messages,
         model_context_tokens=budget,
-        threshold_ratio=_DEFAULT_THRESHOLD_RATIO,
+        threshold_ratio=threshold_ratio,
         keep_tail_turns=_DEFAULT_KEEP_TAIL_TURNS,
         reason="manual" if force else "auto",
         force=force,

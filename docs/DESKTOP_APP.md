@@ -167,7 +167,7 @@ signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 \
 
 Open the app (Start menu on Windows, `oxenclaw-desktop` from
 `apt`-installed `.deb`, or run the `.AppImage` directly). The app
-appears in the system tray (`🦞`). On first launch a setup screen
+appears in the system tray (`🐂🐂`). On first launch a setup screen
 asks for:
 
 - **Gateway URL** — `http://localhost:7331` for a local agent. For a

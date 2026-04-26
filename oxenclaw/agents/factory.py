@@ -1,33 +1,130 @@
 """Construct an Agent from provider name + options.
 
-Shared by the CLI (`gateway start --provider anthropic`) and the
-`agents.create` gateway RPC, so agent construction lives in one place.
+**openclaw-style routing.** All catalog providers go through one runtime
+(`PiAgent` on top of `oxenclaw.pi.run`). The CLI's `--provider` argument
+selects the **catalog provider id** of the model — same role as openclaw's
+`registerProviderStreamForModel({ model.provider, ... })`. Adding a new
+provider is a single change in `oxenclaw/pi/providers/`.
+
+The pre-pi shortcut classes (`LocalAgent`, `EchoAgent`) still exist in
+the tree:
+- `EchoAgent` is the test-only `--provider echo` route.
+- `LocalAgent` is no longer wired through this factory but stays on
+  disk for direct construction in legacy tests / migration code.
+
+Legacy provider names (`local`, `pi`, `vllm`) are accepted for
+back-compat with existing config.yaml files but emit a deprecation log
+and are mapped to their canonical catalog id (`ollama`, `ollama`, `vllm`
+respectively).
 """
 
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
+from dataclasses import replace
 
 from oxenclaw.agents.base import Agent
 from oxenclaw.agents.builtin_tools import default_tools
 from oxenclaw.agents.echo import EchoAgent
-from oxenclaw.agents.local_agent import VLLM_DEFAULT_BASE_URL, LocalAgent
 from oxenclaw.agents.pi_agent import PiAgent
 from oxenclaw.agents.tools import Tool, ToolRegistry
+from oxenclaw.pi.catalog import default_registry
+from oxenclaw.pi.models import Model
+from oxenclaw.pi.registry import InMemoryAuthStorage
 
-# When `--provider anthropic` is invoked without an explicit `--model`,
-# we route through PiAgent and pick the latest mid-tier Sonnet so
-# behaviour stays close to the old inline AnthropicAgent default.
-DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-6"
+logger = logging.getLogger(__name__)
+
+
+# Catalog providers — every provider id that has a stream wrapper
+# registered in `oxenclaw/pi/providers/`. Keep this list in sync with
+# the `register_provider_stream(...)` calls there; the test
+# `tests/test_agents_factory.py::test_catalog_providers_match_pi_registrations`
+# enforces the invariant.
+CATALOG_PROVIDERS: tuple[str, ...] = (
+    "anthropic",
+    "anthropic-vertex",
+    "bedrock",
+    "deepseek",
+    "fireworks",
+    "google",
+    "groq",
+    "kilocode",
+    "litellm",
+    "llamacpp",
+    "lmstudio",
+    "minimax",
+    "mistral",
+    "moonshot",
+    "ollama",
+    "openai",
+    "openai-compatible",
+    "openrouter",
+    "proxy",
+    "together",
+    "vertex-ai",
+    "vllm",
+    "zai",
+)
+
+# `echo` is a hidden test backend — not a real provider, but exposed
+# here so the dashboard / tests can construct one without special-casing.
+SUPPORTED_PROVIDERS: tuple[str, ...] = (*CATALOG_PROVIDERS, "echo")
+
+# Legacy aliases — accepted with a deprecation warning, mapped to the
+# canonical catalog id. Mirrors openclaw's `normalizeProviderId`.
+LEGACY_ALIASES: dict[str, str] = {
+    "local": "ollama",  # pre-pi LocalAgent was always Ollama-shaped
+    "pi": "ollama",  # pi default model was gemma4:latest (Ollama)
+    "aws-bedrock": "bedrock",  # openclaw's normalizeProviderId mapping
+    "z.ai": "zai",
+    "z-ai": "zai",
+}
+
+# Default model when `--model` is omitted. Picked to be cheap + first-run
+# friendly; users can always override with `--model <id>`.
+PROVIDER_DEFAULT_MODELS: dict[str, str] = {
+    "anthropic": "claude-sonnet-4-6",
+    "anthropic-vertex": "claude-sonnet-4-6",
+    "openai": "gpt-4o-mini",
+    "google": "gemini-2.0-flash",
+    "vertex-ai": "gemini-2.0-flash",
+    "ollama": "gemma4:latest",
+    "vllm": "gemma4:latest",
+    "lmstudio": "gemma4:latest",
+    "llamacpp": "gemma4:latest",
+    "openai-compatible": "gemma4:latest",
+    "proxy": "gemma4:latest",
+    "litellm": "gemma4:latest",
+}
+
+# Reasonable default context windows for synthesised (non-catalog) models.
+# Local providers usually serve OSS models with 128K windows; hosted
+# providers tend to be bigger but unknown — pick a conservative 128K.
+_SYNTHETIC_CONTEXT_WINDOW = 128_000
+_SYNTHETIC_MAX_OUTPUT = 4_096
+
+
+class UnknownProvider(ValueError):
+    """Raised when `provider` is not a recognised catalog id or alias."""
+
+
+def _resolve_provider(provider: str) -> str:
+    """Map legacy aliases to canonical catalog ids."""
+    if provider in LEGACY_ALIASES:
+        canonical = LEGACY_ALIASES[provider]
+        logger.warning(
+            "provider %r is a legacy alias for %r; update your config to use the canonical name",
+            provider,
+            canonical,
+        )
+        return canonical
+    return provider
 
 
 def _maybe_canvas_tools(agent_id: str) -> list[Tool]:
-    """Append canvas tools when OXENCLAW_ENABLE_CANVAS is set.
-
-    Reuses the process-wide CanvasStore + CanvasEventBus singletons so
-    every agent shares the same dashboard target.
-    """
+    """Append canvas tools when OXENCLAW_ENABLE_CANVAS is set."""
     if os.environ.get("OXENCLAW_ENABLE_CANVAS", "").lower() not in ("1", "true", "yes"):
         return []
     try:
@@ -49,11 +146,7 @@ def _maybe_canvas_tools(agent_id: str) -> list[Tool]:
 
 
 def _maybe_browser_tools() -> list[Tool]:
-    """Append browser tools when OXENCLAW_ENABLE_BROWSER is set + playwright present.
-
-    Failures (missing optional dep) are logged once and swallowed so the
-    gateway still boots. The opt-in is opt-in: no env, no tools.
-    """
+    """Append browser tools when OXENCLAW_ENABLE_BROWSER is set + playwright present."""
     if os.environ.get("OXENCLAW_ENABLE_BROWSER", "").lower() not in ("1", "true", "yes"):
         return []
     try:
@@ -67,19 +160,52 @@ def _maybe_browser_tools() -> list[Tool]:
         return []
 
 
-class UnknownProvider(ValueError):
-    """Raised when `provider` is not one of the supported names."""
+def _build_default_tools(agent_id: str, mcp_tools: list[Tool] | None) -> ToolRegistry:
+    reg = ToolRegistry()
+    reg.register_all(default_tools())
+    canvas = _maybe_canvas_tools(agent_id)
+    if canvas:
+        reg.register_all(canvas)
+    browser = _maybe_browser_tools()
+    if browser:
+        reg.register_all(browser)
+    if mcp_tools:
+        reg.register_all(list(mcp_tools))
+    return reg
 
 
-# `pi` is the pi-embedded-runner-backed agent — full streaming, tool
-# loop, compaction, cache observability, multi-provider.
-# `vllm` is a thin alias of `local` with strict-OpenAI payload (no Ollama
-# extras) and warmup off; defaults to vLLM's canonical 127.0.0.1:8000/v1.
-# `anthropic` is a thin alias of `pi` pinned to a Claude default model
-# (the inline AnthropicAgent was removed in favour of PiAgent's richer
-# Anthropic path: cache_control, thinking, cache observability,
-# compaction, persistence).
-SUPPORTED_PROVIDERS: tuple[str, ...] = ("pi", "local", "vllm", "echo", "anthropic")
+def _registry_for(
+    provider: str,
+    model_id: str,
+    base_url: str | None,
+):
+    """Return a ModelRegistry that has `model_id` registered with the
+    requested `provider` and (optional) `base_url` override.
+
+    - Catalog hit + matching provider + no base_url override → registry as-is.
+    - Catalog hit + provider/base_url mismatch → register a `replace()`d copy.
+    - Catalog miss → synthesise a transient entry with conservative defaults.
+    """
+    reg = default_registry()
+    existing = reg.get(model_id)
+    if existing is None:
+        synthetic = Model(
+            id=model_id,
+            provider=provider,
+            context_window=_SYNTHETIC_CONTEXT_WINDOW,
+            max_output_tokens=_SYNTHETIC_MAX_OUTPUT,
+            extra={"base_url": base_url} if base_url else {},
+        )
+        reg.register(synthetic)
+        return reg
+    needs_provider_override = existing.provider != provider
+    needs_base_url_override = base_url is not None and existing.extra.get("base_url") != base_url
+    if needs_provider_override or needs_base_url_override:
+        new_extra = dict(existing.extra)
+        if base_url is not None:
+            new_extra["base_url"] = base_url
+        reg.register(replace(existing, provider=provider, extra=new_extra))
+    return reg
 
 
 def build_agent(
@@ -94,64 +220,43 @@ def build_agent(
     memory=None,  # type: ignore[no-untyped-def]
     mcp_tools: list[Tool] | None = None,
 ) -> Agent:
-    """Build an agent. Provider-specific kwargs are silently ignored when not applicable."""
+    """Build an agent. All catalog providers route through `PiAgent`."""
     if provider == "echo":
         return EchoAgent(agent_id=agent_id)
-    if provider in ("pi", "anthropic"):
-        resolved_tools = tools
-        if resolved_tools is None:
-            resolved_tools = ToolRegistry()
-            resolved_tools.register_all(default_tools())
-            canvas_tools = _maybe_canvas_tools(agent_id)
-            if canvas_tools:
-                resolved_tools.register_all(canvas_tools)
-            browser_tools = _maybe_browser_tools()
-            if browser_tools:
-                resolved_tools.register_all(browser_tools)
-        if mcp_tools:
-            resolved_tools.register_all(list(mcp_tools))
-        kwargs: dict = {"agent_id": agent_id, "tools": resolved_tools}  # type: ignore[type-arg]
-        if system_prompt is not None:
-            kwargs["system_prompt"] = system_prompt
-        resolved_model = model
-        if provider == "anthropic" and resolved_model is None:
-            resolved_model = DEFAULT_ANTHROPIC_MODEL
-        if resolved_model is not None:
-            kwargs["model_id"] = resolved_model
-        if memory is not None:
-            kwargs["memory"] = memory
-        return PiAgent(**kwargs)
-    if provider in ("local", "vllm"):
-        resolved_tools = tools
-        if resolved_tools is None:
-            resolved_tools = ToolRegistry()
-            resolved_tools.register_all(default_tools())
-            canvas_tools = _maybe_canvas_tools(agent_id)
-            if canvas_tools:
-                resolved_tools.register_all(canvas_tools)
-            browser_tools = _maybe_browser_tools()
-            if browser_tools:
-                resolved_tools.register_all(browser_tools)
-        if mcp_tools:
-            resolved_tools.register_all(list(mcp_tools))
-        kwargs: dict = {"agent_id": agent_id, "tools": resolved_tools}  # type: ignore[type-arg]
-        if system_prompt is not None:
-            kwargs["system_prompt"] = system_prompt
-        if model is not None:
-            kwargs["model"] = model
-        if memory is not None:
-            kwargs["memory"] = memory
-        if provider == "vllm":
-            kwargs["flavor"] = "vllm"
-            kwargs["base_url"] = base_url if base_url is not None else VLLM_DEFAULT_BASE_URL
-        elif base_url is not None:
-            kwargs["base_url"] = base_url
-        if api_key is not None:
-            kwargs["api_key"] = api_key
-        return LocalAgent(**kwargs)
-    raise UnknownProvider(
-        f"unknown agent provider: {provider!r} (supported: {', '.join(SUPPORTED_PROVIDERS)})"
-    )
+
+    canonical = _resolve_provider(provider)
+    if canonical not in CATALOG_PROVIDERS:
+        raise UnknownProvider(
+            f"unknown agent provider: {provider!r} (supported: {', '.join(SUPPORTED_PROVIDERS)})"
+        )
+
+    resolved_model_id = model or PROVIDER_DEFAULT_MODELS.get(canonical)
+    if resolved_model_id is None:
+        raise UnknownProvider(
+            f"no default model registered for provider {canonical!r}; pass --model explicitly"
+        )
+
+    registry = _registry_for(canonical, resolved_model_id, base_url)
+    resolved_tools = tools if tools is not None else _build_default_tools(agent_id, mcp_tools)
+    if tools is not None and mcp_tools:
+        resolved_tools.register_all(list(mcp_tools))
+
+    auth = InMemoryAuthStorage({canonical: api_key}) if api_key else None
+
+    kwargs: dict = {  # type: ignore[type-arg]
+        "agent_id": agent_id,
+        "model_id": resolved_model_id,
+        "tools": resolved_tools,
+        "registry": registry,
+    }
+    if auth is not None:
+        kwargs["auth"] = auth
+    if system_prompt is not None:
+        kwargs["system_prompt"] = system_prompt
+    if memory is not None:
+        kwargs["memory"] = memory
+
+    return PiAgent(**kwargs)
 
 
 async def load_mcp_tools(
@@ -187,3 +292,15 @@ def load_mcp_tools_sync(
     variant there.
     """
     return asyncio.run(load_mcp_tools(paths, reserved_names=reserved_names))
+
+
+__all__ = [
+    "CATALOG_PROVIDERS",
+    "LEGACY_ALIASES",
+    "PROVIDER_DEFAULT_MODELS",
+    "SUPPORTED_PROVIDERS",
+    "UnknownProvider",
+    "build_agent",
+    "load_mcp_tools",
+    "load_mcp_tools_sync",
+]

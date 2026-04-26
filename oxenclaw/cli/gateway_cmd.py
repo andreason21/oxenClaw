@@ -92,31 +92,48 @@ def start(
     port: int = typer.Option(7331, help="Bind port."),
     agent_id: str = typer.Option("assistant", help="Agent id."),
     provider: str = typer.Option(
-        "local",
+        "ollama",
         "--provider",
         help=(
-            "Agent provider: 'local' (Ollama / OpenAI-compatible, default), "
-            "'vllm' (internal vLLM server, strict-OpenAI payload, base_url "
-            "defaults to http://127.0.0.1:8000/v1), 'pi' (multi-provider via "
-            "pi catalog), 'echo', or 'anthropic'."
+            "Catalog provider id (openclaw-style). One of: ollama (default), "
+            "anthropic, openai, google, vllm, lmstudio, llamacpp, openrouter, "
+            "groq, deepseek, mistral, together, fireworks, kilocode, moonshot, "
+            "zai, minimax, bedrock, vertex-ai, openai-compatible, proxy, "
+            "litellm, anthropic-vertex, or 'echo' (test). Provider determines "
+            "the transport — model is picked separately via --model. "
+            "Pre-rc.15 names ('local', 'pi') are accepted as legacy aliases."
         ),
     ),
-    model: str | None = typer.Option(None, "--model", help="Model id (provider-specific)."),
+    model: str | None = typer.Option(
+        None,
+        "--model",
+        help=(
+            "Model id from the pi catalog (e.g. gemma4:latest, "
+            "claude-sonnet-4-6, gpt-4o-mini, gemini-2.0-flash). When omitted, "
+            "the provider's catalog default is used. Custom models not in the "
+            "catalog (e.g. fine-tuned vLLM weights) are accepted with a "
+            "synthetic 128K-window registry entry."
+        ),
+    ),
     base_url: str | None = typer.Option(
         None,
         "--base-url",
         help=(
-            "Override base URL (local/vllm providers only). "
-            "Defaults: http://127.0.0.1:11434/v1 (local/Ollama), "
-            "http://127.0.0.1:8000/v1 (vllm)."
+            "Override the model's transport URL. Useful when running an "
+            "inline provider (Ollama / vLLM / LM Studio / llama.cpp / "
+            "litellm / proxy / openai-compatible) on a non-default host. "
+            "Defaults: http://127.0.0.1:11434/v1 (Ollama), "
+            "http://127.0.0.1:8000/v1 (vLLM)."
         ),
     ),
     api_key: str | None = typer.Option(
         None,
         "--api-key",
         help=(
-            "API key for local/vllm provider. Most Ollama setups don't "
-            "need one; vLLM uses it when started with `--api-key`."
+            "API key for hosted providers (anthropic / openai / google / "
+            "groq / etc). Inline providers (Ollama / vLLM / lmstudio / …) "
+            "ignore it. Falls back to the provider's env var when unset "
+            "(see oxenclaw/pi/registry.py:EnvAuthStorage)."
         ),
     ),
     system_prompt: str | None = typer.Option(

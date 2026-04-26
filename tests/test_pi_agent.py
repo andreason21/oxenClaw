@@ -69,16 +69,27 @@ def _auth_with_key(provider: str) -> InMemoryAuthStorage:
 # ─── Factory wiring ──────────────────────────────────────────────────
 
 
-def test_pi_provider_registered_in_factory() -> None:
-    assert "pi" in SUPPORTED_PROVIDERS
-    # `pi` is first → it's the new preferred provider.
-    assert SUPPORTED_PROVIDERS[0] == "pi"
+def test_pi_runtime_drives_every_catalog_provider() -> None:
+    """Post-rc.15: there's no `pi` provider — pi is the *runtime*, and
+    every catalog provider id (ollama / anthropic / openai / google /
+    vllm / etc.) routes through it. The legacy `pi` name remains
+    accepted via the alias map so pre-rc.15 configs keep working."""
+    from oxenclaw.agents.factory import CATALOG_PROVIDERS, LEGACY_ALIASES
+
+    assert "ollama" in CATALOG_PROVIDERS
+    assert "anthropic" in CATALOG_PROVIDERS
+    assert "pi" in LEGACY_ALIASES
+    assert LEGACY_ALIASES["pi"] == "ollama"
+    assert set(SUPPORTED_PROVIDERS) >= set(CATALOG_PROVIDERS)
 
 
-def test_factory_builds_pi_agent_with_default_model(tmp_path: Path) -> None:
+def test_factory_builds_pi_agent_for_legacy_pi_alias(tmp_path: Path) -> None:
+    """`provider='pi'` is a legacy alias; the factory still produces a
+    PiAgent backed by the Ollama catalog default (gemma4:latest)."""
     a = build_agent(agent_id="a", provider="pi")
     assert isinstance(a, PiAgent)
     assert a._model.id == "gemma4:latest"
+    assert a._model.provider == "ollama"
 
 
 # ─── End-to-end turn: streamed text ──────────────────────────────────

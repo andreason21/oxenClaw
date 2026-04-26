@@ -34,27 +34,41 @@ class _CreateParams(BaseModel):
 
 
 def _provider_name(agent) -> str:  # type: ignore[no-untyped-def]
-    """Best-effort provider id from an agent instance."""
-    cls = type(agent).__name__
-    return {
-        "EchoAgent": "echo",
-        "LocalAgent": "local",
-        "PiAgent": "pi",
-    }.get(cls, cls)
+    """Provider id from the model's catalog entry (openclaw-style).
+
+    EchoAgent is the lone exception — it has no model and is a test
+    backend, so we keep the legacy 'echo' label.
+    """
+    if type(agent).__name__ == "EchoAgent":
+        return "echo"
+    model = getattr(agent, "_model", None)
+    provider = getattr(model, "provider", None)
+    if isinstance(provider, str) and provider:
+        return provider
+    return type(agent).__name__
 
 
 def _agent_details(agent) -> dict:  # type: ignore[no-untyped-def, type-arg]
     """Pull whatever attributes are available off an agent instance.
 
-    Echo agent has none of these private fields, so optional getattrs.
+    EchoAgent has none of these private fields, so optional getattrs.
     """
     tools = getattr(agent, "_tools", None)
+    model_obj = getattr(agent, "_model", None)
+    model_id = getattr(model_obj, "id", model_obj) if model_obj is not None else None
+    base_url = None
+    extra = getattr(model_obj, "extra", None)
+    if isinstance(extra, dict):
+        base_url = extra.get("base_url")
+    if base_url is None:
+        # LocalAgent (legacy direct-construction) still exposes _base_url.
+        base_url = getattr(agent, "_base_url", None)
     return {
         "id": agent.id,
         "provider": _provider_name(agent),
-        "model": getattr(agent, "_model", None),
+        "model": model_id,
         "system_prompt": getattr(agent, "_system_prompt", None),
-        "base_url": getattr(agent, "_base_url", None),
+        "base_url": base_url,
         "tools": sorted(tools.names()) if tools is not None else [],
     }
 

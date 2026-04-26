@@ -140,7 +140,7 @@ Then start the gateway with `--base-url`:
 
 ```bash
 oxenclaw gateway start \
-  --provider local --model gemma4:latest \
+  --provider ollama --model gemma4:latest \
   --base-url http://172.28.176.1:11434/v1
 ```
 
@@ -213,7 +213,7 @@ Create `~/.oxenclaw/config.yaml`:
 channels: {}
 agents:
   default:
-    provider: local
+    provider: ollama
     model: gemma4:latest
     system_prompt: |
       You are a helpful assistant.
@@ -223,7 +223,7 @@ Generate a token and start:
 
 ```bash
 export OXENCLAW_GATEWAY_TOKEN=$(openssl rand -hex 32)
-oxenclaw gateway start --provider local
+oxenclaw gateway start --provider ollama
 ```
 
 You should see `gateway listening on http://127.0.0.1:7331`.
@@ -240,7 +240,7 @@ If you want the gateway reachable from another machine on your LAN
 (through the Windows host), bind to `0.0.0.0`:
 
 ```bash
-oxenclaw gateway start --host 0.0.0.0 --port 7331 --provider local
+oxenclaw gateway start --host 0.0.0.0 --port 7331 --provider ollama
 ```
 
 Then open Windows port 7331 if your Windows Firewall blocks it. WSL2
@@ -264,7 +264,7 @@ the systemd unit from [`docs/OPERATIONS.md`](OPERATIONS.md).
 If systemd isn't available, run under `tmux` / `screen` / `nohup`:
 
 ```bash
-nohup oxenclaw gateway start --provider local > ~/oxenclaw.log 2>&1 &
+nohup oxenclaw gateway start --provider ollama > ~/oxenclaw.log 2>&1 &
 disown
 ```
 
@@ -408,7 +408,7 @@ ip route show default | awk '{print $3}'
 # 예: 172.28.176.1
 
 oxenclaw gateway start \
-  --provider local --model gemma4:latest \
+  --provider ollama --model gemma4:latest \
   --base-url http://172.28.176.1:11434/v1
 ```
 
@@ -456,7 +456,7 @@ pytest -q
 channels: {}
 agents:
   default:
-    provider: local
+    provider: ollama
     model: gemma4:latest
     system_prompt: |
       You are a helpful assistant.
@@ -464,7 +464,7 @@ agents:
 
 ```bash
 export OXENCLAW_GATEWAY_TOKEN=$(openssl rand -hex 32)
-oxenclaw gateway start --provider local
+oxenclaw gateway start --provider ollama
 ```
 
 `gateway listening on http://127.0.0.1:7331` 확인. **Windows 브라우저**에서
@@ -475,7 +475,7 @@ oxenclaw gateway start --provider local
 다른 PC에서 접근하려면 `0.0.0.0` 바인드:
 
 ```bash
-oxenclaw gateway start --host 0.0.0.0 --port 7331 --provider local
+oxenclaw gateway start --host 0.0.0.0 --port 7331 --provider ollama
 ```
 
 Windows 방화벽이 막으면 7331 포트 열기. WSL2가 LAN 자동 포워딩.
@@ -495,7 +495,7 @@ PowerShell에서 `wsl --shutdown` → 재시작 →
 systemd 없으면 `nohup`:
 
 ```bash
-nohup oxenclaw gateway start --provider local > ~/oxenclaw.log 2>&1 &
+nohup oxenclaw gateway start --provider ollama > ~/oxenclaw.log 2>&1 &
 disown
 ```
 

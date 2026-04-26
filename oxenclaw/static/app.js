@@ -781,15 +781,57 @@ const AgentsView = {
       left.append(renderCreateForm(providers));
     }
 
+    // openclaw-style: provider IS the model's catalog provider id, not
+    // an agent-class selector. The model field auto-suggests a sensible
+    // default per provider; users can type anything (custom vLLM models
+    // etc. work via the factory's synthetic-registry path).
+    const PROVIDER_MODEL_HINTS = {
+      anthropic: "claude-sonnet-4-6",
+      "anthropic-vertex": "claude-sonnet-4-6",
+      openai: "gpt-4o-mini",
+      google: "gemini-2.0-flash",
+      "vertex-ai": "gemini-2.0-flash",
+      ollama: "gemma4:latest",
+      vllm: "meta-llama/Llama-3.1-8B-Instruct",
+      lmstudio: "gemma4:latest",
+      llamacpp: "gemma4:latest",
+      "openai-compatible": "gemma4:latest",
+      proxy: "gemma4:latest",
+      litellm: "gemma4:latest",
+      bedrock: "claude-sonnet-4-6",
+      groq: "llama-3.1-70b-versatile",
+      deepseek: "deepseek-chat",
+      mistral: "mistral-large-latest",
+      together: "meta-llama/Llama-3.1-70B-Instruct-Turbo",
+      fireworks: "accounts/fireworks/models/llama-v3p1-70b-instruct",
+      kilocode: "kilo-flash",
+      moonshot: "moonshot-v1-8k",
+      zai: "glm-4-plus",
+      minimax: "abab6.5-chat",
+      openrouter: "openrouter/auto",
+      echo: "(no model — echoes input)",
+    };
+
     function renderCreateForm(providers) {
       const card = el("div", { class: "card", style: "margin-top:12px" });
       card.append(el("h3", { class: "card-title" }, "Create new"));
 
       const idIn = el("input", { type: "text", placeholder: "agent id" });
       const provSel = el("select", {});
-      for (const p of providers) provSel.append(el("option", { value: p }, p));
-      const modelIn = el("input", { type: "text", placeholder: "model (provider-specific)" });
-      const baseIn = el("input", { type: "text", placeholder: "base_url (local only)" });
+      const sortedProviders = [...providers].sort();
+      for (const p of sortedProviders) provSel.append(el("option", { value: p }, p));
+      const modelIn = el("input", {
+        type: "text",
+        placeholder: PROVIDER_MODEL_HINTS[provSel.value] || "model id (catalog or custom)",
+      });
+      provSel.addEventListener("change", () => {
+        const hint = PROVIDER_MODEL_HINTS[provSel.value];
+        modelIn.placeholder = hint || "model id (catalog or custom)";
+      });
+      const baseIn = el("input", {
+        type: "text",
+        placeholder: "base_url (override transport URL — Ollama/vLLM/etc.)",
+      });
       const sysIn = el("textarea", { placeholder: "system_prompt (optional)" });
 
       const create = el("button", { class: "btn btn-primary", onclick: async () => {

@@ -33,6 +33,10 @@ dev = [
     "respx>=0.21",
     "ruff>=0.7",
     "pyright>=1.1",
+    # Headless browser tests under `tests/dashboard/`. The whole suite
+    # auto-skips when Chromium / its system libs are missing — install
+    # once with: `playwright install chromium && sudo playwright install-deps chromium`
+    "playwright>=1.50",
 ]
 browser = [
     "playwright>=1.50",

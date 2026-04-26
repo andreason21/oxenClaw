@@ -174,24 +174,33 @@ sampyclaw message send --agent default "summarize today's news headlines"
 ## Architecture
 
 ```
-                    ┌────────────────────────────────────────────┐
-                    │              GATEWAY (port 7331)           │
-                    │  WS JSON-RPC + HTTP /metrics /healthz      │
-                    │             /readyz / dashboard            │
-                    └──────────┬──────────────────┬──────────────┘
-                               │                  │
-   ┌───────────────────────────┴──┐         ┌─────┴─────────┐
-   │ Channel router               │         │ Agent runtime │
-   │ (one supervisor per channel) │         │  - LocalAgent │
-   │                              │         │  - PiAgent    │
-   │ Telegram, ... pluggable      │         │  - Anthropic  │
-   └─────────────┬────────────────┘         └─────┬─────────┘
-                 │                                │
-                 └────────────┬───────────────────┘
-                              │
-   ┌──────────────────────────┴──────────────────────────────┐
-   │  Tools  ·  Skills  ·  MCP client  ·  Memory  ·  Wiki     │
-   │  Approvals  ·  Cron  ·  NetPolicy  ·  Sandbox            │
+   ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐
+   │ Tauri desktop    │  │ Browser dashboard│  │ Channels         │
+   │ (Win .msi /      │  │ (built-in SPA at │  │ - Telegram (in)  │
+   │  Ubuntu .deb /   │  │  port 7331)      │  │ - Slack outbound │
+   │  .AppImage)      │  │                  │  │ - …pluggable     │
+   └────────┬─────────┘  └─────────┬────────┘  └────────┬─────────┘
+            │ WS+token, Origin-locked│                   │
+            └───────────────┬────────┴───────────────────┘
+                            │
+                   ┌────────┴───────────────────────────────┐
+                   │           GATEWAY (port 7331)          │
+                   │  WS JSON-RPC + HTTP /metrics /healthz  │
+                   │  /readyz / dashboard / static assets   │
+                   └────────────────┬───────────────────────┘
+                                    │
+   ┌────────────────────────────────┴────────────────────────────┐
+   │ Agent runtime                                               │
+   │  - LocalAgent  (Ollama / vLLM / any OpenAI-compatible HTTP) │
+   │  - PiAgent     (22 hosted providers, incl. Anthropic / GPT  │
+   │                 / Gemini / Bedrock / Groq …)                │
+   │  - EchoAgent   (test fixture)                               │
+   │ `--provider anthropic` → PiAgent pinned to claude-sonnet-4-6│
+   └───────────────────────────┬─────────────────────────────────┘
+                               │
+   ┌───────────────────────────┴──────────────────────────────┐
+   │  Tools · Skills · MCP client · Memory · Wiki             │
+   │  Approvals · Cron · NetPolicy · Sandbox                  │
    └──────────────────────────────────────────────────────────┘
 ```
 
@@ -511,24 +520,34 @@ sampyclaw message send --agent default "오늘 뉴스 헤드라인 요약해줘"
 ### 아키텍처
 
 ```
-                    ┌────────────────────────────────────────────┐
-                    │           GATEWAY (port 7331)              │
-                    │  WS JSON-RPC + HTTP /metrics /healthz      │
-                    │            /readyz / dashboard             │
-                    └──────────┬──────────────────┬──────────────┘
-                               │                  │
-   ┌───────────────────────────┴──┐         ┌─────┴─────────┐
-   │ 채널 라우터                  │         │ 에이전트 런타임│
-   │ (채널당 슈퍼바이저 1개)      │         │  - LocalAgent │
-   │ Telegram 등 플러그인 가능     │         │  - PiAgent    │
-   └─────────────┬────────────────┘         │  - Anthropic  │
-                 │                          └─────┬─────────┘
-                 └──────────┬───────────────────┘
+   ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐
+   │ Tauri 데스크톱앱 │  │ 브라우저 대시보드│  │ 채널              │
+   │ (Win .msi /      │  │ (번들 SPA,       │  │ - Telegram (양방향)│
+   │  Ubuntu .deb /   │  │  port 7331)      │  │ - Slack 아웃바운드│
+   │  .AppImage)      │  │                  │  │ - …플러그인 가능  │
+   └────────┬─────────┘  └─────────┬────────┘  └────────┬─────────┘
+            │ WS+토큰, Origin 잠금│                     │
+            └───────────────┬─────┴─────────────────────┘
                             │
-   ┌────────────────────────┴────────────────────────────────┐
-   │  도구 · 스킬 · MCP 클라이언트 · 메모리 · 위키            │
-   │  승인 · cron · NetPolicy · 샌드박스                     │
-   └──────────────────────────────────────────────────────────┘
+                   ┌────────┴────────────────────────────────┐
+                   │           GATEWAY (port 7331)           │
+                   │  WS JSON-RPC + HTTP /metrics /healthz   │
+                   │  /readyz / dashboard / 정적 자원        │
+                   └────────────────┬────────────────────────┘
+                                    │
+   ┌────────────────────────────────┴──────────────────────────────┐
+   │ 에이전트 런타임                                               │
+   │  - LocalAgent  (Ollama / vLLM / OpenAI 호환 HTTP)             │
+   │  - PiAgent     (22개 호스티드 프로바이더 — Anthropic / GPT /  │
+   │                 Gemini / Bedrock / Groq …)                    │
+   │  - EchoAgent   (테스트용)                                     │
+   │ `--provider anthropic` → PiAgent + claude-sonnet-4-6 기본값   │
+   └───────────────────────────┬───────────────────────────────────┘
+                               │
+   ┌───────────────────────────┴───────────────────────────────┐
+   │  도구 · 스킬 · MCP 클라이언트 · 메모리 · 위키              │
+   │  승인 · cron · NetPolicy · 샌드박스                       │
+   └────────────────────────────────────────────────────────────┘
 ```
 
 | 계층 | 하는 일 |

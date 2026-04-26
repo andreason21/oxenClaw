@@ -36,27 +36,52 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             desktop/src-tauri/target
-          key: cargo-${{ runner.os }}-${{ hashFiles('desktop/src-tauri/Cargo.toml') }}
+          key: cargo-${{ runner.os }}-${{ hashFiles('desktop/src-tauri/Cargo.toml', 'desktop/src-tauri/tauri.conf.json') }}
 
       - name: Install Tauri CLI
         run: cargo install tauri-cli --version "^2.0" --locked
 
-      - name: Install WiX 3.11 toolset (required for .msi)
-        # Tauri 2.x doesn't auto-install WiX. Without this step the
-        # bundler silently skips msi and only NSIS .exe is produced.
+      - name: Locate or install WiX toolset (required for .msi)
+        # `windows-latest` ships WiX 3.x preinstalled; reuse it if we
+        # find candle.exe, only falling back to a fresh `choco install`
+        # when nothing is detected. See release.yml for the full rationale.
         shell: pwsh
         run: |
-          choco install -y wixtoolset --version=3.11.2
-          $wixBin = "${env:ProgramFiles(x86)}\WiX Toolset v3.11\bin"
-          if (-Not (Test-Path $wixBin)) {
-            $wixBin = "$env:ProgramFiles\WiX Toolset v3.11\bin"
+          $ErrorActionPreference = "Stop"
+          $wixBin = $null
+          $candle = (Get-Command candle.exe -ErrorAction SilentlyContinue)
+          if ($candle) {
+            $wixBin = Split-Path $candle.Source -Parent
           }
-          if (-Not (Test-Path "$wixBin\candle.exe")) {
-            Write-Error "WiX install did not produce candle.exe at $wixBin"
+          if (-not $wixBin) {
+            $candidates = @(
+              "${env:ProgramFiles(x86)}\WiX Toolset v3.14\bin",
+              "$env:ProgramFiles\WiX Toolset v3.14\bin",
+              "${env:ProgramFiles(x86)}\WiX Toolset v3.11\bin",
+              "$env:ProgramFiles\WiX Toolset v3.11\bin",
+              "$env:ProgramData\chocolatey\lib\wixtoolset\tools"
+            )
+            foreach ($c in $candidates) {
+              if (Test-Path "$c\candle.exe") { $wixBin = $c; break }
+            }
+          }
+          if (-not $wixBin) {
+            choco install -y wixtoolset
+            foreach ($c in @(
+              "${env:ProgramFiles(x86)}\WiX Toolset v3.14\bin",
+              "$env:ProgramFiles\WiX Toolset v3.14\bin",
+              "${env:ProgramFiles(x86)}\WiX Toolset v3.11\bin",
+              "$env:ProgramFiles\WiX Toolset v3.11\bin"
+            )) {
+              if (Test-Path "$c\candle.exe") { $wixBin = $c; break }
+            }
+          }
+          if (-not $wixBin -or -not (Test-Path "$wixBin\candle.exe")) {
+            Write-Error "WiX install did not produce candle.exe in any known location"
             exit 1
           }
-          echo $wixBin | Out-File -FilePath $env:GITHUB_PATH -Append
-          echo "WIX=$wixBin" | Out-File -FilePath $env:GITHUB_ENV -Append
+          echo $wixBin | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+          echo "WIX=$wixBin" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Build .msi + NSIS .exe
         working-directory: desktop

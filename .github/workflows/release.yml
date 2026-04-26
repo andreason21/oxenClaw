@@ -122,26 +122,60 @@ jobs:
             desktop/src-tauri/target
           key: cargo-${{ runner.os }}-${{ hashFiles('desktop/src-tauri/Cargo.toml') }}
       - run: cargo install tauri-cli --version "^2.0" --locked
-      - name: Install WiX 3.11 toolset (required for .msi)
-        # Tauri 2.x doesn't auto-install WiX. Without this step
-        # `cargo tauri build` silently skips the msi bundle and only
-        # NSIS .exe ships. We install WiX 3.x via Chocolatey (the
-        # `windows-latest` runner has it preinstalled) and add its
-        # bin dir to PATH so `candle.exe`/`light.exe` are visible to
-        # tauri-bundler.
+      - name: Locate or install WiX toolset (required for .msi)
+        # Tauri 2.x doesn't auto-install WiX, so we have to make sure
+        # `candle.exe`/`light.exe` are on PATH for the bundler. The
+        # `windows-latest` runner ships a recent WiX 3.x preinstalled
+        # already (currently 3.14.1) — re-installing on top of that
+        # fails because choco refuses downgrades. Strategy:
+        #
+        #   1. If candle.exe is already on PATH → use that.
+        #   2. Probe known WiX 3.x install dirs (3.14, 3.11).
+        #   3. Only install via choco if neither finds anything.
         shell: pwsh
         run: |
-          choco install -y wixtoolset --version=3.11.2
-          $wixBin = "${env:ProgramFiles(x86)}\WiX Toolset v3.11\bin"
-          if (-Not (Test-Path $wixBin)) {
-            $wixBin = "$env:ProgramFiles\WiX Toolset v3.11\bin"
+          $ErrorActionPreference = "Stop"
+          $wixBin = $null
+          $candle = (Get-Command candle.exe -ErrorAction SilentlyContinue)
+          if ($candle) {
+            $wixBin = Split-Path $candle.Source -Parent
+            Write-Host "Found candle.exe on PATH: $wixBin"
           }
-          if (-Not (Test-Path "$wixBin\candle.exe")) {
-            Write-Error "WiX install did not produce candle.exe at $wixBin"
+          if (-not $wixBin) {
+            $candidates = @(
+              "${env:ProgramFiles(x86)}\WiX Toolset v3.14\bin",
+              "$env:ProgramFiles\WiX Toolset v3.14\bin",
+              "${env:ProgramFiles(x86)}\WiX Toolset v3.11\bin",
+              "$env:ProgramFiles\WiX Toolset v3.11\bin",
+              "$env:ProgramData\chocolatey\lib\wixtoolset\tools"
+            )
+            foreach ($c in $candidates) {
+              if (Test-Path "$c\candle.exe") {
+                $wixBin = $c
+                Write-Host "Found preinstalled WiX at: $wixBin"
+                break
+              }
+            }
+          }
+          if (-not $wixBin) {
+            Write-Host "No WiX found — installing via Chocolatey."
+            choco install -y wixtoolset
+            $candidates = @(
+              "${env:ProgramFiles(x86)}\WiX Toolset v3.14\bin",
+              "$env:ProgramFiles\WiX Toolset v3.14\bin",
+              "${env:ProgramFiles(x86)}\WiX Toolset v3.11\bin",
+              "$env:ProgramFiles\WiX Toolset v3.11\bin"
+            )
+            foreach ($c in $candidates) {
+              if (Test-Path "$c\candle.exe") { $wixBin = $c; break }
+            }
+          }
+          if (-not $wixBin -or -not (Test-Path "$wixBin\candle.exe")) {
+            Write-Error "WiX install did not produce candle.exe in any known location"
             exit 1
           }
-          echo $wixBin | Out-File -FilePath $env:GITHUB_PATH -Append
-          echo "WIX=$wixBin" | Out-File -FilePath $env:GITHUB_ENV -Append
+          echo $wixBin | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+          echo "WIX=$wixBin" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           & "$wixBin\candle.exe" -? | Select-Object -First 1
       - name: Build .msi + NSIS .exe (with updater signing if key set)
         working-directory: desktop
@@ -228,7 +262,10 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             desktop/src-tauri/target
-          key: cargo-${{ matrix.distro }}-${{ hashFiles('desktop/src-tauri/Cargo.toml') }}
+          # Invalidate when either Cargo.toml or tauri.conf.json changes —
+          # bundle target list edits (e.g. dropping/restoring appimage)
+          # need a clean build to take effect.
+          key: cargo-${{ matrix.distro }}-${{ hashFiles('desktop/src-tauri/Cargo.toml', 'desktop/src-tauri/tauri.conf.json') }}
       - name: Install Tauri Linux build deps
         run: |
           sudo apt-get update

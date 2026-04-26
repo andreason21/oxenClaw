@@ -120,7 +120,7 @@ class OpenAIEmbeddings:
                             f"Ollama, run `ollama pull {self._model}` on the "
                             f"host serving {self._base_url}. Verify the URL "
                             f"with `curl {self._base_url}/embeddings -d "
-                            f"'{{\"model\":\"{self._model}\",\"input\":\"hi\"}}'`."
+                            f'\'{{"model":"{self._model}","input":"hi"}}\'`.'
                         )
                     raise EmbeddingError(
                         f"embeddings endpoint returned {resp.status}: {body[:300]}{hint}"

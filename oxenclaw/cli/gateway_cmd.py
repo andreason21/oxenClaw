@@ -309,11 +309,11 @@ async def _run_gateway(
     # base_url because operators sometimes run chat against a remote
     # vLLM but keep embeddings local on Ollama (or vice versa).
     embed_kwargs: dict[str, str] = {}
-    if (env_base := os.environ.get("OXENCLAW_EMBED_BASE_URL")):
+    if env_base := os.environ.get("OXENCLAW_EMBED_BASE_URL"):
         embed_kwargs["base_url"] = env_base
-    if (env_model := os.environ.get("OXENCLAW_EMBED_MODEL")):
+    if env_model := os.environ.get("OXENCLAW_EMBED_MODEL"):
         embed_kwargs["model"] = env_model
-    if (env_key := os.environ.get("OXENCLAW_EMBED_API_KEY")):
+    if env_key := os.environ.get("OXENCLAW_EMBED_API_KEY"):
         embed_kwargs["api_key"] = env_key
     memory_retriever = MemoryRetriever.for_root(paths, OpenAIEmbeddings(**embed_kwargs))
 

@@ -258,50 +258,6 @@ async def test_pi_agent_with_image_capable_model_appends_image_block(
     assert has_image and has_text
 
 
-# ─── AnthropicAgent ──────────────────────────────────────────────────
-
-
-@pytest.mark.asyncio
-async def test_anthropic_agent_user_message_carries_image_block(tmp_path):  # type: ignore[no-untyped-def]
-    from sampyclaw.agents.anthropic_agent import AnthropicAgent
-
-    captured: list = []
-
-    class _StubAnthropicClient:
-        class _Messages:
-            async def create(self_, **kwargs):  # type: ignore[no-untyped-def]
-                captured.append(kwargs)
-                return type(
-                    "Resp",
-                    (),
-                    {
-                        "content": [
-                            type("B", (), {"type": "text", "text": "I see it."})()
-                        ],
-                        "stop_reason": "end_turn",
-                    },
-                )()
-
-        messages = _Messages()
-
-    agent = AnthropicAgent(
-        agent_id="ant",
-        model="claude-sonnet-4-6",
-        client=_StubAnthropicClient(),
-        paths=_paths(tmp_path),
-    )
-
-    env = _envelope(text="describe", photo_b64=_jpeg_b64())
-    [_ async for _ in agent.handle(env, _ctx())]
-
-    assert captured, "client.messages.create was not called"
-    msgs = captured[0]["messages"]
-    assert msgs[-1]["role"] == "user"
-    blocks = msgs[-1]["content"]
-    assert isinstance(blocks, list)
-    types = [b["type"] for b in blocks]
-    assert "image" in types
-    assert "text" in types
-    img_block = next(b for b in blocks if b["type"] == "image")
-    assert img_block["source"]["type"] == "base64"
-    assert img_block["source"]["media_type"] == "image/jpeg"
+# Anthropic image-block coverage now lives in `tests/test_pi_providers.py`
+# (Anthropic provider serializer test) — the standalone AnthropicAgent
+# was removed in favour of routing `--provider anthropic` through PiAgent.

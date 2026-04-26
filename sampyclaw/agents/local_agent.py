@@ -5,8 +5,8 @@ Works with Ollama, LM Studio, vLLM, llama.cpp `server`, text-generation-webui
 Ollama at `127.0.0.1:11434` running a tool-capable model. Change via
 constructor or CLI flags.
 
-Design mirrors `AnthropicAgent` but adds capabilities the local path needs
-more than the Anthropic path:
+Design adds capabilities the local path needs more than a hosted-API
+path:
 - Streaming (`stream=True`) with delta accumulation for content + tool_calls.
 - Retry/backoff on transient errors (429, 5xx, connection drops, timeouts).
 - One-shot warmup ping so the first user request doesn't pay model load.

@@ -38,8 +38,8 @@ def _provider_name(agent) -> str:  # type: ignore[no-untyped-def]
     cls = type(agent).__name__
     return {
         "EchoAgent": "echo",
-        "AnthropicAgent": "anthropic",
         "LocalAgent": "local",
+        "PiAgent": "pi",
     }.get(cls, cls)
 
 

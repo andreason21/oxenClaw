@@ -6,8 +6,7 @@ Lookup priority:
    for any model the runtime knows about (`Model.supports_image_input`).
 2. A hard-coded set of well-known multimodal models for cases where a
    non-pi agent is talking to a provider directly (e.g. `LocalAgent`
-   pointed at an Ollama tag that isn't in the catalog yet, or the plain
-   `AnthropicAgent` constructed without a pi `Model` handle).
+   pointed at an Ollama tag that isn't in the catalog yet).
 
 The hard-coded list errs on the side of permissive — it's used to *opt
 in* image dispatch, not to block providers that have already accepted

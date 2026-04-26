@@ -196,7 +196,7 @@ sampyclaw message send --agent default "summarize today's news headlines"
 | Layer | What lives there |
 |---|---|
 | `gateway/` | WS JSON-RPC server, HTTP routes (`/metrics`, `/healthz`, `/readyz`, dashboard), per-connection concurrency cap, bearer auth, graceful shutdown |
-| `agents/` | Agent registry, factory, `LocalAgent` (Ollama / OpenAI-compatible), `AnthropicAgent`, `PiAgent` (22 providers via `pi/`), `EchoAgent` |
+| `agents/` | Agent registry, factory, `LocalAgent` (Ollama / vLLM / OpenAI-compatible), `PiAgent` (22 providers via `pi/`, also serves `--provider anthropic`), `EchoAgent` |
 | `channels/` | Channel abstraction, router, runner supervisor (restart-on-error with backoff) |
 | `extensions/telegram/` | First-party Telegram plugin (aiogram) — file-for-file mirror of openclaw's TS module |
 | `pi/` | The pi-embedded-runner port — provider wrappers, run loop, compaction, persistence, system-prompt assembly, cache observability, tool runtime, MCP client |
@@ -525,7 +525,7 @@ sampyclaw message send --agent default "오늘 뉴스 헤드라인 요약해줘"
 | 계층 | 하는 일 |
 |---|---|
 | `gateway/` | WS JSON-RPC 서버, HTTP 라우트, 연결당 동시성 한도, Bearer 인증, 그레이스풀 종료 |
-| `agents/` | 에이전트 레지스트리·팩토리, LocalAgent / AnthropicAgent / PiAgent / EchoAgent |
+| `agents/` | 에이전트 레지스트리·팩토리, LocalAgent / PiAgent / EchoAgent (`--provider anthropic`은 PiAgent로 라우팅) |
 | `channels/` | 채널 추상화, 라우터, 슈퍼바이저(에러 시 백오프 재시작) |
 | `extensions/telegram/` | 1st-party Telegram 플러그인 (aiogram). openclaw TS 모듈을 파일 단위로 미러링 |
 | `pi/` | pi-embedded-runner 포트 — 프로바이더 래퍼, 런 루프, 압축, 영속, 시스템 프롬프트 조립, 캐시 옵저버, 도구 런타임, MCP 클라이언트 |

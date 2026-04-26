@@ -5,7 +5,8 @@ from __future__ import annotations
 import pytest
 import typer
 
-from sampyclaw.agents import AnthropicAgent, EchoAgent
+from sampyclaw.agents import EchoAgent
+from sampyclaw.agents.pi_agent import PiAgent
 from sampyclaw.cli.gateway_cmd import build_agent
 
 
@@ -16,8 +17,9 @@ def test_build_echo_agent() -> None:
 
 
 def test_build_anthropic_agent_with_default_tools() -> None:
+    """`--provider anthropic` is a pi alias now; default tools still wire."""
     agent = build_agent(agent_id="assistant", provider="anthropic")
-    assert isinstance(agent, AnthropicAgent)
+    assert isinstance(agent, PiAgent)
     assert agent.id == "assistant"
     assert sorted(agent._tools.names()) == ["echo", "get_time"]
 

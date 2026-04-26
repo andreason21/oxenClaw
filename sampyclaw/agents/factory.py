@@ -9,13 +9,17 @@ from __future__ import annotations
 import asyncio
 import os
 
-from sampyclaw.agents.anthropic_agent import AnthropicAgent
 from sampyclaw.agents.base import Agent
 from sampyclaw.agents.builtin_tools import default_tools
 from sampyclaw.agents.echo import EchoAgent
 from sampyclaw.agents.local_agent import VLLM_DEFAULT_BASE_URL, LocalAgent
 from sampyclaw.agents.pi_agent import PiAgent
 from sampyclaw.agents.tools import Tool, ToolRegistry
+
+# When `--provider anthropic` is invoked without an explicit `--model`,
+# we route through PiAgent and pick the latest mid-tier Sonnet so
+# behaviour stays close to the old inline AnthropicAgent default.
+DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-6"
 
 
 def _maybe_canvas_tools(agent_id: str) -> list[Tool]:
@@ -65,10 +69,14 @@ class UnknownProvider(ValueError):
     """Raised when `provider` is not one of the supported names."""
 
 
-# `pi` is the new pi-embedded-runner-backed agent — full streaming, tool
+# `pi` is the pi-embedded-runner-backed agent — full streaming, tool
 # loop, compaction, cache observability, multi-provider.
 # `vllm` is a thin alias of `local` with strict-OpenAI payload (no Ollama
 # extras) and warmup off; defaults to vLLM's canonical 127.0.0.1:8000/v1.
+# `anthropic` is a thin alias of `pi` pinned to a Claude default model
+# (the inline AnthropicAgent was removed in favour of PiAgent's richer
+# Anthropic path: cache_control, thinking, cache observability,
+# compaction, persistence).
 SUPPORTED_PROVIDERS: tuple[str, ...] = ("pi", "local", "vllm", "echo", "anthropic")
 
 
@@ -87,7 +95,7 @@ def build_agent(
     """Build an agent. Provider-specific kwargs are silently ignored when not applicable."""
     if provider == "echo":
         return EchoAgent(agent_id=agent_id)
-    if provider == "pi":
+    if provider in ("pi", "anthropic"):
         resolved_tools = tools
         if resolved_tools is None:
             resolved_tools = ToolRegistry()
@@ -103,12 +111,15 @@ def build_agent(
         kwargs: dict = {"agent_id": agent_id, "tools": resolved_tools}  # type: ignore[type-arg]
         if system_prompt is not None:
             kwargs["system_prompt"] = system_prompt
-        if model is not None:
-            kwargs["model_id"] = model
+        resolved_model = model
+        if provider == "anthropic" and resolved_model is None:
+            resolved_model = DEFAULT_ANTHROPIC_MODEL
+        if resolved_model is not None:
+            kwargs["model_id"] = resolved_model
         if memory is not None:
             kwargs["memory"] = memory
         return PiAgent(**kwargs)
-    if provider in ("anthropic", "local", "vllm"):
+    if provider in ("local", "vllm"):
         resolved_tools = tools
         if resolved_tools is None:
             resolved_tools = ToolRegistry()
@@ -128,9 +139,6 @@ def build_agent(
             kwargs["model"] = model
         if memory is not None:
             kwargs["memory"] = memory
-        if provider == "anthropic":
-            return AnthropicAgent(**kwargs)
-        # provider in ("local", "vllm")
         if provider == "vllm":
             kwargs["flavor"] = "vllm"
             kwargs["base_url"] = base_url if base_url is not None else VLLM_DEFAULT_BASE_URL

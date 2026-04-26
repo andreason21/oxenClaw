@@ -5,8 +5,8 @@ inbound photos to the model.
 
 - `capabilities.py` — `model_supports_images()` — capability gate sourced
   from the pi catalog with a hard-coded fallback list of known
-  multimodal models for providers that don't go through pi (e.g. plain
-  AnthropicAgent, LocalAgent against a non-catalog Ollama tag).
+  multimodal models for providers that don't go through pi (e.g.
+  LocalAgent pointed at a non-catalog Ollama tag).
 - `inbound.py` — `InboundImage` dataclass + `normalize_media_item()`
   that turns a `MediaItem` into bytes/base64 with size + MIME guards.
 - `formats.py` — provider-specific content-block builders so each

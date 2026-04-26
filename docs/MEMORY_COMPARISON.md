@@ -63,7 +63,7 @@ These are **different products**. openclaw's design is "agent reads your knowled
 | `memory_get` tool (read file range) | ✅ | ❌ | Out unless file-backed |
 | CLI commands | ✅ `memory-core/src/cli*.ts` (list/sync/dream/stats) | ❌ (`cli/memory_cmd.py` stub) | **P1** (at least sync/list/stats) |
 | Prompt-section builder | ✅ `buildPromptSection()` w/ budget | ✅ `format_memories_for_prompt()` | — (done, simpler) |
-| Agent auto-injection | ✅ via prompt-section + flush-plan | Partial — formatter exists, not wired from `anthropic_agent.py` | **P0 for Phase A.1** |
+| Agent auto-injection | ✅ via prompt-section + flush-plan | Partial — formatter exists, not wired into `LocalAgent` / `PiAgent` system-prompt assembly yet | **P0 for Phase A.1** |
 | Per-agent isolation | ✅ `agent-scope.ts` (`resolveAgentDir`) | ✅ `agent_id` FK | — |
 | Session-scope memories | ✅ sessions source | ✅ `session_key` column | — |
 | Dimension mismatch error | ✅ | ✅ explicit ValueError | — |

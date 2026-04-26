@@ -5,13 +5,14 @@ from __future__ import annotations
 import pytest
 
 from sampyclaw.agents import (
-    AnthropicAgent,
     EchoAgent,
     LocalAgent,
     SUPPORTED_PROVIDERS,
     UnknownProvider,
     build_agent,
 )
+from sampyclaw.agents.factory import DEFAULT_ANTHROPIC_MODEL
+from sampyclaw.agents.pi_agent import PiAgent
 
 
 def test_build_echo() -> None:
@@ -19,21 +20,25 @@ def test_build_echo() -> None:
     assert isinstance(agent, EchoAgent)
 
 
-def test_build_anthropic_defaults_to_builtin_tools() -> None:
+def test_build_anthropic_routes_to_pi_with_claude_default() -> None:
+    """`--provider anthropic` is now a thin alias of `pi` pinned to a
+    Claude default model. The standalone AnthropicAgent was removed."""
     agent = build_agent(agent_id="a", provider="anthropic")
-    assert isinstance(agent, AnthropicAgent)
+    assert isinstance(agent, PiAgent)
     assert sorted(agent._tools.names()) == ["echo", "get_time"]
+    assert agent._model.id == DEFAULT_ANTHROPIC_MODEL
 
 
-def test_build_anthropic_custom_system_prompt_and_model() -> None:
+def test_build_anthropic_custom_model_passes_through() -> None:
     agent = build_agent(
         agent_id="a",
         provider="anthropic",
         system_prompt="You are brief.",
         model="claude-haiku-4-5-20251001",
     )
+    assert isinstance(agent, PiAgent)
+    assert agent._model.id == "claude-haiku-4-5-20251001"
     assert agent._system_prompt == "You are brief."
-    assert agent._model == "claude-haiku-4-5-20251001"
 
 
 def test_build_local_defaults_target_tool_capable_ollama_model() -> None:
@@ -62,12 +67,12 @@ def test_build_local_custom_endpoint_and_model() -> None:
     assert agent._system_prompt == "You are terse."
 
 
-def test_build_local_ignores_base_url_on_anthropic() -> None:
-    # base_url is local-only; anthropic should ignore it, not crash.
+def test_anthropic_provider_ignores_base_url() -> None:
+    # base_url is for local/vllm; anthropic (now a pi alias) ignores it.
     agent = build_agent(
         agent_id="a", provider="anthropic", base_url="ignored"
     )
-    assert isinstance(agent, AnthropicAgent)
+    assert isinstance(agent, PiAgent)
 
 
 def test_unknown_provider_raises() -> None:

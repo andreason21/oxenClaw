@@ -171,6 +171,94 @@ sampyclaw message send --agent default "summarize today's news headlines"
 
 ---
 
+## Clients
+
+You can talk to the running gateway through three surfaces. They all
+go through the same WS JSON-RPC endpoint and the same bearer-token
+authentication.
+
+### Browser dashboard (built-in, zero install)
+
+The gateway ships a single-page dashboard at `http://localhost:7331/`
+on the same port as the WS endpoint. Open it in any modern browser:
+
+```
+http://localhost:7331/
+```
+
+A login overlay appears the first time. Paste the token printed by
+`sampyclaw gateway token` (or the value of `SAMPYCLAW_GATEWAY_TOKEN`).
+Tick "Remember on this device" to write a 12-hour cookie + localStorage.
+
+What you get:
+- Chat tab with image upload (📎) for vision-capable models
+- Sessions browser (list / preview / reset / fork / archive / delete)
+- Cron, Approvals, Skills, Memory, Config, RPC log
+- Light / dark theme toggle (top-right 🌓)
+- Command palette (Ctrl+K)
+- Responsive: < 900 px collapses the sidebar to a slide-in drawer
+
+For deep walkthroughs of every interactive surface, see
+[`tests/dashboard/README.md`](tests/dashboard/README.md) (the E2E
+test catalogue is also a usage map).
+
+### Native desktop app (Windows + Ubuntu)
+
+Pre-built installers are attached to every GitHub Release at
+[`/releases`](https://github.com/andreason21/sampyClaw/releases).
+Pick the one for your OS:
+
+| OS | File | Install |
+|---|---|---|
+| Windows 11 | `sampyclaw_X.Y.Z_x64_en-US.msi` | double-click, or `winget install sampyClaw.sampyClaw` |
+| Windows 11 (no admin) | `sampyclaw_X.Y.Z_x64-setup.exe` | double-click (NSIS, per-user) |
+| Ubuntu 22.04 | `sampyclaw_X.Y.Z_amd64_ubuntu22.04.deb` | `sudo apt install ./sampyclaw_*.deb` |
+| Ubuntu 24.04 | `sampyclaw_X.Y.Z_amd64_ubuntu24.04.deb` | same with the matching file |
+| Any glibc Linux | `sampyclaw_X.Y.Z_amd64_*.AppImage` | `chmod +x *.AppImage && ./sampyclaw_*.AppImage` |
+
+First-run wizard asks for:
+- **Gateway URL** — `http://localhost:7331` for a local agent, or the
+  remote host's URL for a shared gateway.
+- **Bearer token** — paste from `sampyclaw gateway token`. Stored in
+  the OS keychain (Credential Manager on Windows, libsecret on Linux),
+  never localStorage.
+- (optional) **Auto-start on login**, **WSL auto-launch** (Windows only).
+
+Updates are delivered automatically — the app polls a signed
+`latest.json` on launch and applies new versions in the background
+(MSI on Windows, AppImage on Linux). `.deb` installs are upgraded
+through `apt` instead.
+
+Full guide: [`docs/DESKTOP_APP.md`](docs/DESKTOP_APP.md).
+
+### Messaging channels (Telegram, Slack, …)
+
+Channels are how the agent reaches users on platforms they already
+use. Configure them in `~/.sampyclaw/config.yaml`:
+
+```yaml
+channels:
+  telegram:
+    accounts:
+      - account_id: main         # bidirectional — DMs become InboundEnvelopes
+  slack:
+    accounts:
+      - account_id: alerts       # outbound-only — for #alerts notifications
+```
+
+Then drop the bot token at `~/.sampyclaw/credentials/<channel>/<account_id>.json`
+(mode 0600). After `sampyclaw gateway start` picks them up:
+
+- **Telegram** — DM the bot; the agent runs full turns with tool use.
+  See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the deep dive.
+- **Slack** — push notifications via `chat.postMessage`. Walk-through
+  for Enterprise Grid + corp proxies in [`docs/SLACK.md`](docs/SLACK.md).
+- **Custom channel** — ship a Python plugin with a
+  `sampyclaw.plugins` entry point; the runner picks it up at gateway
+  boot. See "Add a custom channel" below.
+
+---
+
 ## Architecture
 
 ```
@@ -515,6 +603,88 @@ Telegram DM을 보내면 로컬 모델이 도구를 사용해 답한다.
 ```bash
 sampyclaw message send --agent default "오늘 뉴스 헤드라인 요약해줘"
 ```
+
+### 클라이언트
+
+게이트웨이에는 3가지 클라이언트 경로가 있다. 모두 동일한 WS JSON-RPC
+엔드포인트와 동일한 Bearer 토큰 인증을 거친다.
+
+#### 브라우저 대시보드 (번들, 설치 불필요)
+
+게이트웨이가 시작되면 WS 엔드포인트와 같은 포트에서 SPA를 같이 서빙한다.
+브라우저로 열기만 하면 끝:
+
+```
+http://localhost:7331/
+```
+
+처음 열면 로그인 오버레이가 뜬다. `sampyclaw gateway token`이 출력한
+토큰 (또는 `SAMPYCLAW_GATEWAY_TOKEN` 값)을 붙여넣고 "Remember on this
+device"를 체크하면 12시간 쿠키 + localStorage 에 저장된다.
+
+제공 기능:
+- Chat 탭 + 이미지 첨부 (📎) — vision 가능 모델 자동 인식
+- 세션 브라우저 (리스트 / 미리보기 / 리셋 / 포크 / 아카이브 / 삭제)
+- Cron, Approvals, Skills, Memory, Config, RPC log
+- 라이트/다크 테마 토글 (우상단 🌓)
+- Command palette (Ctrl+K)
+- 반응형: 900 px 미만에서 사이드바가 슬라이드 drawer로 전환
+
+세부 동작은 [`tests/dashboard/README.md`](tests/dashboard/README.md)
+의 E2E 테스트 카탈로그 참고 (사용 가이드 역할도 함).
+
+#### 네이티브 데스크톱 앱 (Windows + Ubuntu)
+
+매 GitHub Release에 사전 빌드된 인스톨러가 첨부된다 →
+[`/releases`](https://github.com/andreason21/sampyClaw/releases).
+OS에 맞는 파일을 받는다:
+
+| OS | 파일 | 설치 |
+|---|---|---|
+| Windows 11 | `sampyclaw_X.Y.Z_x64_en-US.msi` | 더블클릭, 또는 `winget install sampyClaw.sampyClaw` |
+| Windows 11 (관리자 없음) | `sampyclaw_X.Y.Z_x64-setup.exe` | 더블클릭 (NSIS, per-user) |
+| Ubuntu 22.04 | `sampyclaw_X.Y.Z_amd64_ubuntu22.04.deb` | `sudo apt install ./sampyclaw_*.deb` |
+| Ubuntu 24.04 | `sampyclaw_X.Y.Z_amd64_ubuntu24.04.deb` | 동일 (24.04용 파일로) |
+| 기타 glibc Linux | `sampyclaw_X.Y.Z_amd64_*.AppImage` | `chmod +x *.AppImage && ./sampyclaw_*.AppImage` |
+
+첫 실행 마법사가 묻는 것:
+- **Gateway URL** — 로컬 에이전트면 `http://localhost:7331`, 원격이면
+  해당 호스트의 URL.
+- **Bearer 토큰** — `sampyclaw gateway token`에서 복사. OS 키체인
+  (Windows = Credential Manager, Linux = libsecret) 에 저장되며
+  localStorage 에는 절대 안 들어간다.
+- (선택) **로그인 시 자동 시작**, **WSL 자동 부팅** (Windows 전용).
+
+자동 업데이트가 내장되어 있다 — 부팅 시 서명된 `latest.json`을 폴링해서
+새 버전을 백그라운드로 적용 (Windows MSI / Linux AppImage). `.deb`
+설치본은 `apt` 로 직접 업그레이드.
+
+전체 가이드: [`docs/DESKTOP_APP.md`](docs/DESKTOP_APP.md).
+
+#### 메시징 채널 (Telegram, Slack, …)
+
+채널은 사용자가 평소 쓰는 플랫폼에서 에이전트와 대화하기 위한 통로.
+`~/.sampyclaw/config.yaml`에서 설정:
+
+```yaml
+channels:
+  telegram:
+    accounts:
+      - account_id: main         # 양방향 — DM이 InboundEnvelope로 들어옴
+  slack:
+    accounts:
+      - account_id: alerts       # 아웃바운드 전용 — #alerts 알림용
+```
+
+봇 토큰은 `~/.sampyclaw/credentials/<channel>/<account_id>.json`
+(권한 0600) 에 저장. 게이트웨이 재시작 시 자동 로드:
+
+- **Telegram** — 봇에 DM 보내면 도구 사용 포함 풀 턴 실행. 자세한 흐름은
+  [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) 참고.
+- **Slack** — `chat.postMessage` 통한 알림 발송. Enterprise Grid +
+  사내 프록시 셋업은 [`docs/SLACK.md`](docs/SLACK.md).
+- **커스텀 채널** — `sampyclaw.plugins` entry point 가진 Python 패키지
+  배포하면 게이트웨이 부팅 시 자동 로드. 아래 "커스텀 채널 추가" 참고.
 
 ### 아키텍처
 

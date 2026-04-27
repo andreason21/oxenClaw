@@ -14,6 +14,9 @@ from pydantic import BaseModel, Field, model_validator
 
 from oxenclaw.agents.tools import FunctionTool, Tool
 from oxenclaw.memory.retriever import MemoryRetriever
+from oxenclaw.plugin_sdk.runtime_env import get_logger
+
+logger = get_logger("memory.tools")
 
 
 # LLM tool-calling drift: GPT-4-class models often emit aliases like
@@ -122,6 +125,16 @@ class _GetArgs(BaseModel):
 
 def memory_save_tool(retriever: MemoryRetriever) -> Tool:
     async def _handler(args: _SaveArgs) -> str:
+        # Operator visibility: log the saved fact + tags so a
+        # `tail -f gateway.log` shows whether memory_save actually
+        # fired (vs. the model claiming it did but never calling).
+        # 200-char preview keeps long pastes from flooding the log.
+        preview = args.text.strip().replace("\n", " ")[:200]
+        logger.info(
+            "memory_save: tags=%s text=%r",
+            args.tags or [],
+            preview,
+        )
         report = await retriever.save(args.text, tags=args.tags or None)
         return (
             f"saved to {retriever.inbox_path.name}; reindexed "

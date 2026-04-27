@@ -219,6 +219,23 @@ class PiAgent:
                     hybrid=HybridConfig(enabled=True),
                     temporal_decay=TemporalDecayConfig(enabled=True),
                 )
+                # Operator-facing visibility: log the hit count + top
+                # score + first chunk's citation so a `tail -f` of
+                # gateway.log shows whether recall actually surfaced
+                # something for this turn. Without this an empty
+                # `<recalled_memories>` block (the "agent doesn't
+                # remember" symptom) is invisible from logs alone.
+                if hits:
+                    top = hits[0]
+                    logger.info(
+                        "memory recall: %d hit(s), top score=%.3f citation=%s query=%r",
+                        len(hits),
+                        top.score,
+                        top.citation,
+                        query[:80],
+                    )
+                else:
+                    logger.info("memory recall: 0 hits for query=%r", query[:80])
                 mblock = format_memories_for_prompt(hits)
                 if mblock:
                     contributions.append(memory_contribution(memory_block=mblock))

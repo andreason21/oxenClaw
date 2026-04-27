@@ -98,6 +98,20 @@ class Dispatcher:
             AgentContext(agent_id=agent_id, session_key=session_key),
         )
         ctx.history.append(envelope)
+        # Per-turn instrumentation. Without this the gateway log was
+        # silent for every successful chat turn — operators couldn't
+        # tell from logs alone whether memory recall / tool calls /
+        # the model itself fired. The matching "turn done" log lives
+        # at the bottom of this function with a duration measurement.
+        import time as _time_mod
+        _turn_started_at = _time_mod.monotonic()
+        text_preview = (envelope.text or "").strip().replace("\n", " ")[:120]
+        logger.info(
+            "turn start agent=%s session=%s text=%r",
+            agent_id,
+            session_key,
+            text_preview,
+        )
 
         results: list[SendResult] = []
         delivery_warnings: list[str] = []
@@ -125,6 +139,16 @@ class Dispatcher:
                 # channel id" routing makes this the expected path, not an
                 # operator-actionable warning.
                 logger.info("drop outbound: %s", msg)
+        elapsed_ms = int((_time_mod.monotonic() - _turn_started_at) * 1000)
+        logger.info(
+            "turn done agent=%s session=%s yielded=%d delivered=%d warnings=%d elapsed_ms=%d",
+            agent_id,
+            session_key,
+            agent_yielded,
+            len(results),
+            len(delivery_warnings),
+            elapsed_ms,
+        )
         return DispatchOutcome(
             results=results,
             agent_id=agent_id,

@@ -452,3 +452,201 @@ async def test_narrow_viewport_hamburger_opens_drawer(page) -> None:
         "!document.getElementById('app').classList.contains('nav-open')",
         timeout=2000,
     )
+
+
+# ─── cron enhanced ────────────────────────────────────────────────────
+
+
+async def test_cron_view_search_filters_jobs(page) -> None:
+    """Populate two synthetic jobs via JS, type into the search bar, and
+    verify only the matching row remains visible.
+
+    The test injects jobs directly into CronViewState and calls
+    renderJobList() (via the filter bar's input event) so we don't
+    need a live RPC server."""
+    await _click_nav(page, "cron")
+    await page.wait_for_selector(".cron-filter-bar__search", timeout=5000)
+
+    # Inject two fake jobs into client-side state and re-render.
+    await page.evaluate(
+        """() => {
+          // Give CronViewState two jobs: one matching 'alpha', one matching 'beta'.
+          window.CronViewState.allJobs = [
+            {
+              id: 'job-alpha-001', name: 'alpha job', prompt: 'do alpha stuff',
+              schedule: '0 8 * * *', enabled: true,
+              agent_id: 'assistant', channel: 'dashboard',
+              account_id: 'main', chat_id: 'chat-1',
+            },
+            {
+              id: 'job-beta-002', name: 'beta job', prompt: 'do beta stuff',
+              schedule: '0 9 * * *', enabled: true,
+              agent_id: 'assistant', channel: 'dashboard',
+              account_id: 'main', chat_id: 'chat-2',
+            },
+          ];
+          window.CronViewState.jobLastRun = { 'job-alpha-001': null, 'job-beta-002': null };
+          // Trigger a re-render by dispatching input on the search box.
+          const search = document.querySelector('.cron-filter-bar__search');
+          // First clear so a re-render shows both rows.
+          search.value = '';
+          search.dispatchEvent(new Event('input', { bubbles: true }));
+        }"""
+    )
+    # Both rows should appear.
+    await page.wait_for_function(
+        "document.querySelectorAll('.cron-row').length === 2",
+        timeout=3000,
+    )
+
+    # Now search for 'alpha' — only the alpha row should remain.
+    await page.evaluate(
+        """() => {
+          window.CronViewState.allJobs = [
+            {
+              id: 'job-alpha-001', name: 'alpha job', prompt: 'do alpha stuff',
+              schedule: '0 8 * * *', enabled: true,
+              agent_id: 'assistant', channel: 'dashboard',
+              account_id: 'main', chat_id: 'chat-1',
+            },
+            {
+              id: 'job-beta-002', name: 'beta job', prompt: 'do beta stuff',
+              schedule: '0 9 * * *', enabled: true,
+              agent_id: 'assistant', channel: 'dashboard',
+              account_id: 'main', chat_id: 'chat-2',
+            },
+          ];
+          window.CronViewState.jobLastRun = { 'job-alpha-001': null, 'job-beta-002': null };
+          const search = document.querySelector('.cron-filter-bar__search');
+          search.value = 'alpha';
+          search.dispatchEvent(new Event('input', { bubbles: true }));
+        }"""
+    )
+    await page.wait_for_function(
+        "document.querySelectorAll('.cron-row').length === 1",
+        timeout=3000,
+    )
+    remaining = await page.locator(".cron-row").count()
+    assert remaining == 1, f"expected 1 row after filtering for 'alpha', got {remaining}"
+    row_text = await page.locator(".cron-row").first.text_content()
+    assert "alpha" in row_text.lower(), f"expected 'alpha' in row text, got: {row_text!r}"
+
+
+async def test_cron_view_full_edit_modal_opens_and_validates(page) -> None:
+    """Inject a job, click Edit, leave a required field blank, and verify
+    aria-invalid is set on that field plus a blocking-field error list
+    appears that prevents submit."""
+    await _click_nav(page, "cron")
+    await page.wait_for_selector(".cron-filter-bar__search", timeout=5000)
+
+    # Inject one job and render it.
+    await page.evaluate(
+        """() => {
+          window.CronViewState.allJobs = [
+            {
+              id: 'job-edit-001', name: 'edit me', prompt: 'original prompt',
+              schedule: '0 8 * * *', enabled: true,
+              agent_id: 'assistant', channel: 'dashboard',
+              account_id: 'main', chat_id: 'chat-test',
+            },
+          ];
+          window.CronViewState.jobLastRun = { 'job-edit-001': null };
+          const search = document.querySelector('.cron-filter-bar__search');
+          search.value = '';
+          search.dispatchEvent(new Event('input', { bubbles: true }));
+        }"""
+    )
+    await page.wait_for_selector(".cron-row", timeout=3000)
+
+    # Click the Edit button on the row.
+    await page.locator(".cron-row button", has_text="Edit").first.click()
+    await page.wait_for_selector(".cron-modal-overlay", timeout=3000)
+    assert await page.locator(".cron-modal").count() == 1
+
+    # Clear the prompt field (required) and click Save.
+    await page.locator("#cme-prompt").fill("")
+    # Also clear chat_id to trigger multiple errors.
+    await page.locator("#cme-chat-id").fill("")
+    await page.locator(".cron-modal__footer .btn-primary").click()
+
+    # The error list should appear.
+    await page.wait_for_selector(".cron-modal__error-list", timeout=2000)
+    error_list_visible = await page.locator(".cron-modal__error-list").is_visible()
+    assert error_list_visible, "blocking error list must appear on submit with missing required fields"
+
+    # The prompt textarea should have aria-invalid.
+    aria_invalid = await page.locator("#cme-prompt").get_attribute("aria-invalid")
+    assert aria_invalid == "true", f"#cme-prompt must have aria-invalid='true', got {aria_invalid!r}"
+
+    # Esc closes the modal.
+    await page.keyboard.press("Escape")
+    await page.wait_for_function(
+        "!document.querySelector('.cron-modal-overlay') || "
+        "document.querySelector('.cron-modal-overlay').style.display === 'none'",
+        timeout=2000,
+    )
+
+
+async def test_cron_view_run_log_panel_shows_status_pills(page) -> None:
+    """Inject a fake cron.runs response via JS, switch to the Run log tab,
+    and verify the run row renders with the correct status pill colour class."""
+    await _click_nav(page, "cron")
+    await page.wait_for_selector(".cron-tab-bar", timeout=5000)
+
+    # Inject a job so the allJobs list is populated (needed for job name lookup).
+    await page.evaluate(
+        """() => {
+          window.CronViewState.allJobs = [
+            {
+              id: 'job-run-001', name: 'run test job', prompt: 'test',
+              schedule: '* * * * *', enabled: true,
+              agent_id: 'assistant', channel: 'dashboard',
+              account_id: 'main', chat_id: 'chat-run',
+            },
+          ];
+          window.CronViewState.jobLastRun = {};
+        }"""
+    )
+
+    # Inject a fake run entry directly into CronViewState and render it.
+    await page.evaluate(
+        """() => {
+          window.CronViewState.runs = [
+            {
+              run_id: 'run-abc-123',
+              job_id: 'job-run-001',
+              started_at: Math.floor(Date.now() / 1000) - 60,
+              ended_at: Math.floor(Date.now() / 1000) - 55,
+              status: 'ok',
+              summary: 'Completed successfully',
+              output_preview: 'Output text here',
+              model: 'claude-3-5-sonnet',
+              provider: 'anthropic',
+              token_usage: { input: 100, output: 200, total: 300 },
+              delivery_status: 'delivered',
+            },
+          ];
+          window.CronViewState.runsTotal = 1;
+          window.CronViewState.runsHasMore = false;
+          // Switch to the runs tab by clicking.
+          const runTab = Array.from(document.querySelectorAll('.cron-tab'))
+            .find(t => t.textContent.trim() === 'Run log');
+          if (runTab) runTab.click();
+        }"""
+    )
+
+    await page.wait_for_selector(".cron-run-card", timeout=4000)
+
+    # The status pill should have the 'pill-ok' class (green = ok).
+    pill_ok = await page.locator(".cron-run-card .pill-ok").count()
+    assert pill_ok >= 1, "expected at least one .pill-ok pill on the run card"
+
+    # Summary text should be present.
+    summary_text = await page.locator(".cron-run-card__summary").first.text_content()
+    assert "Completed" in summary_text, f"unexpected summary: {summary_text!r}"
+
+    # Token usage chip should show in/out/total.
+    chips_text = await page.locator(".cron-run-card__chips").first.text_content()
+    assert "100" in chips_text and "200" in chips_text, (
+        f"token usage chips not rendered correctly: {chips_text!r}"
+    )

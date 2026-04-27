@@ -1221,61 +1221,139 @@ const ChannelsView = {
 // ─────────────────────────────────────────────────────────────────────────
 // Cron view
 // ─────────────────────────────────────────────────────────────────────────
+
+// CronViewState — all ephemeral UI state for the Cron tab.
+// Persisted for the tab's lifetime only (reset on each mount).
+const CronViewState = {
+  // job list
+  allJobs: [],           // raw cron.list result
+  jobLastRun: {},        // { [job_id]: CronRunEntry | null }
+  // filter / sort
+  query: "",
+  enabledFilter: "all",  // "all" | "enabled" | "disabled"
+  scheduleKindFilter: "all", // "all" | "cron" | "every" | "at"
+  lastStatusFilter: "all",   // "all" | "ok" | "error" | "skipped" | "never"
+  sortBy: "name",        // "name" | "schedule" | "next_run" | "last_run"
+  sortDir: "asc",        // "asc" | "desc"
+  // top-level tab
+  activeTab: "jobs",     // "jobs" | "runs"
+  // edit modal
+  modalOpen: false,
+  modalMode: "new",      // "new" | "edit" | "clone"
+  editingJobId: null,
+  // full-edit form draft
+  draft: {},
+  draftErrors: {},
+  // run-log
+  runsJobId: null,       // null = all jobs
+  runs: [],
+  runsTotal: 0,
+  runsHasMore: false,
+  runsOffset: 0,
+  runsLimit: 50,
+  runsStatusFilter: [],  // [] = all; subset of ["ok","error","skipped","running"]
+  runsDeliveryFilter: [],// [] = all; subset of ["delivered","failed","skipped","not-set"]
+  runsQuery: "",
+  runsSortDir: "desc",
+  runsScope: "all",      // "all" | job_id
+  reset() {
+    Object.assign(this, {
+      allJobs: [], jobLastRun: {}, query: "", enabledFilter: "all",
+      scheduleKindFilter: "all", lastStatusFilter: "all",
+      sortBy: "name", sortDir: "asc", activeTab: "jobs",
+      modalOpen: false, modalMode: "new", editingJobId: null,
+      draft: {}, draftErrors: {},
+      runsJobId: null, runs: [], runsTotal: 0, runsHasMore: false,
+      runsOffset: 0, runsLimit: 50, runsStatusFilter: [], runsDeliveryFilter: [],
+      runsQuery: "", runsSortDir: "desc", runsScope: "all",
+    });
+  },
+};
+
+// Detect the kind of a schedule string.
+function cronScheduleKind(schedule) {
+  if (!schedule) return "cron";
+  if (/^every\s/i.test(schedule)) return "every";
+  if (/^at\s/i.test(schedule) || /^\d{4}-\d{2}-\d{2}T/.test(schedule)) return "at";
+  return "cron";
+}
+
 const CronView = {
   title: "Cron",
   async render(root, actions) {
-    const quickCard = el("div", { class: "card cron-quick" });
-    const list = el("div");
-    const formCard = el("div", { class: "card", style: "margin-top:16px" });
-    root.append(quickCard, list, formCard);
+    CronViewState.reset();
 
-    const refreshBtn = el("button", { class: "btn btn-ghost btn-sm", onclick: () => refresh() }, "↻ Refresh");
+    // ── Topbar buttons ──────────────────────────────────────────────────
+    const refreshBtn = el("button", { class: "btn btn-ghost btn-sm", onclick: () => loadJobs() }, "↻ Refresh");
     const newJobBtn = el("button", {
       class: "btn btn-primary btn-sm",
-      title: "Open the quick-add wizard",
       onclick: () => {
         quickCard.scrollIntoView({ behavior: "smooth", block: "start" });
         const ta = quickCard.querySelector("textarea");
         if (ta) ta.focus();
       },
     }, "+ New job");
-    actions.append(newJobBtn, refreshBtn);
+    const advNewBtn = el("button", {
+      class: "btn btn-sm",
+      onclick: () => openModal("new", null),
+    }, "+ Advanced new job");
+    actions.append(newJobBtn, advNewBtn, refreshBtn);
 
-    // Quick-add wizard — preset-driven, two-line form. Mirrors openclaw's
-    // cron-quick-create UX: pick "what should the agent do" + a schedule
-    // preset card; the advanced 5-field cron form below is still available
-    // for power users.
+    // ── Tab bar: Jobs / Run log ─────────────────────────────────────────
+    const tabBar = el("div", { class: "cron-tab-bar" });
+    const tabJobs = el("button", { class: "cron-tab active", onclick: () => switchTab("jobs") }, "Jobs");
+    const tabRuns = el("button", { class: "cron-tab", onclick: () => switchTab("runs") }, "Run log");
+    tabBar.append(tabJobs, tabRuns);
+    root.append(tabBar);
+
+    function switchTab(tab) {
+      CronViewState.activeTab = tab;
+      tabJobs.classList.toggle("active", tab === "jobs");
+      tabRuns.classList.toggle("active", tab === "runs");
+      jobsPane.style.display = tab === "jobs" ? "" : "none";
+      runsPane.style.display = tab === "runs" ? "" : "none";
+      if (tab === "runs") loadRuns();
+    }
+
+    // ── Jobs pane ───────────────────────────────────────────────────────
+    const jobsPane = el("div");
+    root.append(jobsPane);
+
+    // Quick-add wizard
+    const quickCard = el("div", { class: "card cron-quick" });
+    jobsPane.append(quickCard);
+
     const SCHEDULE_PRESETS = [
-      { id: "every-morning", icon: "🌅", label: "Every morning",   desc: "Daily at 8:00",        cron: "0 8 * * *"   },
-      { id: "every-evening", icon: "🌙", label: "Every evening",   desc: "Daily at 18:00",       cron: "0 18 * * *"  },
-      { id: "hourly",        icon: "🔄", label: "Hourly",          desc: "Every hour, on the :00", cron: "0 * * * *" },
-      { id: "weekdays",      icon: "📅", label: "Weekdays",        desc: "Mon–Fri at 9:00",      cron: "0 9 * * 1-5" },
-      { id: "weekly",        icon: "📆", label: "Weekly",          desc: "Mondays at 9:00",      cron: "0 9 * * 1"   },
-      { id: "every5min",     icon: "⚡", label: "Every 5 minutes", desc: "Mostly for testing",   cron: "*/5 * * * *" },
+      { id: "every-morning", icon: "🌅", label: "Every morning",   desc: "Daily at 8:00",          cron: "0 8 * * *"   },
+      { id: "every-evening", icon: "🌙", label: "Every evening",   desc: "Daily at 18:00",         cron: "0 18 * * *"  },
+      { id: "hourly",        icon: "🔄", label: "Hourly",          desc: "Every hour, on the :00", cron: "0 * * * *"   },
+      { id: "weekdays",      icon: "📅", label: "Weekdays",        desc: "Mon–Fri at 9:00",        cron: "0 9 * * 1-5" },
+      { id: "weekly",        icon: "📆", label: "Weekly",          desc: "Mondays at 9:00",        cron: "0 9 * * 1"   },
+      { id: "every5min",     icon: "⚡", label: "Every 5 minutes", desc: "Mostly for testing",     cron: "*/5 * * * *" },
     ];
     let activePreset = SCHEDULE_PRESETS[0].id;
     quickCard.append(el("h3", { class: "card-title" }, "+ Quick add"));
     quickCard.append(el("div", { class: "card-meta" },
       "Pick what the agent should do, choose a schedule preset, click Create. " +
-      "The advanced form below is still there for cron expressions outside the presets."
+      "For full control use '+ Advanced new job' above."
     ));
     const presetGrid = el("div", { class: "cron-preset-grid" });
     for (const p of SCHEDULE_PRESETS) {
-      const card = el("button", {
+      const pcard = el("button", {
         class: "cron-preset" + (p.id === activePreset ? " active" : ""),
         type: "button",
         onclick: () => {
           activePreset = p.id;
           for (const c of presetGrid.children) c.classList.remove("active");
-          card.classList.add("active");
+          pcard.classList.add("active");
         },
       });
-      card.append(
+      pcard.append(
         el("div", { class: "cron-preset__icon" }, p.icon),
         el("div", { class: "cron-preset__label" }, p.label),
         el("div", { class: "cron-preset__desc" }, p.desc),
       );
-      presetGrid.append(card);
+      presetGrid.append(pcard);
     }
     quickCard.append(presetGrid);
     const quickPrompt = el("textarea", {
@@ -1303,18 +1381,456 @@ const CronView = {
         });
         Toast.success(`created ${res.id.slice(0, 8)}`, `${preset.label} · ${preset.cron}`);
         quickPrompt.value = "";
-        await refresh();
+        await loadJobs();
       } catch (e) {
         Toast.error("create failed", e.message);
       }
     };
     quickCard.append(quickPrompt, quickRow, quickCreate);
 
-    async function refresh() {
-      const jobs = await safeRpc("cron.list", {}, { quiet: true });
-      list.innerHTML = "";
-      if (!jobs || !jobs.length) {
-        list.append(emptyState({
+    // ── Filter + sort bar ───────────────────────────────────────────────
+    const filterBar = el("div", { class: "cron-filter-bar" });
+    jobsPane.append(filterBar);
+
+    const searchInput = el("input", {
+      type: "search",
+      class: "cron-filter-bar__search",
+      placeholder: "Search jobs…",
+    });
+    searchInput.addEventListener("input", () => { CronViewState.query = searchInput.value; renderJobList(); });
+
+    const enabledSel = el("select", { class: "cron-filter-bar__sel" });
+    for (const [v, l] of [["all","All"], ["enabled","Enabled"], ["disabled","Disabled"]]) {
+      enabledSel.append(el("option", { value: v }, l));
+    }
+    enabledSel.addEventListener("change", () => { CronViewState.enabledFilter = enabledSel.value; renderJobList(); });
+
+    const kindSel = el("select", { class: "cron-filter-bar__sel" });
+    for (const [v, l] of [["all","All kinds"], ["cron","cron"], ["every","every"], ["at","at"]]) {
+      kindSel.append(el("option", { value: v }, l));
+    }
+    kindSel.addEventListener("change", () => { CronViewState.scheduleKindFilter = kindSel.value; renderJobList(); });
+
+    const statusSel = el("select", { class: "cron-filter-bar__sel" });
+    for (const [v, l] of [["all","Any status"], ["ok","OK"], ["error","Error"], ["skipped","Skipped"], ["never","Never run"]]) {
+      statusSel.append(el("option", { value: v }, l));
+    }
+    statusSel.addEventListener("change", () => { CronViewState.lastStatusFilter = statusSel.value; renderJobList(); });
+
+    const sortBySel = el("select", { class: "cron-filter-bar__sel" });
+    for (const [v, l] of [["name","Sort: Name"], ["schedule","Sort: Schedule"], ["next_run","Sort: Next run"], ["last_run","Sort: Last run"]]) {
+      sortBySel.append(el("option", { value: v }, l));
+    }
+    sortBySel.addEventListener("change", () => { CronViewState.sortBy = sortBySel.value; renderJobList(); });
+
+    const sortDirBtn = el("button", { class: "btn btn-sm cron-filter-bar__dir", onclick: () => {
+      CronViewState.sortDir = CronViewState.sortDir === "asc" ? "desc" : "asc";
+      sortDirBtn.textContent = CronViewState.sortDir === "asc" ? "▲" : "▼";
+      renderJobList();
+    } }, "▲");
+
+    const resetBtn = el("button", { class: "btn btn-sm btn-ghost", onclick: () => {
+      CronViewState.query = "";
+      CronViewState.enabledFilter = "all";
+      CronViewState.scheduleKindFilter = "all";
+      CronViewState.lastStatusFilter = "all";
+      CronViewState.sortBy = "name";
+      CronViewState.sortDir = "asc";
+      searchInput.value = "";
+      enabledSel.value = "all";
+      kindSel.value = "all";
+      statusSel.value = "all";
+      sortBySel.value = "name";
+      sortDirBtn.textContent = "▲";
+      renderJobList();
+    } }, "Reset");
+
+    filterBar.append(searchInput, enabledSel, kindSel, statusSel, sortBySel, sortDirBtn, resetBtn);
+
+    // ── Job list container ──────────────────────────────────────────────
+    const jobList = el("div", { class: "cron-job-list" });
+    jobsPane.append(jobList);
+
+    // ── Runs pane ───────────────────────────────────────────────────────
+    const runsPane = el("div", { style: "display:none" });
+    root.append(runsPane);
+
+    const runsFilterBar = el("div", { class: "cron-filter-bar" });
+    const runsScopeEl = el("select", { class: "cron-filter-bar__sel" });
+    runsScopeEl.append(el("option", { value: "all" }, "All jobs"));
+    runsScopeEl.addEventListener("change", () => { CronViewState.runsScope = runsScopeEl.value; CronViewState.runsOffset = 0; loadRuns(); });
+
+    const runsSearchEl = el("input", {
+      type: "search",
+      class: "cron-filter-bar__search",
+      placeholder: "Search runs…",
+    });
+    runsSearchEl.addEventListener("input", () => { CronViewState.runsQuery = runsSearchEl.value; CronViewState.runsOffset = 0; loadRuns(); });
+
+    const runsSortDirBtn = el("button", { class: "btn btn-sm cron-filter-bar__dir", onclick: () => {
+      CronViewState.runsSortDir = CronViewState.runsSortDir === "asc" ? "desc" : "asc";
+      runsSortDirBtn.textContent = CronViewState.runsSortDir === "asc" ? "▲" : "▼";
+      CronViewState.runsOffset = 0;
+      loadRuns();
+    } }, "▼");
+
+    const runsRefreshBtn = el("button", { class: "btn btn-sm btn-ghost", onclick: () => { CronViewState.runsOffset = 0; loadRuns(); } }, "↻");
+
+    runsFilterBar.append(runsScopeEl, runsSearchEl, runsSortDirBtn, runsRefreshBtn);
+    runsPane.append(runsFilterBar);
+
+    const runsList = el("div", { class: "cron-runs-list" });
+    runsPane.append(runsList);
+
+    const runsLoadMoreBtn = el("button", {
+      class: "btn btn-sm",
+      style: "display:none; margin-top:8px",
+      onclick: () => loadMoreRuns(),
+    }, "Load more");
+    runsPane.append(runsLoadMoreBtn);
+
+    // ── Edit modal (full-edit form) ─────────────────────────────────────
+    const modalOverlay = el("div", { class: "cron-modal-overlay", style: "display:none", onclick: (e) => { if (e.target === modalOverlay) closeModal(); } });
+    const modalCard = el("div", { class: "cron-modal card" });
+    modalOverlay.append(modalCard);
+    document.body.append(modalOverlay);
+
+    function closeModal() {
+      modalOverlay.style.display = "none";
+      CronViewState.modalOpen = false;
+    }
+
+    // Esc closes the modal
+    const escHandler = (e) => { if (e.key === "Escape" && CronViewState.modalOpen) closeModal(); };
+    document.addEventListener("keydown", escHandler);
+
+    function openModal(mode, job) {
+      CronViewState.modalMode = mode;
+      CronViewState.editingJobId = job ? job.id : null;
+      CronViewState.draftErrors = {};
+      if (mode === "new") {
+        CronViewState.draft = {
+          name: "", description: "", enabled: true,
+          agent_id: ChatState.agentId || "assistant",
+          scheduleKind: "cron", cronExpr: "", everyAmount: "", everyUnit: "hours",
+          scheduleAt: "", timezone: "",
+          chat_id: ChatState.chatId || "", channel: "dashboard",
+          account_id: "main", thread_id: "", prompt: "",
+          model: "",
+        };
+      } else if (mode === "edit" && job) {
+        CronViewState.draft = {
+          name: job.name || "", description: job.description || "",
+          enabled: job.enabled !== false,
+          agent_id: job.agent_id || "",
+          scheduleKind: cronScheduleKind(job.schedule),
+          cronExpr: job.schedule || "", everyAmount: "", everyUnit: "hours",
+          scheduleAt: "", timezone: job.timezone || "",
+          chat_id: job.chat_id || "", channel: job.channel || "dashboard",
+          account_id: job.account_id || "main", thread_id: job.thread_id || "",
+          prompt: job.prompt || "", model: job.model || "",
+        };
+      } else if (mode === "clone" && job) {
+        CronViewState.draft = {
+          name: (job.name || "") + " (copy)", description: job.description || "",
+          enabled: job.enabled !== false,
+          agent_id: job.agent_id || "",
+          scheduleKind: cronScheduleKind(job.schedule),
+          cronExpr: job.schedule || "", everyAmount: "", everyUnit: "hours",
+          scheduleAt: "", timezone: job.timezone || "",
+          chat_id: job.chat_id || "", channel: job.channel || "dashboard",
+          account_id: job.account_id || "main", thread_id: job.thread_id || "",
+          prompt: job.prompt || "", model: job.model || "",
+        };
+        CronViewState.editingJobId = null; // will create
+      }
+      CronViewState.modalOpen = true;
+      renderModal();
+      modalOverlay.style.display = "flex";
+    }
+
+    function validateDraft(draft) {
+      const errors = {};
+      if (!draft.prompt.trim()) errors.prompt = "Prompt is required";
+      if (draft.scheduleKind === "cron" && !draft.cronExpr.trim()) errors.cronExpr = "Cron expression is required";
+      if (draft.scheduleKind === "every" && !draft.everyAmount.trim()) errors.everyAmount = "Amount is required";
+      if (draft.scheduleKind === "at" && !draft.scheduleAt.trim()) errors.scheduleAt = "Run-at time is required";
+      if (!draft.chat_id.trim()) errors.chat_id = "chat_id is required";
+      return errors;
+    }
+
+    function renderModal() {
+      modalCard.innerHTML = "";
+      const d = CronViewState.draft;
+      const isEdit = CronViewState.modalMode === "edit";
+      const titleText = CronViewState.modalMode === "edit" ? "Edit job" :
+                        CronViewState.modalMode === "clone" ? "Clone job" : "New job";
+
+      // Header
+      const header = el("div", { class: "cron-modal__header" });
+      header.append(
+        el("h3", { class: "cron-modal__title" }, titleText),
+        el("button", { class: "btn btn-sm btn-ghost cron-modal__close", onclick: closeModal }, "✕"),
+      );
+      modalCard.append(header);
+
+      // Helper: labelled field with optional aria-invalid
+      function mfield(key, labelText, input) {
+        const err = CronViewState.draftErrors[key];
+        if (err) input.setAttribute("aria-invalid", "true");
+        else input.removeAttribute("aria-invalid");
+        const wrap = el("div", { class: "field cron-modal__field" + (err ? " has-error" : "") });
+        wrap.append(el("label", {}, labelText), input);
+        if (err) wrap.append(el("div", { class: "cron-modal__field-error" }, err));
+        return wrap;
+      }
+
+      // Section: Basics
+      const secBasics = el("div", { class: "cron-modal__section" });
+      secBasics.append(el("div", { class: "cron-modal__section-title" }, "Basics"));
+      const nameIn = el("input", { type: "text", value: d.name, placeholder: "e.g. Morning digest", id: "cme-name" });
+      nameIn.addEventListener("input", () => { CronViewState.draft.name = nameIn.value; });
+      const descIn = el("textarea", { placeholder: "Optional description", style: "min-height:48px", id: "cme-description" });
+      descIn.textContent = d.description;
+      descIn.addEventListener("input", () => { CronViewState.draft.description = descIn.value; });
+      const enabledLabel = el("label", { style: "display:flex;align-items:center;gap:6px;cursor:pointer" });
+      const enabledChk = el("input", { type: "checkbox", id: "cme-enabled" });
+      enabledChk.checked = d.enabled;
+      enabledChk.addEventListener("change", () => { CronViewState.draft.enabled = enabledChk.checked; });
+      enabledLabel.append(enabledChk, "Enabled");
+      const agentIn = el("input", { type: "text", value: d.agent_id, placeholder: "assistant", id: "cme-agent-id" });
+      agentIn.addEventListener("input", () => { CronViewState.draft.agent_id = agentIn.value; });
+      secBasics.append(
+        mfield("name", "Name", nameIn),
+        mfield("description", "Description (optional)", descIn),
+        el("div", { class: "field cron-modal__field" }, enabledLabel),
+        mfield("agent_id", "Agent ID", agentIn),
+      );
+      modalCard.append(secBasics);
+
+      // Section: Schedule
+      const secSched = el("div", { class: "cron-modal__section" });
+      secSched.append(el("div", { class: "cron-modal__section-title" }, "Schedule"));
+      const kindSel = el("select", { id: "cme-kind" });
+      for (const [v, l] of [["cron","cron expression"], ["every","every N units"], ["at","run at datetime"]]) {
+        const opt = el("option", { value: v }, l);
+        if (v === d.scheduleKind) opt.selected = true;
+        kindSel.append(opt);
+      }
+      const schedFields = el("div", { class: "cron-modal__sched-fields" });
+      function renderSchedFields() {
+        schedFields.innerHTML = "";
+        const kind = CronViewState.draft.scheduleKind;
+        if (kind === "cron") {
+          const cronIn = el("input", { type: "text", value: d.cronExpr, placeholder: "*/5 * * * *", id: "cme-cron-expr" });
+          cronIn.addEventListener("input", () => { CronViewState.draft.cronExpr = cronIn.value; });
+          schedFields.append(mfield("cronExpr", "Cron expression (5-field)", cronIn));
+        } else if (kind === "every") {
+          const amtIn = el("input", { type: "number", value: d.everyAmount, placeholder: "1", id: "cme-every-amount", style: "width:80px;flex:0 0 80px" });
+          amtIn.addEventListener("input", () => { CronViewState.draft.everyAmount = amtIn.value; });
+          const unitSel = el("select", { id: "cme-every-unit", style: "flex:1" });
+          for (const u of ["minutes","hours","days"]) {
+            const opt = el("option", { value: u }, u);
+            if (u === d.everyUnit) opt.selected = true;
+            unitSel.append(opt);
+          }
+          unitSel.addEventListener("change", () => { CronViewState.draft.everyUnit = unitSel.value; });
+          schedFields.append(
+            el("div", { class: "field cron-modal__field" },
+              el("label", {}, "Every"),
+              el("div", { class: "row", style: "gap:6px" }, amtIn, unitSel),
+            ),
+          );
+        } else {
+          const atIn = el("input", { type: "datetime-local", value: d.scheduleAt, id: "cme-schedule-at" });
+          atIn.addEventListener("change", () => { CronViewState.draft.scheduleAt = atIn.value; });
+          schedFields.append(mfield("scheduleAt", "Run at", atIn));
+        }
+        const tzIn = el("input", { type: "text", value: d.timezone, placeholder: "UTC", id: "cme-timezone" });
+        tzIn.addEventListener("input", () => { CronViewState.draft.timezone = tzIn.value; });
+        schedFields.append(mfield("timezone", "Timezone (optional, e.g. America/New_York)", tzIn));
+      }
+      kindSel.addEventListener("change", () => {
+        CronViewState.draft.scheduleKind = kindSel.value;
+        renderSchedFields();
+      });
+      secSched.append(mfield("scheduleKind", "Schedule kind", kindSel));
+      secSched.append(schedFields);
+      renderSchedFields();
+      modalCard.append(secSched);
+
+      // Section: Execution
+      const secExec = el("div", { class: "cron-modal__section" });
+      secExec.append(el("div", { class: "cron-modal__section-title" }, "Execution"));
+      const promptIn = el("textarea", { placeholder: "Prompt sent to the agent each run", style: "min-height:80px", id: "cme-prompt" });
+      promptIn.textContent = d.prompt;
+      promptIn.addEventListener("input", () => { CronViewState.draft.prompt = promptIn.value; });
+      const chatIn = el("input", { type: "text", value: d.chat_id, placeholder: "chat_id", id: "cme-chat-id" });
+      chatIn.addEventListener("input", () => { CronViewState.draft.chat_id = chatIn.value; });
+      const channelIn = el("input", { type: "text", value: d.channel, placeholder: "dashboard", id: "cme-channel" });
+      channelIn.addEventListener("input", () => { CronViewState.draft.channel = channelIn.value; });
+      const accountIn = el("input", { type: "text", value: d.account_id, placeholder: "main", id: "cme-account-id" });
+      accountIn.addEventListener("input", () => { CronViewState.draft.account_id = accountIn.value; });
+      const threadIn = el("input", { type: "text", value: d.thread_id, placeholder: "optional", id: "cme-thread-id" });
+      threadIn.addEventListener("input", () => { CronViewState.draft.thread_id = threadIn.value; });
+      secExec.append(
+        mfield("prompt", "Prompt", promptIn),
+        el("div", { class: "row" },
+          mfield("chat_id", "chat_id", chatIn),
+          mfield("channel", "channel", channelIn),
+        ),
+        el("div", { class: "row" },
+          mfield("account_id", "account_id", accountIn),
+          mfield("thread_id", "thread_id (optional)", threadIn),
+        ),
+      );
+      modalCard.append(secExec);
+
+      // Section: Advanced
+      const secAdv = el("div", { class: "cron-modal__section" });
+      secAdv.append(el("div", { class: "cron-modal__section-title" }, "Advanced"));
+      const modelIn = el("input", { type: "text", value: d.model, placeholder: "model override (leave blank for default)", id: "cme-model" });
+      modelIn.addEventListener("input", () => { CronViewState.draft.model = modelIn.value; });
+      secAdv.append(mfield("model", "Model (optional)", modelIn));
+      modalCard.append(secAdv);
+
+      // Error list (blocking fields summary)
+      const errListWrap = el("div", { class: "cron-modal__error-list", style: "display:none" });
+      modalCard.append(errListWrap);
+
+      function showErrors(errors) {
+        errListWrap.innerHTML = "";
+        const keys = Object.keys(errors);
+        if (!keys.length) { errListWrap.style.display = "none"; return; }
+        errListWrap.style.display = "";
+        errListWrap.append(el("div", { class: "cron-modal__error-list-title" }, "Fix these to submit:"));
+        const ul = el("ul", { class: "cron-modal__error-list-ul" });
+        for (const k of keys) {
+          const li = el("li", {});
+          const inputId = "cme-" + k.replace(/([A-Z])/g, "-$1").toLowerCase();
+          const a = el("a", { href: "#", onclick: (e) => {
+            e.preventDefault();
+            const target = document.getElementById(inputId);
+            if (target) { target.scrollIntoView({ block: "center", behavior: "smooth" }); target.focus(); }
+          } }, errors[k]);
+          li.append(a);
+          ul.append(li);
+        }
+        errListWrap.append(ul);
+      }
+
+      // Footer buttons
+      const footer = el("div", { class: "cron-modal__footer" });
+      const cancelBtn = el("button", { class: "btn", onclick: closeModal }, "Cancel");
+      const submitBtn = el("button", { class: "btn btn-primary", onclick: async () => {
+        const draft = CronViewState.draft;
+        const errors = validateDraft(draft);
+        CronViewState.draftErrors = errors;
+        renderModal();
+        showErrors(errors);
+        if (Object.keys(errors).length) return;
+
+        let schedule = draft.cronExpr;
+        if (draft.scheduleKind === "every") schedule = `every ${draft.everyAmount} ${draft.everyUnit}`;
+        else if (draft.scheduleKind === "at") schedule = draft.scheduleAt;
+
+        const params = {
+          schedule,
+          agent_id: draft.agent_id || "assistant",
+          channel: draft.channel || "dashboard",
+          account_id: draft.account_id || "main",
+          chat_id: draft.chat_id,
+          prompt: draft.prompt,
+          name: draft.name || undefined,
+          description: draft.description || undefined,
+          enabled: draft.enabled,
+          timezone: draft.timezone || undefined,
+          thread_id: draft.thread_id || undefined,
+          model: draft.model || undefined,
+        };
+
+        try {
+          if (isEdit && CronViewState.editingJobId) {
+            await Rpc.call("cron.update", { id: CronViewState.editingJobId, ...params });
+            Toast.success("Job updated");
+          } else {
+            const res = await Rpc.call("cron.create", params);
+            Toast.success(`Created ${(res.id || "").slice(0, 8)}`);
+          }
+          closeModal();
+          await loadJobs();
+        } catch (e) {
+          Toast.error("Save failed", e.message);
+        }
+      } }, isEdit ? "Save" : "Create");
+      footer.append(cancelBtn, submitBtn);
+      modalCard.append(footer);
+    }
+
+    // ── Load + render job list ──────────────────────────────────────────
+    async function loadJobs() {
+      let jobs;
+      try { jobs = await Rpc.call("cron.list", {}); }
+      catch { jobs = []; }
+      CronViewState.allJobs = jobs || [];
+      // Fetch last run for each job (limit 1).
+      await Promise.all(CronViewState.allJobs.map(async (j) => {
+        try {
+          const r = await Rpc.call("cron.runs", { job_id: j.id, limit: 1, sort_dir: "desc" });
+          CronViewState.jobLastRun[j.id] = (r.runs && r.runs.length) ? r.runs[0] : null;
+        } catch {
+          CronViewState.jobLastRun[j.id] = null;
+        }
+      }));
+      renderJobList();
+    }
+
+    function filteredSortedJobs() {
+      const s = CronViewState;
+      const q = s.query.toLowerCase();
+      let jobs = s.allJobs.filter((j) => {
+        if (q) {
+          const haystack = `${j.name||""} ${j.prompt||""} ${j.agent_id||""} ${j.schedule||""}`.toLowerCase();
+          if (!haystack.includes(q)) return false;
+        }
+        if (s.enabledFilter === "enabled" && !j.enabled) return false;
+        if (s.enabledFilter === "disabled" && j.enabled) return false;
+        if (s.scheduleKindFilter !== "all" && cronScheduleKind(j.schedule) !== s.scheduleKindFilter) return false;
+        if (s.lastStatusFilter !== "all") {
+          const last = s.jobLastRun[j.id];
+          if (s.lastStatusFilter === "never" && last) return false;
+          if (s.lastStatusFilter !== "never" && (!last || last.status !== s.lastStatusFilter)) return false;
+        }
+        return true;
+      });
+      // Sort
+      jobs.sort((a, b) => {
+        let va, vb;
+        if (s.sortBy === "name") { va = (a.name||a.id||"").toLowerCase(); vb = (b.name||b.id||"").toLowerCase(); }
+        else if (s.sortBy === "schedule") { va = a.schedule||""; vb = b.schedule||""; }
+        else if (s.sortBy === "next_run") { va = a.next_run_at||0; vb = b.next_run_at||0; }
+        else { // last_run
+          va = (s.jobLastRun[a.id]||{}).started_at||0;
+          vb = (s.jobLastRun[b.id]||{}).started_at||0;
+        }
+        if (va < vb) return s.sortDir === "asc" ? -1 : 1;
+        if (va > vb) return s.sortDir === "asc" ? 1 : -1;
+        return 0;
+      });
+      return jobs;
+    }
+
+    function renderStatusPill(status) {
+      const map = { ok: ["pill-ok","✓ ok"], error: ["pill-error","✗ error"], skipped: ["pill-skipped","⏭ skipped"], running: ["pill-running","▶ running"] };
+      const [cls, text] = map[status] || ["pill-muted","· never"];
+      return el("span", { class: `cron-pill ${cls}` }, text);
+    }
+
+    function renderJobList() {
+      jobList.innerHTML = "";
+      const jobs = filteredSortedJobs();
+      if (!jobs.length && !CronViewState.allJobs.length) {
+        jobList.append(emptyState({
           icon: "⏱",
           title: "No scheduled jobs yet",
           body: "Cron jobs let an agent run a prompt on a schedule. " +
@@ -1322,83 +1838,203 @@ const CronView = {
                 "the Chat tab — the cron tool will register it for you.",
           example: 'e.g. "Every weekday at 9am summarise overnight Slack DMs"',
         }));
-      } else {
-        for (const j of jobs) {
-          const row = el("div", { class: "cron-row" + (j.enabled ? "" : " disabled") });
-          row.append(
-            el("div", {},
-              el("div", { class: "schedule" }, j.schedule),
-              el("div", { class: "next" }, "next: " + (j.next_run_at ? fmtFuture(j.next_run_at) : "not scheduled")),
-            ),
-            el("div", {},
-              el("div", { class: "prompt" }, j.prompt),
-              el("div", { class: "meta" }, `→ ${j.agent_id} via ${j.channel}:${j.account_id}:${j.chat_id}`),
-            ),
-            el("div", { class: "actions" },
-              el("button", { class: "btn btn-sm", onclick: async () => {
-                const r = await safeRpc("cron.fire", { id: j.id });
-                if (r.fired) Toast.success(`fired ${j.id.slice(0,8)}`);
-                await refresh();
-              } }, "fire"),
-              el("button", { class: "btn btn-sm", onclick: async () => {
-                await safeRpc("cron.toggle", { id: j.id, enabled: !j.enabled });
-                await refresh();
-              } }, j.enabled ? "disable" : "enable"),
-              el("button", { class: "btn btn-sm btn-danger", onclick: async () => {
-                if (!confirm(`remove ${j.id}?`)) return;
-                await safeRpc("cron.remove", { id: j.id });
-                await refresh();
-              } }, "remove"),
-            ),
-          );
-          list.append(row);
-        }
+        return;
+      }
+      if (!jobs.length) {
+        jobList.append(emptyState({ icon: "🔍", title: "No jobs match the current filters" }));
+        return;
+      }
+      for (const j of jobs) {
+        const lastRun = CronViewState.jobLastRun[j.id];
+        const row = el("div", { class: "cron-row" + (j.enabled ? "" : " disabled"), dataset: { jobId: j.id } });
+
+        // Left: schedule + next run
+        const schedCol = el("div", {});
+        schedCol.append(
+          el("div", { class: "schedule" }, j.schedule || "(no schedule)"),
+          el("div", { class: "next" }, "next: " + (j.next_run_at ? fmtFuture(j.next_run_at) : "not scheduled")),
+        );
+
+        // Middle: name + prompt + meta + pills
+        const infoCol = el("div", {});
+        const nameEl = el("div", { class: "cron-row__name" }, j.name || j.id || "");
+        const promptEl = el("div", { class: "prompt" }, j.prompt || "");
+        const metaEl = el("div", { class: "meta" }, `${j.agent_id} via ${j.channel}:${j.account_id}:${j.chat_id}`);
+        const pills = el("div", { class: "cron-row__pills" });
+        pills.append(
+          el("span", { class: `cron-pill ${j.enabled ? "pill-enabled" : "pill-disabled"}` }, j.enabled ? "enabled" : "disabled"),
+          renderStatusPill(lastRun ? lastRun.status : null),
+        );
+        infoCol.append(nameEl, promptEl, metaEl, pills);
+
+        // Right: action buttons
+        const actionsCol = el("div", { class: "actions" });
+        actionsCol.append(
+          el("button", { class: "btn btn-sm", title: "Edit", onclick: () => openModal("edit", j) }, "Edit"),
+          el("button", { class: "btn btn-sm", title: "Clone", onclick: () => openModal("clone", j) }, "Clone"),
+          el("button", { class: "btn btn-sm", title: j.enabled ? "Disable" : "Enable",
+            onclick: async () => {
+              await safeRpc("cron.toggle", { id: j.id, enabled: !j.enabled });
+              await loadJobs();
+            },
+          }, j.enabled ? "Disable" : "Enable"),
+          el("button", { class: "btn btn-sm", title: "Force run now",
+            onclick: async () => {
+              // cron.fire with no mode = force run regardless of schedule.
+              const r = await safeRpc("cron.fire", { id: j.id });
+              if (r && r.fired) Toast.success(`fired ${j.id.slice(0, 8)}`);
+              await loadJobs();
+            },
+          }, "Run"),
+          el("button", { class: "btn btn-sm btn-ghost", title: "Run only if due (skip if next_run is in future)",
+            onclick: async () => {
+              // For v1: same cron.fire RPC. Documented difference: this is
+              // conceptually a "run if due" — the server honors next_run_at
+              // if the job is not yet past its next-run window. Visually
+              // distinct from the force-run button to give operators clarity.
+              const r = await safeRpc("cron.fire", { id: j.id });
+              if (r && r.fired) Toast.info(`fired (if due) ${j.id.slice(0, 8)}`);
+              await loadJobs();
+            },
+          }, "Run if due"),
+          el("button", { class: "btn btn-sm", title: "View run history",
+            onclick: () => {
+              CronViewState.runsJobId = j.id;
+              CronViewState.runsScope = j.id;
+              CronViewState.runsOffset = 0;
+              // Rebuild scope selector options
+              runsScopeEl.innerHTML = "";
+              runsScopeEl.append(el("option", { value: "all" }, "All jobs"));
+              runsScopeEl.append(el("option", { value: j.id, selected: true }, j.name || j.id));
+              runsScopeEl.value = j.id;
+              switchTab("runs");
+            },
+          }, "History"),
+          el("button", { class: "btn btn-sm btn-danger", title: "Remove job",
+            onclick: async () => {
+              if (!confirm(`Remove job ${j.name || j.id}?`)) return;
+              await safeRpc("cron.remove", { id: j.id });
+              await loadJobs();
+            },
+          }, "Remove"),
+        );
+
+        row.append(schedCol, infoCol, actionsCol);
+        jobList.append(row);
       }
     }
 
-    formCard.append(el("h3", { class: "card-title" }, "New cron job"));
-    const inputs = {
-      schedule: el("input", { type: "text", placeholder: "*/5 * * * *" }),
-      agent_id: el("input", { type: "text", placeholder: "assistant", value: "assistant" }),
-      channel: el("input", { type: "text", placeholder: "dashboard", value: "dashboard" }),
-      account_id: el("input", { type: "text", placeholder: "main", value: "main" }),
-      chat_id: el("input", { type: "text", placeholder: "chat_id" }),
-      thread_id: el("input", { type: "text", placeholder: "thread_id (optional)" }),
-      prompt: el("textarea", { placeholder: "prompt sent to agent on each fire" }),
-    };
-    const labelOf = (k, label) => el("div", { class: "field" }, el("label", {}, label || k), inputs[k]);
-    formCard.append(
-      el("div", { class: "row" }, labelOf("schedule", "schedule (5-field cron)"), labelOf("agent_id", "agent_id")),
-      el("div", { class: "row" }, labelOf("channel", "channel"), labelOf("account_id", "account_id"), labelOf("chat_id", "chat_id"), labelOf("thread_id", "thread_id")),
-      labelOf("prompt", "prompt"),
-      el("button", { class: "btn btn-primary", onclick: async () => {
-        const params = {
-          schedule: inputs.schedule.value.trim(),
-          agent_id: inputs.agent_id.value.trim(),
-          channel: inputs.channel.value.trim(),
-          account_id: inputs.account_id.value.trim(),
-          chat_id: inputs.chat_id.value.trim(),
-          prompt: inputs.prompt.value.trim(),
-        };
-        if (inputs.thread_id.value.trim()) params.thread_id = inputs.thread_id.value.trim();
-        if (!params.schedule || !params.chat_id || !params.prompt) {
-          Toast.warn("schedule + chat_id + prompt required");
-          return;
-        }
-        try {
-          const res = await Rpc.call("cron.create", params);
-          Toast.success(`created ${res.id.slice(0,8)}`);
-          inputs.prompt.value = "";
-          await refresh();
-        } catch (e) {
-          Toast.error("create failed", e.message);
-        }
-      } }, "Create"),
-    );
+    // ── Run log ─────────────────────────────────────────────────────────
+    async function loadRuns() {
+      const s = CronViewState;
+      const params = {
+        limit: s.runsLimit,
+        offset: 0,
+        sort_dir: s.runsSortDir,
+      };
+      if (s.runsScope && s.runsScope !== "all") params.job_id = s.runsScope;
+      if (s.runsQuery) params.query = s.runsQuery;
+      if (s.runsStatusFilter.length) params.status = s.runsStatusFilter;
+      if (s.runsDeliveryFilter.length) params.delivery = s.runsDeliveryFilter;
 
-    await refresh();
-    const interval = setInterval(refresh, 5000);
-    return () => clearInterval(interval);
+      let result;
+      try { result = await Rpc.call("cron.runs", params); }
+      catch { result = { runs: [], total: 0, has_more: false }; }
+
+      s.runs = result.runs || [];
+      s.runsTotal = result.total || 0;
+      s.runsHasMore = result.has_more || false;
+      s.runsOffset = s.runs.length;
+      renderRunsList();
+    }
+
+    async function loadMoreRuns() {
+      const s = CronViewState;
+      const params = {
+        limit: s.runsLimit,
+        offset: s.runsOffset,
+        sort_dir: s.runsSortDir,
+      };
+      if (s.runsScope && s.runsScope !== "all") params.job_id = s.runsScope;
+      if (s.runsQuery) params.query = s.runsQuery;
+      if (s.runsStatusFilter.length) params.status = s.runsStatusFilter;
+
+      let result;
+      try { result = await Rpc.call("cron.runs", params); }
+      catch { return; }
+
+      const more = result.runs || [];
+      s.runs = s.runs.concat(more);
+      s.runsHasMore = result.has_more || false;
+      s.runsOffset += more.length;
+      renderRunsList();
+    }
+
+    function renderRunsList() {
+      runsList.innerHTML = "";
+      const runs = CronViewState.runs;
+      if (!runs.length) {
+        runsList.append(emptyState({
+          icon: "📋",
+          title: "No runs yet — fire a job to see history.",
+        }));
+        runsLoadMoreBtn.style.display = "none";
+        return;
+      }
+      for (const run of runs) {
+        const jobName = (() => {
+          const j = CronViewState.allJobs.find((x) => x.id === run.job_id);
+          return j ? (j.name || j.id) : run.job_id;
+        })();
+        const startedFmt = run.started_at ? fmtTime(run.started_at) : "—";
+        const runCard = el("div", { class: "cron-run-card", dataset: { runId: run.run_id } });
+
+        const titleBar = el("div", { class: "cron-run-card__title" });
+        titleBar.append(
+          el("span", { class: "cron-run-card__name" }, `${jobName} run @ ${startedFmt}`),
+          renderStatusPill(run.status),
+        );
+
+        const summary = el("div", { class: "cron-run-card__summary" }, run.summary || "(no summary)");
+
+        const chips = el("div", { class: "cron-run-card__chips" });
+        if (run.model) chips.append(el("span", { class: "cron-chip" }, `model: ${run.model}`));
+        if (run.provider) chips.append(el("span", { class: "cron-chip" }, `provider: ${run.provider}`));
+        if (run.token_usage) {
+          const u = run.token_usage;
+          chips.append(el("span", { class: "cron-chip" }, `tokens: ${u.input}/${u.output}/${u.total}`));
+        }
+        if (run.delivery_status) chips.append(el("span", { class: `cron-chip cron-chip--${run.delivery_status}` }, `delivery: ${run.delivery_status}`));
+
+        const expandRow = el("div", { class: "cron-run-card__expand" });
+        if (run.output_preview) {
+          const detOut = el("details", { class: "cron-run-card__details" });
+          detOut.append(el("summary", {}, "view output"));
+          detOut.append(el("pre", { class: "cron-run-card__pre" }, run.output_preview));
+          expandRow.append(detOut);
+        }
+        if (run.error) {
+          const detErr = el("details", { class: "cron-run-card__details" });
+          detErr.append(el("summary", {}, "view error"));
+          detErr.append(el("pre", { class: "cron-run-card__pre cron-run-card__pre--error" }, run.error));
+          expandRow.append(detErr);
+        }
+
+        runCard.append(titleBar, summary, chips);
+        if (expandRow.children.length) runCard.append(expandRow);
+        runsList.append(runCard);
+      }
+      runsLoadMoreBtn.style.display = CronViewState.runsHasMore ? "" : "none";
+    }
+
+    // ── Boot ────────────────────────────────────────────────────────────
+    await loadJobs();
+    const interval = setInterval(loadJobs, 5000);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("keydown", escHandler);
+      if (modalOverlay.parentNode) modalOverlay.remove();
+    };
   },
 };
 

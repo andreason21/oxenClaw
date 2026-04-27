@@ -23,6 +23,12 @@ from oxenclaw.memory.retriever import MemoryRetriever
 # `before` validator instead. Matches openclaw's permissive intake.
 _SAVE_TEXT_ALIASES = ("content", "body", "note", "fact", "value", "data")
 _SAVE_TAG_ALIASES = ("tag", "key", "category", "label", "kind")
+# Known canonical fields. Anything outside these (and the aliases
+# above) gets dropped by the `before` validator so an LLM sprinkling
+# `source` / `metadata` / `confidence` etc. on the call doesn't break
+# strict validation.
+_SAVE_KNOWN_FIELDS = {"text", "tags"}
+_SEARCH_KNOWN_FIELDS = {"query", "k", "source"}
 
 
 class _SaveArgs(BaseModel):
@@ -67,7 +73,12 @@ class _SaveArgs(BaseModel):
                 deduped.append(t)
         if deduped:
             out["tags"] = deduped
-        return out
+        # Drop any remaining unknown fields silently. LLMs sprinkle
+        # `source`, `metadata`, `confidence`, `timestamp`, `tool` etc.
+        # onto memory_save calls — none of those break strict
+        # validation if we strip them here, because every alias we
+        # actually care about was popped above.
+        return {k: v for k, v in out.items() if k in _SAVE_KNOWN_FIELDS}
 
 
 _SEARCH_QUERY_ALIASES = ("question", "q", "prompt", "text", "topic")
@@ -98,7 +109,8 @@ class _SearchArgs(BaseModel):
         if "k" not in out and out.get("limit"):
             out["k"] = out["limit"]
         out.pop("limit", None)
-        return out
+        # Drop unknown keys silently (same rationale as _SaveArgs).
+        return {k: v for k, v in out.items() if k in _SEARCH_KNOWN_FIELDS}
 
 
 class _GetArgs(BaseModel):

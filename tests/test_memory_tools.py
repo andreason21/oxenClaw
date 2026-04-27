@@ -115,6 +115,40 @@ async def test_memory_save_dedupes_tag_aliases(tmp_path: Path) -> None:
         await r.aclose()
 
 
+async def test_memory_save_drops_unknown_metadata_keys(tmp_path: Path) -> None:
+    """Production hit: LLM emitted `{text, source: '사용자 발화'}` —
+    `source` isn't a _SaveArgs field. Strict `extra=forbid` rejects
+    the whole call. The before-validator strips unknown keys so
+    sprinkled metadata (source / metadata / confidence / timestamp)
+    no longer breaks the save."""
+    r = _retriever(tmp_path)
+    try:
+        tool = memory_save_tool(r)
+        # Real-world payload that crashed in production.
+        out = await tool.execute({
+            "text": "사용자는 수원에 거주한다.",
+            "source": "사용자 발화",
+            "metadata": {"turn": 3},
+            "confidence": 0.9,
+        })
+        assert "saved" in out
+        body = (r.memory_dir / "inbox.md").read_text(encoding="utf-8")
+        assert "수원에 거주" in body
+    finally:
+        await r.aclose()
+
+
+async def test_memory_search_drops_unknown_metadata_keys(tmp_path: Path) -> None:
+    r = _retriever(tmp_path)
+    try:
+        await r.save("alpha bravo charlie")
+        tool = memory_search_tool(r)
+        out = await tool.execute({"query": "alpha", "scope": "global", "agent_id": "x"})
+        assert "inbox.md" in out
+    finally:
+        await r.aclose()
+
+
 async def test_memory_search_accepts_question_alias(tmp_path: Path) -> None:
     r = _retriever(tmp_path)
     try:

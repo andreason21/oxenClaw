@@ -427,7 +427,15 @@ def _build_runtime(name: str) -> AcpRuntime:
         from oxenclaw.acp.fake_runtime import InMemoryFakeRuntime
 
         return InMemoryFakeRuntime()
-    raise SystemExit(f"unknown backend {name!r} (built-in choices: 'fake')")
+    if name == "pi":
+        from oxenclaw.acp.pi_agent_runtime import PiAgentAcpRuntime
+        from oxenclaw.agents.factory import build_agent
+
+        agent = build_agent(agent_id="pi", provider="ollama")
+        return PiAgentAcpRuntime(agent=agent)
+    raise SystemExit(
+        f"unknown backend {name!r} (built-in choices: 'fake', 'pi')"
+    )
 
 
 async def _run_cli(argv: list[str] | None = None) -> int:

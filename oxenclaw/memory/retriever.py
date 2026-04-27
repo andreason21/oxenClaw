@@ -217,12 +217,18 @@ def format_memories_for_prompt(results: list[MemorySearchResult]) -> str:
         return ""
     lines = [
         "<recalled_memories>",
-        "  <usage>You are seeing chunks retrieved from the user's long-term "
-        "memory store. When you answer using one of these, cite it inline "
-        "with the form `[mem:&lt;id&gt;]` (e.g. `[mem:abc123]`). The dashboard "
-        "renders these citations as hover-able links to the source chunk. "
-        "Skip the citation when you're answering from general knowledge "
-        "rather than a specific memory.</usage>",
+        "  <usage>The chunks below ARE things you already know about this "
+        "user — they were saved by you (or the operator) in earlier turns "
+        "and retrieved just now because they're relevant to the current "
+        "question. Treat them as authoritative ground truth about the "
+        "user / project / past decisions. If the user asks something "
+        "these chunks answer (e.g. \"내가 어디 살지?\" + a memory saying "
+        "\"User lives in Suwon\"), USE the memory — do NOT respond with "
+        "\"I don't know\" or \"I have no record of that.\" When you answer "
+        "from a specific memory, cite it inline with `[mem:&lt;id&gt;]` "
+        "(e.g. `[mem:abc123]`); skip the citation only when you're "
+        "answering from general knowledge that doesn't trace to one of "
+        "these chunks.</usage>",
     ]
     for r in results:
         citation = _xml_escape(r.citation)

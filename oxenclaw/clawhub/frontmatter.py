@@ -96,6 +96,44 @@ class SkillOpenClawMetadata(BaseModel):
     install: list[SkillInstallSpec] = Field(default_factory=list)
 
 
+class SkillCommand(BaseModel):
+    """One auto-registered command in a skill's `commands:` frontmatter.
+
+    Mirrors openclaw's skill-commands convention. When a skill ships a
+    `commands` block in its frontmatter, the loader registers each
+    entry as a callable LLM tool that runs the named shell template
+    via the gateway's shell tool. The skill author writes natural
+    language; the model invokes by tool name.
+
+    Example frontmatter:
+        commands:
+          - name: weather_lookup
+            description: "Look up current weather for a city."
+            template: 'curl "wttr.in/{city}?format=3"'
+            inputs:
+              city: { type: string, required: true }
+    """
+
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+
+    name: str
+    description: str
+    template: str
+    inputs: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    timeout_seconds: float = Field(default=30.0, alias="timeoutSeconds")
+
+    @field_validator("name")
+    @classmethod
+    def _validate_command_name(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("command name is required")
+        if not VALID_SLUG_RE.match(v.replace("_", "-")):
+            raise ValueError(
+                f"command name {v!r} must be alphanumeric + underscores/hyphens"
+            )
+        return v
+
+
 class SkillManifest(BaseModel):
     """Parsed YAML frontmatter from SKILL.md.
 
@@ -111,6 +149,7 @@ class SkillManifest(BaseModel):
     license: str | None = None
     version: str | None = None
     openclaw: SkillOpenClawMetadata = Field(default_factory=SkillOpenClawMetadata)
+    commands: list[SkillCommand] = Field(default_factory=list)
 
     @field_validator("name")
     @classmethod

@@ -241,5 +241,41 @@ def format_memories_for_prompt(results: list[MemorySearchResult]) -> str:
     return "\n".join(lines)
 
 
+def format_memories_as_prelude(results: list[MemorySearchResult]) -> str:
+    """Tight plain-text recall prelude designed to sit ABOVE the base
+    system prompt — first thing the model sees.
+
+    Small local models (gemma2/3, qwen2.5:3b, llama3.1:8b) tend to fade
+    on long English playbooks, so the recall content needs to be at the
+    very top of the prompt in a format that doesn't look like meta-
+    documentation. This helper flattens the retrieved chunks into a
+    bullet list under a directive header — no XML, no escape sequences,
+    no citations. The richer XML block (with chunk_id + citations) is
+    still emitted via `format_memories_for_prompt` for citation-aware
+    models; this prelude is a redundant "you already know these
+    things" reminder placed where attention is highest.
+    """
+    if not results:
+        return ""
+    # Positive framing only. Earlier versions used "Never reply 'I don't
+    # know'" — small local models (gemma2/3, qwen2.5:3b) sometimes
+    # interpret negative meta-instructions as a freeze signal and emit
+    # an empty response. The directive below tells the model what TO do
+    # without naming the failure mode.
+    lines = [
+        "## What you already know about this user",
+        "",
+        "These facts come from your long-term memory and are relevant to",
+        "the current question. Use them directly when answering.",
+        "",
+    ]
+    for r in results:
+        text = r.chunk.text.strip().replace("\n", " ")
+        if len(text) > 280:
+            text = text[:280] + "…"
+        lines.append(f"- {text}")
+    return "\n".join(lines)
+
+
 def _xml_escape(s: str) -> str:
     return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")

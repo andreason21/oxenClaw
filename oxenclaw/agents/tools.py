@@ -111,6 +111,74 @@ _TOOL_NAME_ALIASES: dict[str, str] = {
     "skill_find": "skill_resolver",
     "find_skill": "skill_resolver",
     "install_skill": "skill_resolver",
+    # message tool — production hit: gemma4 emits `message:send_message`
+    # (openclaw-style namespaced colon) when the registered tool is
+    # bare `message`. Loop-detection used to abort the turn entirely.
+    "message_send_message": "message",
+    "message_send": "message",
+    "send_message": "message",
+    "send": "message",
+    "message_post": "message",
+    "post_message": "message",
+    "message_reply": "message",
+    "reply": "message",
+    # weather tool variants
+    "weather_lookup": "weather",
+    "get_weather": "weather",
+    "weather_get": "weather",
+    "weather_now": "weather",
+    "current_weather": "weather",
+    # web_search / web_fetch variants
+    "search_web": "web_search",
+    "websearch": "web_search",
+    "google_search": "web_search",
+    "google_search_search": "web_search",  # double-canon from `google:search:search`
+    "google": "web_search",                # bare provider name → web_search
+    "google_search_": "web_search",        # `google:search:` trailing colon
+    "ddg_search": "web_search",
+    "duckduckgo": "web_search",
+    "duckduckgo_search": "web_search",
+    "bing": "web_search",
+    "bing_search": "web_search",
+    "search_engine": "web_search",
+    "internet_search": "web_search",
+    "online_search": "web_search",
+    "fetch_url": "web_fetch",
+    "fetch_web": "web_fetch",
+    "url_fetch": "web_fetch",
+    "http_get": "web_fetch",
+    "browse": "web_fetch",
+    "browse_url": "web_fetch",
+    "open_url": "web_fetch",
+    "visit_url": "web_fetch",
+    # github tool variants
+    "github_get": "github",
+    "github_query": "github",
+    "gh": "github",
+    # cron tool variants
+    "cron_create": "cron",
+    "cron_add": "cron",
+    "schedule": "cron",
+    "schedule_job": "cron",
+    # get_time variants
+    "now": "get_time",
+    "current_time": "get_time",
+    "time_now": "get_time",
+    "time_get": "get_time",
+    # sessions_spawn variants (ACP)
+    "sessions_create": "sessions_spawn",
+    "subagent_spawn": "sessions_spawn",
+    "spawn_subagent": "sessions_spawn",
+    "spawn_session": "sessions_spawn",
+    # sessions_yield variants
+    "yield_session": "sessions_yield",
+    "yield": "sessions_yield",
+    # update_plan variants
+    "plan_update": "update_plan",
+    "update_planning": "update_plan",
+    # healthcheck
+    "health_check": "healthcheck",
+    "health": "healthcheck",
 }
 
 

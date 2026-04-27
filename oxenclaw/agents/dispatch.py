@@ -14,6 +14,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
 from oxenclaw.agents.base import AgentContext
+from oxenclaw.agents.lanes import BusyPolicy, LaneRegistry
 from oxenclaw.agents.registry import AgentRegistry, session_key_for_envelope
 from oxenclaw.plugin_sdk.channel_contract import (
     InboundEnvelope,
@@ -60,11 +61,26 @@ class Dispatcher:
         agents: AgentRegistry,
         config: RootConfig,
         send: SendCallable,
+        lanes: LaneRegistry | None = None,
+        busy_policy: BusyPolicy | None = None,
     ) -> None:
         self._agents = agents
         self._config = config
         self._send = send
         self._sessions: dict[tuple[str, str], AgentContext] = {}
+        # Lane registry — at most one in-flight turn per
+        # (agent_id, session_key). Optional global cap configurable
+        # at construction. Defaults to "session-only" so concurrent
+        # `chat.send` calls on the same session serialise but
+        # different sessions still run in parallel.
+        if lanes is None:
+            lanes = LaneRegistry(busy_policy=busy_policy or "queue")
+        elif busy_policy is not None:
+            # Allow callers to override the policy on a pre-built
+            # registry (used by tests + CLI flag wiring).
+            lanes._busy_policy = busy_policy  # type: ignore[attr-defined]
+        self._lanes = lanes
+        self._busy_policy: BusyPolicy = busy_policy or lanes.busy_policy
 
     async def dispatch(self, envelope: InboundEnvelope) -> list[SendResult]:
         """Compatibility wrapper — returns just the send results.
@@ -76,6 +92,42 @@ class Dispatcher:
         return outcome.results
 
     async def dispatch_with_outcome(self, envelope: InboundEnvelope) -> DispatchOutcome:
+        # Lane gate: serialise turns per (agent_id, session_key) so
+        # two concurrent inbound envelopes for the same chat don't
+        # interleave history writes. Resolution happens INSIDE the
+        # lane so we don't pay the lock cost on no-agent drops, but
+        # we use the resolved key to acquire the right lock.
+        agent_id_preview = self._resolve_agent_id(envelope) or "_unrouted"
+        session_key_preview = session_key_for_envelope(envelope)
+        # Honour the busy policy: when a turn is already in-flight on
+        # this lane, we may want to signal an abort (interrupt) or
+        # stage the message for mid-stream injection (steer). The
+        # actual serialisation still happens via `_lanes.run`.
+        lane_state = self._lanes.lane(agent_id_preview, session_key_preview)
+        if lane_state.lock.locked():
+            policy = self._busy_policy
+            if policy == "interrupt":
+                self._lanes.signal_abort(agent_id_preview, session_key_preview)
+            elif policy == "steer":
+                # Best-effort: queue the message text into pending so a
+                # `steer(text)`-aware agent can consume it. Falls back
+                # to queue-on-lane for agents that don't support it.
+                self._lanes.queue_message(
+                    agent_id_preview, session_key_preview, envelope.text
+                )
+            elif policy == "queue":
+                self._lanes.queue_message(
+                    agent_id_preview, session_key_preview, envelope.text
+                )
+            # `block` falls through silently — the lock provides the
+            # blocking behaviour.
+        return await self._lanes.run(
+            agent_id=agent_id_preview,
+            session_key=session_key_preview,
+            coro_factory=lambda: self._dispatch_locked(envelope),
+        )
+
+    async def _dispatch_locked(self, envelope: InboundEnvelope) -> DispatchOutcome:
         agent_id = self._resolve_agent_id(envelope)
         if agent_id is None:
             reason = self._explain_no_agent(envelope)
@@ -160,6 +212,16 @@ class Dispatcher:
         channel = envelope.channel
         sender = envelope.sender_id
 
+        # 0) Caller-pinned agent wins. Dashboards and RPC clients that
+        # already chose an agent (e.g. via the chat target dropdown)
+        # don't need channel routing — they tell us directly. If the
+        # pinned id is unknown we drop rather than fall through to
+        # implicit fallback, since silently routing to a different
+        # agent would mask the misconfiguration.
+        pinned = envelope.agent_id
+        if pinned:
+            return pinned if self._agents.get(pinned) is not None else None
+
         # 1) Explicit routing in config.yaml takes precedence — operators
         # who declare per-channel agents get exactly the agent they
         # asked for.
@@ -192,6 +254,11 @@ class Dispatcher:
         channel = envelope.channel
         if not registered:
             return "no agents are registered with the gateway"
+        if envelope.agent_id and envelope.agent_id not in registered:
+            return (
+                f"pinned agent {envelope.agent_id!r} is not registered "
+                f"(known: {sorted(registered)!r})"
+            )
         # Did any agent declare routing for this channel but reject the sender?
         for agent_id, agent_cfg in self._config.agents.items():
             routing = agent_cfg.channels.get(channel)

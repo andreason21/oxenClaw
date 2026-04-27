@@ -17,11 +17,60 @@ content_block_delta SSE into the pi event union.
 
 from __future__ import annotations
 
+import email.utils
 import json
-from collections.abc import AsyncIterator
+import time
+from collections.abc import AsyncIterator, Mapping
 from typing import Any
 
 import aiohttp
+
+
+def _parse_retry_after(headers: Mapping[str, str]) -> float | None:
+    """Return seconds-to-wait per RFC 7231 + provider rate-limit hints.
+
+    `Retry-After` may be either an integer of seconds or an HTTP-date.
+    Anthropic and OpenAI also surface `x-ratelimit-reset-{requests,
+    tokens}` (and `*-1h` variants) as either epoch seconds or relative
+    seconds — we honour the largest hint we can confidently parse.
+    Returns None when nothing usable is present.
+    """
+    candidates: list[float] = []
+    ra = headers.get("Retry-After") or headers.get("retry-after")
+    if ra:
+        s = ra.strip()
+        try:
+            candidates.append(float(s))
+        except ValueError:
+            try:
+                target = email.utils.parsedate_to_datetime(s).timestamp()
+                candidates.append(max(0.0, target - time.time()))
+            except (TypeError, ValueError):
+                pass
+    for key in (
+        "x-ratelimit-reset-requests",
+        "x-ratelimit-reset-tokens",
+        "x-ratelimit-reset-requests-1h",
+        "x-ratelimit-reset-tokens-1h",
+        "anthropic-ratelimit-requests-reset",
+        "anthropic-ratelimit-tokens-reset",
+    ):
+        v = headers.get(key)
+        if not v:
+            continue
+        try:
+            n = float(v)
+        except ValueError:
+            continue
+        # Heuristic: anything > 10**9 is an absolute epoch timestamp.
+        if n > 1_000_000_000:
+            candidates.append(max(0.0, n - time.time()))
+        else:
+            candidates.append(n)
+    if not candidates:
+        return None
+    # Use the longest hint to be conservative (matches hermes behaviour).
+    return max(candidates)
 
 from oxenclaw.pi.messages import (
     AssistantMessage,
@@ -279,8 +328,31 @@ async def stream_anthropic(
                     yield ErrorEvent(
                         message=f"HTTP {resp.status}: {body[:300]}",
                         retryable=resp.status in RETRYABLE_STATUS,
+                        retry_after_seconds=_parse_retry_after(resp.headers),
+                        status_code=resp.status,
                     )
                     return
+
+                # Capture rate-limit headers for any tracker the runtime
+                # injected. Best-effort: a malformed header set just yields
+                # None and we move on. Key ID is the first 8 chars of the
+                # api key (or "default" when absent) so we don't leak the
+                # full secret into the per-process tracker dict.
+                tracker = (ctx.extra or {}).get("rate_limit_tracker")
+                if tracker is not None:
+                    try:
+                        from oxenclaw.pi.rate_limit_tracker import (
+                            parse_rate_limit_headers,
+                        )
+
+                        rl_state = parse_rate_limit_headers(dict(resp.headers))
+                        if rl_state is not None:
+                            api_key = ctx.api.api_key or ""
+                            key_id = api_key[:8] if api_key else "default"
+                            tracker.record(ctx.model.provider, key_id, rl_state)
+                    except Exception:
+                        # Tracking is opportunistic — never fail the call.
+                        pass
 
                 # Per-block accumulators keyed by the `index` Anthropic emits.
                 block_kind: dict[int, str] = {}

@@ -24,15 +24,27 @@ from __future__ import annotations
 
 import time
 from collections.abc import AsyncIterator
+from pathlib import Path
 from typing import Any
 
 import oxenclaw.pi.providers  # noqa: F401  registers stream wrappers
 from oxenclaw.agents.base import AgentContext
 from oxenclaw.agents.history import ConversationHistory
+from oxenclaw.agents.incomplete_turn import repair_incomplete_turn
+from oxenclaw.agents.message_merge import merge_consecutive_same_role
 from oxenclaw.agents.tools import ToolRegistry
 from oxenclaw.clawhub.loader import format_skills_for_prompt, load_installed_skills
 from oxenclaw.config.paths import OxenclawPaths, default_paths
-from oxenclaw.memory.retriever import MemoryRetriever, format_memories_for_prompt
+from oxenclaw.memory.active import (
+    ActiveMemoryConfig,
+    ActiveMemoryRunner,
+    format_active_memory_prelude,
+)
+from oxenclaw.memory.retriever import (
+    MemoryRetriever,
+    format_memories_as_prelude,
+    format_memories_for_prompt,
+)
 from oxenclaw.pi import (
     AssistantMessage,
     AuthStorage,
@@ -49,17 +61,28 @@ from oxenclaw.pi import (
     resolve_api,
 )
 from oxenclaw.pi.cache_observability import CacheObserver, should_apply_cache_markers
-from oxenclaw.pi.compaction import truncating_summarizer
+from oxenclaw.pi.compaction import (
+    CompactionGuard,
+    llm_structured_summarizer,
+    truncating_summarizer,
+)
 from oxenclaw.pi.context_engine import (
     ContextEngine,
     ContextEngineRuntimeContext,
     LegacyContextEngine,
 )
+from oxenclaw.pi.hooks import HookContext, HookRunner
 from oxenclaw.pi.run import RuntimeConfig, run_agent_turn
+from oxenclaw.pi.run.history_image_prune import prune_old_images
 from oxenclaw.pi.system_prompt import (
     assemble_system_prompt,
+    embedded_context_contribution,
+    execution_bias_contribution,
+    load_project_context_files,
     memory_contribution,
+    memory_recall_contribution,
     skills_contribution,
+    skills_mandatory_contribution,
 )
 from oxenclaw.pi.thinking import ThinkingLevel
 from oxenclaw.plugin_sdk.channel_contract import InboundEnvelope, SendParams
@@ -117,6 +140,20 @@ DEFAULT_SYSTEM_PROMPT = (
     "best match, and returns the SKILL.md path + how to invoke it via\n"
     "the shell tool. Don't refuse before trying skill_resolver.\n"
     "\n"
+    "Weather playbook. For weather / temperature / forecast questions\n"
+    "(\"날씨\", \"weather\", \"temperature\", \"forecast\", \"비 와?\")\n"
+    "ALWAYS prefer the dedicated `weather` tool — do NOT use web_search\n"
+    "for weather. Required arg: `city` (string) OR `lat`+`lon` (numbers).\n"
+    "  - If the user named a city: `weather(city=\"<city>\")`.\n"
+    "  - If they didn't: check the recalled-memories block first for a\n"
+    "    location fact (e.g. \"User lives in Suwon\") and use that. Only\n"
+    "    if neither the question nor recall reveals a location, ask the\n"
+    "    user once: \"어느 도시 날씨를 알려드릴까요?\".\n"
+    "  - The tool returns one short line (e.g. `Suwon: 🌦 +18°C`); read\n"
+    "    it back to the user. wttr.in is the upstream provider — it\n"
+    "    rarely returns errors so don't fall back to web_search after\n"
+    "    one weather-tool call.\n"
+    "\n"
     "Web research playbook (mirrors openclaw's chaining guide). When the\n"
     "user asks a factual / current-events / market-research question and\n"
     "you need fresh information:\n"
@@ -129,6 +166,9 @@ DEFAULT_SYSTEM_PROMPT = (
     "  3. Try alternate query phrasings (English / Korean / domain\n"
     "     site: filters) before reporting that nothing was found.\n"
     "  4. When you do answer from web data, cite the URLs you fetched.\n"
+    "  5. NEVER use web_search for queries that have a dedicated tool\n"
+    "     (weather → `weather`, github → `github`, current time →\n"
+    "     `get_time`). Reach for the specialised tool first.\n"
     "\n"
     "Wiki playbook. The wiki vault stores *durable* knowledge that\n"
     "survives across many sessions (decisions, entities, concepts,\n"
@@ -159,11 +199,17 @@ class PiAgent:
         runtime: RuntimeConfig | None = None,
         memory: MemoryRetriever | None = None,
         memory_top_k: int = 5,
+        memory_weak_threshold: float = 0.30,
+        memory_inject_into_user: bool = True,
+        active_memory: ActiveMemoryConfig | None = None,
         include_skills: bool = True,
+        include_execution_bias: bool = True,
+        project_context_dir: Path | str | None = None,
         chunk_limit: int = 4_000,
         thinking: ThinkingLevel | str | None = None,
         compact_keep_tail_turns: int = 6,
         context_engine: ContextEngine | None = None,
+        hooks: HookRunner | None = None,
     ) -> None:
         self.id = agent_id
         self._registry = registry or default_registry()
@@ -174,7 +220,15 @@ class PiAgent:
         self._system_prompt = system_prompt
         self._memory = memory
         self._memory_top_k = memory_top_k
+        self._memory_weak_threshold = memory_weak_threshold
+        self._memory_inject_into_user = memory_inject_into_user
+        self._active_memory_config = active_memory or ActiveMemoryConfig(enabled=False)
+        self._active_runner: ActiveMemoryRunner | None = None
         self._include_skills = include_skills
+        self._include_execution_bias = include_execution_bias
+        self._project_context_dir: Path | None = (
+            Path(project_context_dir) if project_context_dir is not None else None
+        )
         self._chunk_limit = chunk_limit
         self._compact_keep_tail = compact_keep_tail_turns
 
@@ -188,20 +242,315 @@ class PiAgent:
         # the dispatcher's session_key.
         self._observers: dict[str, CacheObserver] = {}
         self._session_ids: dict[str, str] = {}
+        # Frozen recall snapshot per session — captured once when the
+        # session is first seen so the cacheable portion of the system
+        # prompt stays byte-stable across turns. Dynamic per-query
+        # recall still flows through `memory_contribution` below the
+        # cache marker, but this snapshot adds query-independent user
+        # facts to the cached prefix without invalidating it on writes.
+        # Keyed by (session_key) → frozen XML block string.
+        self._recall_snapshots: dict[str, str] = {}
 
         # Context engine — defaults to the pass-through `LegacyContextEngine`
         # so behaviour matches pre-rc.16 PiAgent byte-for-byte. Operators
         # opt into a custom strategy by injecting it here.
         self._engine: ContextEngine = context_engine or LegacyContextEngine()
 
+        # Hook runner — empty by default. Operators populate before/after
+        # tool / on_empty_reply / on_turn_end callbacks via constructor.
+        self._hooks: HookRunner = hooks or HookRunner()
+
+        # Iterative-summary state for the structured LLM-based
+        # summariser pipeline. Keyed by session_key.
+        # Each entry is a tuple (prior_summary_text, CompactionGuard).
+        self._compaction_state: dict[str, tuple[str | None, CompactionGuard]] = {}
+
+    # ─── user-side recall (the strongest injection point) ─────────
+
+    async def _active_memory_prelude(
+        self, query: str, recent_messages: list[Any], session_key: str
+    ) -> str:
+        """Run the active-memory sub-agent if enabled and return the
+        rendered prelude (or "")."""
+        if (
+            self._memory is None
+            or not self._active_memory_config.enabled
+        ):
+            return ""
+        if self._active_runner is None:
+            self._active_runner = ActiveMemoryRunner(
+                memory=self._memory,
+                main_model=self._model,
+                api_resolver=lambda m: resolve_api(m, self._auth),
+                config=self._active_memory_config,
+            )
+        # Hot-swap sub-model lazily if config asks for a different one.
+        if self._active_memory_config.model_id and (
+            self._active_runner.sub_model is None
+            or self._active_runner.sub_model.id != self._active_memory_config.model_id
+        ):
+            try:
+                self._active_runner.sub_model = self._registry.require(
+                    self._active_memory_config.model_id
+                )
+            except KeyError:
+                logger.warning(
+                    "active-memory model %r not registered; falling back to main",
+                    self._active_memory_config.model_id,
+                )
+                self._active_runner.sub_model = None
+        summary = await self._active_runner.recall_for_turn(
+            query=query,
+            recent_messages=recent_messages,
+            session_key=session_key,
+        )
+        return format_active_memory_prelude(summary)
+
+    async def _build_user_recall_prelude(self, query: str) -> str:
+        """Run a recall search and render it as a tight prelude that
+        will be prepended to the user message body for the model.
+
+        Why user-side and not system-side? Small local models
+        (gemma2/3, qwen2.5:3b, llama3.1:8b) consistently ignore long
+        system-prompt context but strongly attend to the user message.
+        openclaw avoids the issue by relying on the model to call
+        `memory_search` as a tool — the tool_result is part of the
+        normal turn flow and gets full attention. We do BOTH so that
+        models that don't yet know to call `memory_search` still
+        benefit from prior context. The dashboard view never includes
+        this prelude — only the model sees it.
+        """
+        if self._memory is None:
+            return ""
+        from oxenclaw.memory.hybrid import HybridConfig
+        from oxenclaw.memory.temporal_decay import TemporalDecayConfig
+
+        hits = await self._memory.search(
+            query=query,
+            k=self._memory_top_k,
+            hybrid=HybridConfig(enabled=True),
+            temporal_decay=TemporalDecayConfig(enabled=True),
+        )
+        if not hits:
+            return ""
+        prelude = format_memories_as_prelude(hits)
+        if prelude:
+            top = hits[0]
+            logger.info(
+                "user-side recall injected: %d hit(s) top=%.3f citation=%s",
+                len(hits),
+                top.score,
+                top.citation,
+            )
+        return prelude
+
+    # ─── summariser selection ───────────────────────────────────────
+
+    def _build_summarizer(self, session_key: str):
+        """Pick the active summariser for this session.
+
+        When `RuntimeConfig.auxiliary_llm` is set, returns an adapter
+        that drives the LLM-based structured summariser pipeline (keeps
+        per-session prior_summary + CompactionGuard so iterative
+        compactions preserve information). Falls back to the cheap
+        `truncating_summarizer` otherwise — byte-for-byte default
+        behaviour for callers that didn't opt in.
+        """
+        aux_llm = getattr(self._runtime, "auxiliary_llm", None)
+        if aux_llm is None:
+            return truncating_summarizer
+
+        async def _summarize(messages):
+            prior, guard = self._compaction_state.get(
+                session_key, (None, CompactionGuard())
+            )
+            try:
+                summary = await llm_structured_summarizer(
+                    messages,
+                    summarizer_llm=aux_llm,
+                    prior_summary=prior,
+                )
+            except Exception:
+                logger.exception("auxiliary_llm summariser failed; falling back")
+                return await truncating_summarizer(messages)
+            if summary:
+                self._compaction_state[session_key] = (summary, guard)
+            return summary or ""
+
+        return _summarize
+
+    # ─── runtime model swap (debug / A-B) ──────────────────────────
+
+    def set_model_id(self, model_id: str) -> str:
+        """Hot-swap the underlying Model. Returns the new model id.
+
+        Used by the `agents.set_model` RPC for A/B testing recall
+        attention across local models without restarting the gateway.
+        Cache observers are keyed by session id and store provider-
+        specific cache markers, so we drop them on swap to avoid
+        sending stale cache_control breakpoints to a different
+        provider/model.
+        """
+        new_model = self._registry.require(model_id)
+        if new_model.id == self._model.id:
+            return new_model.id
+        self._model = new_model
+        self._observers.clear()
+        logger.info("agents.set_model: %s now using model %s", self.id, new_model.id)
+        return new_model.id
+
     # ─── system prompt assembly ─────────────────────────────────────
 
-    async def _system_for(self, query: str) -> str:
+    async def _system_for(self, query: str, *, session_key: str | None = None) -> str:
+        prompt, _hits, _mblock, _skills_block = await self._assemble_system(
+            query, session_key=session_key,
+        )
+        return prompt
+
+    async def debug_assemble(
+        self, query: str, *, session_key: str | None = None
+    ) -> dict[str, Any]:
+        """Return the same artefacts a real turn would build, for the
+        `chat.debug_prompt` RPC. We never want a debug-RPC failure to
+        break the gateway, so each step is isolated."""
+        prompt, hits, mblock, skills_block = await self._assemble_system(
+            query, session_key=session_key,
+        )
+        prelude = format_memories_as_prelude(hits)
+        hit_payload = [
+            {
+                "chunk_id": h.chunk.id,
+                "citation": h.citation,
+                "score": float(h.score),
+                "distance": float(h.distance),
+                "path": h.chunk.path,
+                "start_line": h.chunk.start_line,
+                "end_line": h.chunk.end_line,
+                "text_preview": h.chunk.text.strip().replace("\n", " ")[:240],
+            }
+            for h in hits
+        ]
+        return {
+            "model_id": self._model.id,
+            "agent_id": self.id,
+            "system_prompt": prompt,
+            "system_prompt_chars": len(prompt),
+            "base_prompt_chars": len(self._system_prompt),
+            "memory_hits": hit_payload,
+            "memory_block": mblock,
+            "memory_block_chars": len(mblock),
+            "memory_prelude": prelude,
+            "memory_prelude_chars": len(prelude),
+            "memory_weak_threshold": self._memory_weak_threshold,
+            "skills_block": skills_block,
+            "skills_block_chars": len(skills_block),
+        }
+
+    async def _ensure_recall_snapshot(self, session_key: str) -> str:
+        """Capture a frozen recall block once per session.
+
+        Hermes-agent style: `tools/memory_tool.py:_system_prompt_snapshot`
+        — mid-session writes mutate the live store but the prompt-
+        injected snapshot does NOT change, preserving the provider's
+        prompt cache for the entire session. We adopt the same pattern
+        here for query-independent user facts (no specific query →
+        general "what we already know about this user"); per-turn
+        query-specific recall continues to flow through the
+        `cacheable=False` `memory_contribution` slot.
+        """
+        cached = self._recall_snapshots.get(session_key)
+        if cached is not None:
+            return cached
+        if self._memory is None:
+            self._recall_snapshots[session_key] = ""
+            return ""
+        try:
+            from oxenclaw.memory.hybrid import HybridConfig
+            from oxenclaw.memory.temporal_decay import TemporalDecayConfig
+            # Generic "user / preferences / identity" probe — pulls the
+            # most recall-worthy long-lived facts. Empty / weak result
+            # is OK; we still want to freeze "" for the session so a
+            # later memory_save mid-session doesn't bust the cache.
+            hits = await self._memory.search(
+                query="user identity preferences personal facts",
+                k=self._memory_top_k,
+                hybrid=HybridConfig(enabled=True),
+                temporal_decay=TemporalDecayConfig(enabled=True),
+            )
+        except Exception:
+            logger.exception("recall snapshot probe failed")
+            hits = []
+        block = format_memories_for_prompt(hits) if hits else ""
+        self._recall_snapshots[session_key] = block
+        if block:
+            logger.info(
+                "recall snapshot frozen for session=%s hits=%d",
+                session_key, len(hits),
+            )
+        return block
+
+    def invalidate_recall_snapshot(self, session_key: str | None = None) -> None:
+        """Drop the frozen recall snapshot.
+
+        Called on explicit session reset / fork. Mid-session memory_save
+        deliberately does NOT call this — the whole point of the
+        snapshot is that writes during a session don't invalidate the
+        cached prompt prefix. The new snapshot is taken at the start
+        of the *next* session.
+        """
+        if session_key is None:
+            self._recall_snapshots.clear()
+        else:
+            self._recall_snapshots.pop(session_key, None)
+
+    async def _assemble_system(
+        self, query: str, *, session_key: str | None = None
+    ) -> tuple[str, list, str, str]:
         contributions = []
+        # Universal "keep going / verify with tools" block — static text,
+        # cacheable, applies regardless of skill / memory state. Ported
+        # from openclaw `buildExecutionBiasSection`.
+        if self._include_execution_bias:
+            contributions.append(execution_bias_contribution())
+        # Project context (AGENTS.md / SOUL.md / etc.) — opt-in via
+        # `project_context_dir`. Cacheable; only changes when files do.
+        if self._project_context_dir is not None:
+            files_block = load_project_context_files(self._project_context_dir)
+            if files_block:
+                contributions.append(
+                    embedded_context_contribution(files_block=files_block)
+                )
+        skills_block = ""
         if self._include_skills:
-            block = format_skills_for_prompt(load_installed_skills(self._paths))
-            if block:
-                contributions.append(skills_contribution(skills_block=block))
+            skills_block = format_skills_for_prompt(load_installed_skills(self._paths))
+            if skills_block:
+                # Procedure block first (priority 18), then the XML
+                # `<available_skills>` block (priority 20). Same layout
+                # as openclaw `buildSkillsSection`.
+                contributions.append(skills_mandatory_contribution())
+                contributions.append(skills_contribution(skills_block=skills_block))
+        # Frozen session recall snapshot — adds query-independent user
+        # facts to the cacheable portion of the system prompt. Stays
+        # byte-stable for the whole session so prompt-cache prefix
+        # survives mid-session memory writes.
+        if session_key is not None and self._memory is not None:
+            snapshot = await self._ensure_recall_snapshot(session_key)
+            if snapshot:
+                from oxenclaw.pi.system_prompt import SystemPromptContribution
+                contributions.append(
+                    SystemPromptContribution(
+                        name="recall_snapshot",
+                        body=snapshot,
+                        # Priority 25 sits between embedded_context (30) and
+                        # skills (20) so a SKILL.md still lands at the top.
+                        priority=25,
+                        cacheable=True,
+                    )
+                )
+
+        hits: list = []
+        mblock = ""
+        prelude = ""
         if self._memory is not None and query.strip():
             try:
                 # Hybrid search by default: vector similarity alone misses
@@ -220,29 +569,62 @@ class PiAgent:
                     temporal_decay=TemporalDecayConfig(enabled=True),
                 )
                 # Operator-facing visibility: log the hit count + top
-                # score + first chunk's citation so a `tail -f` of
-                # gateway.log shows whether recall actually surfaced
-                # something for this turn. Without this an empty
+                # score + per-hit scores + first chunk's citation so a
+                # `tail -f` of gateway.log shows whether recall actually
+                # surfaced something for this turn. Without this an empty
                 # `<recalled_memories>` block (the "agent doesn't
                 # remember" symptom) is invisible from logs alone.
                 if hits:
                     top = hits[0]
+                    score_breakdown = ",".join(f"{h.score:.2f}" for h in hits)
                     logger.info(
-                        "memory recall: %d hit(s), top score=%.3f citation=%s query=%r",
+                        "memory recall: %d hit(s), top score=%.3f citation=%s scores=[%s] query=%r",
                         len(hits),
                         top.score,
                         top.citation,
+                        score_breakdown,
                         query[:80],
                     )
+                    if top.score < self._memory_weak_threshold:
+                        # All hits are weak — log a warning but still
+                        # include the block. The model can ignore weak
+                        # context, and pulling the block hides the
+                        # signal entirely. Operators see this in the log
+                        # and can tune `memory_weak_threshold` per
+                        # embedding model (different models score the
+                        # same chunk pair differently).
+                        logger.warning(
+                            "memory recall: top score %.3f below %.2f — recall is weak for query=%r",
+                            top.score,
+                            self._memory_weak_threshold,
+                            query[:80],
+                        )
                 else:
                     logger.info("memory recall: 0 hits for query=%r", query[:80])
                 mblock = format_memories_for_prompt(hits)
                 if mblock:
+                    # Procedural rule (priority 70) above the XML block
+                    # (priority 80) so the model reads the citation rule
+                    # before the data. Mirrors openclaw's
+                    # `buildMemoryPromptSection`.
+                    contributions.append(memory_recall_contribution())
                     contributions.append(memory_contribution(memory_block=mblock))
+                # Prelude — tight plain-text bullet list prepended to
+                # the base prompt below. Covers small local models
+                # whose attention fades before the XML block lower
+                # down. We still emit the XML block (citation-aware
+                # large models use it).
+                prelude = format_memories_as_prelude(hits)
             except Exception:
                 logger.exception("memory recall failed")
-        prompt, _ = assemble_system_prompt(self._system_prompt, contributions)
-        return prompt
+        # Prepend the recall prelude to the base — `assemble_system_prompt`
+        # always anchors `base` at index 0, so this is the only way to put
+        # something physically ABOVE the playbook.
+        base = self._system_prompt
+        if prelude:
+            base = f"{prelude}\n\n{base}"
+        prompt, _ = assemble_system_prompt(base, contributions)
+        return prompt, hits, mblock, skills_block
 
     # ─── session management ─────────────────────────────────────────
 
@@ -259,6 +641,50 @@ class PiAgent:
                 title=key,
             )
         )
+        # Rehydrate from the dashboard-side ConversationHistory file.
+        # `InMemorySessionManager` is process-local — every gateway
+        # restart starts with an empty pi transcript, but the dashboard
+        # poll keeps showing the prior turns from disk. That mismatch
+        # is what made the agent "forget the conversation" — it really
+        # WAS receiving an empty history list. Now we seed the new
+        # session with whatever the on-disk ConversationHistory has
+        # so cross-restart continuity matches what the user sees.
+        try:
+            history_path = self._paths.session_file(self.id, key)
+            if history_path.exists():
+                hist = ConversationHistory(history_path)
+                seeded = 0
+                for msg in hist.messages():
+                    role = msg.get("role")
+                    content = msg.get("content") or ""
+                    if not content:
+                        continue
+                    if role == "user":
+                        s.messages.append(UserMessage(content=content))
+                        seeded += 1
+                    elif role == "assistant":
+                        s.messages.append(
+                            AssistantMessage(
+                                content=[TextContent(text=content)],
+                                stop_reason="end_turn",
+                            )
+                        )
+                        seeded += 1
+                if seeded:
+                    logger.info(
+                        "pi session rehydrated from disk: agent=%s "
+                        "session=%s seeded=%d",
+                        self.id, key, seeded,
+                    )
+        except Exception:
+            logger.exception("pi session rehydrate failed for %s/%s", self.id, key)
+        # Repair incomplete-turn state (orphan tool_use, trailing user)
+        # so the model never sees a corrupt transcript on the first
+        # turn after a crash / restart.
+        try:
+            repair_incomplete_turn(s.messages)
+        except Exception:
+            logger.exception("incomplete-turn repair failed for %s/%s", self.id, key)
         self._session_ids[key] = s.id
         return s
 
@@ -294,18 +720,97 @@ class PiAgent:
         if not text and not images and not dropped_notes:
             return
 
+        # before_agent_reply hook — last chance to short-circuit the
+        # whole turn (e.g. a cron handler that already knows the
+        # answer, or a content filter that wants to refuse early).
+        hook_ctx = HookContext(
+            agent_id=self.id,
+            session_key=ctx.session_key,
+            workspace_dir=str(self._paths.home),
+            model_provider=getattr(self._model, "provider", None),
+            model_id=self._model.id,
+            channel=inbound.channel,
+        )
+        early = await self._hooks.run_before_agent_reply(text, hook_ctx)
+        if early is not None and early.handled:
+            reply = (early.reply_text or "").strip()
+            if not reply:
+                return
+            dashboard_history = ConversationHistory(
+                self._paths.session_file(self.id, ctx.session_key)
+            )
+            dashboard_history.append({"role": "user", "content": text})
+            dashboard_history.append({"role": "assistant", "content": reply})
+            dashboard_history.save()
+            for chunk in chunk_text(reply, self._chunk_limit):
+                yield SendParams(target=inbound.target, text=chunk)
+            await self._hooks.run_on_turn_end(reply, hook_ctx)
+            return
+
+        # User-side recall injection. The strongest place to put recalled
+        # memories for a small local model is INSIDE the user message —
+        # not the system prompt. The model treats the user message as
+        # "the thing the human just said" and attends to it strongly,
+        # while system-prompt blocks (especially long ones) get faded
+        # out by gemma2/3 + qwen2.5:3b + llama3.1:8b. openclaw side-steps
+        # this entirely by relying on the model to call `memory_search`
+        # as a tool and reading the tool_result; we do BOTH (auto-inject
+        # for tiny models, plus the tool for larger ones).
+        #
+        # The dashboard always shows what the user actually typed, NOT
+        # the augmented version — the prelude is internal context.
+        # Anti-replay sanitisation: strip any `<recalled_memories>` or
+        # `<memory-context>` fence tags the user (or a quoted prior
+        # assistant turn) might paste in. The fence tag is the structural
+        # signal that "the bytes inside are authoritative recall" — if a
+        # user echoes one back, downstream injection paths could re-
+        # ingest it as ground truth. Tag bodies stay; only the open/close
+        # tags are removed so the user's own words aren't lost.
+        from oxenclaw.memory.privacy import sanitize_recall_fence
+        sanitized_text = sanitize_recall_fence(text)
+        user_text_raw = "\n".join(t for t in (sanitized_text, *dropped_notes) if t)
+        user_text_for_model = user_text_raw
+
+        # Active memory sub-agent — produces a one-line natural-language
+        # summary that small models actually attend to (vs raw chunks
+        # they tend to ignore). Only fires when the user has opted in
+        # via active_memory.enabled = True.
+        if self._memory is not None and self._active_memory_config.enabled and text:
+            try:
+                # Use the existing pi-format session messages for "recent" context.
+                # We haven't created the session yet at this point; check the
+                # transcript file directly for a cheap recent-history view.
+                session_for_active = await self._ensure_session(ctx.session_key)
+                active_prelude = await self._active_memory_prelude(
+                    text,
+                    list(session_for_active.messages),
+                    ctx.session_key,
+                )
+            except Exception:
+                logger.exception("active-memory prelude failed")
+                active_prelude = ""
+            if active_prelude:
+                user_text_for_model = f"{active_prelude}\n\n{user_text_raw}"
+
+        if self._memory is not None and self._memory_inject_into_user and text:
+            try:
+                inject_prelude = await self._build_user_recall_prelude(text)
+            except Exception:
+                logger.exception("user-side recall prelude failed")
+                inject_prelude = ""
+            if inject_prelude:
+                user_text_for_model = f"{inject_prelude}\n\n{user_text_for_model}"
+
         # Build the user message content. Pure-text turns keep the
         # `content: str` shape (smaller payload, identical semantics);
         # mixed turns become a list of typed blocks.
         if images:
             blocks: list = [pi_image_content(img) for img in images]
-            text_parts = [t for t in (text, *dropped_notes) if t]
-            if text_parts:
-                blocks.append(TextContent(text="\n".join(text_parts)))
+            if user_text_for_model:
+                blocks.append(TextContent(text=user_text_for_model))
             user_content: Any = blocks
         else:
-            combined = "\n".join(t for t in (text, *dropped_notes) if t)
-            user_content = combined
+            user_content = user_text_for_model
 
         session = await self._ensure_session(ctx.session_key)
         session.messages.append(UserMessage(content=user_content))
@@ -314,18 +819,13 @@ class PiAgent:
         # poll surfaces this turn. PiAgent's pi-format SessionManager and the
         # dashboard-format ConversationHistory are intentionally separate
         # stores — pi owns the rich transcript the runner needs, while the
-        # dashboard wants a flat role/content list. We write the user turn
-        # eagerly here and the assistant turn after the inference loop.
+        # dashboard wants a flat role/content list. The dashboard sees the
+        # ORIGINAL user text (what they typed), not the recall-augmented
+        # version — operator UX shouldn't leak the synthetic prelude.
         dashboard_history = ConversationHistory(
             self._paths.session_file(self.id, ctx.session_key)
         )
-        if isinstance(user_content, str):
-            dashboard_history.append({"role": "user", "content": user_content})
-        else:
-            text_only = "\n".join(
-                b.text for b in user_content if isinstance(b, TextContent)
-            )
-            dashboard_history.append({"role": "user", "content": text_only or "(image)"})
+        dashboard_history.append({"role": "user", "content": user_text_raw or "(image)"})
         dashboard_history.save()
 
         # Engine ingest — single-message hook for the user turn just
@@ -338,7 +838,7 @@ class PiAgent:
         )
 
         api = await resolve_api(self._model, self._auth)
-        system = await self._system_for(text)
+        system = await self._system_for(text, session_key=ctx.session_key)
 
         observer = self._observers.setdefault(session.id, CacheObserver())
         breakpoints = (
@@ -369,7 +869,34 @@ class PiAgent:
 
         pre_prompt_count = len(session.messages)
 
+        # History image prune — replace old base64 image blobs with
+        # placeholders so a 30-turn multimodal session doesn't blow
+        # the context window. Always safe; defaults keep the most
+        # recent 2 user turns intact.
+        try:
+            prune_old_images(history, keep_recent_user_turns=2)
+        except Exception:
+            logger.exception("history-image-prune failed (non-fatal)")
+
+        # Merge consecutive same-role messages — Anthropic + Google
+        # reject them; small models attend to the merged single turn
+        # better than two adjacent fragments anyway.
+        try:
+            merge_consecutive_same_role(history)
+        except Exception:
+            logger.exception("message-merge failed (non-fatal)")
+
         ts_turn_start = time.time()
+        # Wire hooks into the per-turn runtime so before/after_tool_use
+        # fire from inside the run loop. Reuse the same RuntimeConfig
+        # but copy so we don't mutate the agent's stored config.
+        turn_runtime = RuntimeConfig(
+            **{
+                **turn_runtime.__dict__,
+                "hook_runner": self._hooks,
+                "hook_context": hook_ctx,
+            }
+        )
         result = await run_agent_turn(
             model=self._model,
             api=api,
@@ -410,6 +937,7 @@ class PiAgent:
         # so `LegacyContextEngine.compact` can mutate it via the existing
         # `maybe_compact` path. Custom engines that own their own message
         # store ignore the session and operate on `messages`.
+        active_summarizer = self._build_summarizer(ctx.session_key)
         await self._engine.compact(
             session_id=session.id,
             messages=session.messages,
@@ -417,7 +945,7 @@ class PiAgent:
             runtime_context=ContextEngineRuntimeContext(
                 extra={
                     "session": session,
-                    "summarizer": truncating_summarizer,
+                    "summarizer": active_summarizer,
                     "keep_tail_turns": self._compact_keep_tail,
                 }
             ),
@@ -487,20 +1015,56 @@ class PiAgent:
                 b.text for b in result.final_message.content if isinstance(b, TextContent)
             ]
             reply = "\n".join(p for p in text_parts if p).strip()
+            tool_uses_in_final = [
+                b for b in result.final_message.content if isinstance(b, ToolUseBlock)
+            ]
             if not reply:
+                # Empty model output. Two scenarios:
+                #   (a) the model emitted only tool_use blocks → already
+                #       written to dashboard above; the final pass yielding
+                #       no text is normal post-tool flow that the next turn
+                #       resolves.
+                #   (b) the model genuinely emitted nothing — rare on big
+                #       models, common on small local models when a
+                #       restrictive system prompt confuses them. Surface a
+                #       diagnostic so dashboards don't show "the user sent
+                #       a message and nothing happened" silently.
+                logger.warning(
+                    "pi turn produced no text reply: agent=%s session=%s "
+                    "tool_uses_in_final=%d block_kinds=%s",
+                    self.id,
+                    ctx.session_key,
+                    len(tool_uses_in_final),
+                    [type(b).__name__ for b in result.final_message.content],
+                )
+                if not tool_uses_in_final:
+                    # on_empty_reply hook — gives operators a last
+                    # chance to substitute a useful reply before the
+                    # default placeholder fires.
+                    hook_text = await self._hooks.run_on_empty_reply(hook_ctx)
+                    placeholder = hook_text or (
+                        "(no reply — model returned an empty response. "
+                        "Check gateway.log; if persistent, try "
+                        "`agents.set_model` to swap to a stronger model.)"
+                    )
+                    dashboard_history.append({
+                        "role": "assistant",
+                        "content": placeholder,
+                    })
+                    dashboard_history.save()
+                    yield SendParams(target=inbound.target, text=placeholder)
+                    await self._hooks.run_on_turn_end(placeholder, hook_ctx)
                 return
             # Only append the final assistant text message if it doesn't already
             # have tool_calls (i.e. if it was purely a text turn or the final
             # answer after tools). Avoid duplicating messages already appended
             # above in the tool-call walk.
-            tool_uses_in_final = [
-                b for b in result.final_message.content if isinstance(b, ToolUseBlock)
-            ]
             if not tool_uses_in_final:
                 dashboard_history.append({"role": "assistant", "content": reply})
                 dashboard_history.save()
             for chunk in chunk_text(reply, self._chunk_limit):
                 yield SendParams(target=inbound.target, text=chunk)
+            await self._hooks.run_on_turn_end(reply, hook_ctx)
 
     def _persist_usage(self, session_key: str) -> None:
         """Snapshot cumulative cache + cost telemetry for `usage.*` RPCs.

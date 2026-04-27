@@ -273,6 +273,7 @@ def build_agent(
     agent_type: str = "pi",
     session_manager: SessionManager | None = None,
     approval_manager=None,  # type: ignore[no-untyped-def]
+    active_memory=None,  # type: ignore[no-untyped-def]
 ) -> Agent:
     """Build an agent. All catalog providers route through `PiAgent`.
 
@@ -351,6 +352,8 @@ def build_agent(
         kwargs["system_prompt"] = system_prompt
     if memory is not None:
         kwargs["memory"] = memory
+    if active_memory is not None:
+        kwargs["active_memory"] = active_memory
 
     return PiAgent(**kwargs)
 

@@ -103,6 +103,11 @@ class ChatSendParams(BaseModel):
     text: str
     thread_id: str | None = None
     reply_to_message_id: str | None = None
+    # Caller-pinned agent. When set, the dispatcher routes to this agent
+    # regardless of `channels.<channel>` config. Lets the dashboard's
+    # agent dropdown act as a real selector when multiple agents share
+    # the dashboard channel.
+    agent_id: str | None = None
     # Optional media attachments. Each item's `source` may be a
     # `data:image/...;base64,...` URI or a public `http(s)://` URL —
     # `multimodal/inbound.py:normalize_media_item()` validates and

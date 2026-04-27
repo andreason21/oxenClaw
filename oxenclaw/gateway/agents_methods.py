@@ -33,6 +33,12 @@ class _CreateParams(BaseModel):
     api_key: str | None = None
 
 
+class _SetModelParams(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: str
+    model: str
+
+
 def _provider_name(agent) -> str:  # type: ignore[no-untyped-def]
     """Provider id from the model's catalog entry (openclaw-style).
 
@@ -114,3 +120,57 @@ def register_agents_methods(router: Router, registry: AgentRegistry) -> None:
         if existed:
             registry._agents.pop(p.id, None)
         return {"deleted": existed}
+
+    @router.method("agents.set_model", _SetModelParams)
+    async def _set_model(p: _SetModelParams) -> dict:  # type: ignore[type-arg]
+        """Swap an agent's underlying model at runtime — operator-only.
+
+        Useful for A/B testing prompt attention across local models
+        (gemma vs llama vs qwen) without restarting the gateway. Only
+        agents that expose `set_model_id` (PiAgent) honour it.
+        """
+        agent = registry.get(p.id)
+        if agent is None:
+            return {"ok": False, "error": f"agent {p.id!r} not registered"}
+        setter = getattr(agent, "set_model_id", None)
+        if setter is None:
+            return {
+                "ok": False,
+                "error": (
+                    f"agent {p.id!r} ({type(agent).__name__}) does not "
+                    "expose set_model_id"
+                ),
+            }
+        try:
+            new_id = setter(p.model)
+        except KeyError as exc:
+            return {"ok": False, "error": str(exc)}
+        return {"ok": True, "id": p.id, "model": new_id}
+
+    @router.method("agents.models")
+    async def _models(_: dict) -> list[dict]:  # type: ignore[type-arg]
+        """List models known to any registered PiAgent's ModelRegistry.
+
+        We pull from the first PiAgent we find (they typically share
+        `default_registry()`). Returns provider + id + aliases so the
+        dashboard can populate a model picker for `agents.set_model`.
+        """
+        for agent_id in registry.ids():
+            agent = registry.get(agent_id)
+            reg = getattr(agent, "_registry", None)
+            if reg is None:
+                continue
+            try:
+                models = reg.list()
+            except Exception:
+                continue
+            return [
+                {
+                    "id": m.id,
+                    "provider": getattr(m, "provider", None),
+                    "aliases": list(getattr(m, "aliases", []) or []),
+                    "context_window": getattr(m, "context_window", None),
+                }
+                for m in models
+            ]
+        return []

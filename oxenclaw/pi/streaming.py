@@ -89,6 +89,16 @@ class ErrorEvent:
     error: BaseException | None = None
     message: str = ""
     retryable: bool = False
+    # Provider-supplied "wait at least this long before retrying", parsed
+    # from `Retry-After` header (HTTP/1.1 §14.37) or computed from
+    # `x-ratelimit-reset-*` epoch timestamps. When set, the run-loop
+    # uses this verbatim instead of computed backoff — and the auth
+    # pool's per-key cooldown also honours it via report_failure(...).
+    # Capped to one hour by the consumer to bound damage from broken
+    # provider responses.
+    retry_after_seconds: float | None = None
+    # HTTP status, when known. Drives error-classifier dispatch in run.py.
+    status_code: int | None = None
 
 
 AssistantMessageEvent = Union[

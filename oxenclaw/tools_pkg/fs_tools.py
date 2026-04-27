@@ -19,6 +19,18 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 from oxenclaw.agents.tools import FunctionTool, Tool
+from oxenclaw.tools_pkg.file_state import get_registry as _file_state_registry
+from oxenclaw.tools_pkg.fuzzy_match import FuzzyMatchError, fuzzy_find_and_replace
+
+
+def _current_task_id() -> str:
+    """Best-effort task identity for the file-state registry.
+
+    Falls back to ``"main"`` when no AgentContext is propagated through
+    the tool-call stack. The registry tolerates this — single-agent
+    callers will always look like the same writer.
+    """
+    return "main"
 
 
 def _looks_binary(text: str) -> bool:
@@ -112,6 +124,17 @@ def read_file_tool() -> Tool:
 
         if len(text) > args.max_chars:
             text = text[: args.max_chars] + f"\n[...truncated {len(text) - args.max_chars} chars]"
+
+        # Cross-agent file-state coordination: record this read so a
+        # later edit/write can warn if a sibling agent (or external
+        # editor) modified the file in between.
+        try:
+            partial = (start > 1) or (end < total_lines)
+            _file_state_registry().register_read(
+                _current_task_id(), p, partial=partial
+            )
+        except Exception:
+            pass
         return text
 
     return FunctionTool(
@@ -211,13 +234,35 @@ def write_file_tool() -> Tool:
 
     async def _h(args: _WriteFileArgs) -> str:
         p = Path(args.path)
+        # Cross-agent staleness check (informative — does NOT block).
+        warning_prefix = ""
+        try:
+            stale = _file_state_registry().check_stale(_current_task_id(), p)
+            if stale is not None and stale.kind == "sibling_wrote":
+                import time as _t
+                ts = (
+                    _t.strftime("%H:%M:%S", _t.localtime(stale.last_writer_at))
+                    if stale.last_writer_at is not None
+                    else "?"
+                )
+                warning_prefix = (
+                    f"[WARN: another agent wrote to this file at {ts}; "
+                    "you may be overwriting their changes. If you're "
+                    "certain, re-read first.]\n"
+                )
+        except Exception:
+            pass
         try:
             if args.create_parents:
                 p.parent.mkdir(parents=True, exist_ok=True)
             p.write_text(args.content, encoding="utf-8")
         except OSError as exc:
             return f"write_file error: {exc}"
-        return f"wrote {len(args.content)} chars to {p}"
+        try:
+            _file_state_registry().register_write(_current_task_id(), p)
+        except Exception:
+            pass
+        return f"{warning_prefix}wrote {len(args.content)} chars to {p}"
 
     return FunctionTool(
         name="write_file",
@@ -280,11 +325,36 @@ def edit_tool() -> Tool:
         except OSError as exc:
             return f"edit error: {exc}"
 
-        found = text.count(args.old_str)
-        if found != args.count:
-            return f"edit error: expected {args.count} match(es), found {found}"
+        # Cross-agent staleness check (informative — does NOT block).
+        warning_prefix = ""
+        try:
+            stale = _file_state_registry().check_stale(_current_task_id(), p)
+            if stale is not None and stale.kind == "sibling_wrote":
+                import time as _t
+                ts = (
+                    _t.strftime("%H:%M:%S", _t.localtime(stale.last_writer_at))
+                    if stale.last_writer_at is not None
+                    else "?"
+                )
+                warning_prefix = (
+                    f"[WARN: another agent wrote to this file at {ts}; "
+                    "you may be overwriting their changes. If you're "
+                    "certain, re-read first.]\n"
+                )
+        except Exception:
+            pass
 
-        new_text = text.replace(args.old_str, args.new_str)
+        # Multi-strategy fuzzy patcher: tolerates whitespace / indentation /
+        # smart-quote drift but bails out on JSON-escape corruption.
+        try:
+            new_text, _strategy = fuzzy_find_and_replace(
+                text,
+                args.old_str,
+                args.new_str,
+                expected_count=args.count,
+            )
+        except FuzzyMatchError as exc:
+            return f"edit error: {exc}"
 
         # Atomic write: write to a temp file beside the target, then os.replace.
         try:
@@ -304,7 +374,11 @@ def edit_tool() -> Tool:
         except OSError as exc:
             return f"edit error: {exc}"
 
-        return f"edited {p}: {args.count} replacement(s)"
+        try:
+            _file_state_registry().register_write(_current_task_id(), p)
+        except Exception:
+            pass
+        return f"{warning_prefix}edited {p}: {args.count} replacement(s)"
 
     return FunctionTool(
         name="edit",
@@ -607,6 +681,25 @@ def shell_run_tool() -> Tool:
     """
 
     async def _h(args: _ShellRunArgs) -> str:
+        # Three-tier command gate: hardline patterns are unconditionally
+        # refused; dangerous patterns require explicit operator approval
+        # (we don't have a session_key here, so we conservatively block
+        # them rather than auto-execute).
+        from oxenclaw.security.command_gate import detect_command_threats
+
+        verdict, label = detect_command_threats(args.command)
+        if verdict == "hardline":
+            return (
+                f"shell error: BLOCKED (hardline) — {label}. "
+                "This command is on the unconditional blocklist and "
+                "cannot be executed via the agent."
+            )
+        if verdict == "dangerous":
+            return (
+                f"shell error: BLOCKED (dangerous) — {label}. "
+                "This command needs explicit operator approval; use the "
+                "dashboard's approve-command UI before retrying."
+            )
         try:
             proc = await asyncio.create_subprocess_shell(
                 args.command,

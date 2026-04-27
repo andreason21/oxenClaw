@@ -22,6 +22,8 @@ from pydantic import BaseModel, Field
 
 from oxenclaw.agents.tools import FunctionTool, Tool
 from oxenclaw.clawhub.loader import InstalledSkill, load_installed_skills
+from oxenclaw.clawhub.parallel_search import parallel_search_sources
+from oxenclaw.clawhub.sources.base import SkillSource
 from oxenclaw.config.paths import OxenclawPaths, default_paths
 
 
@@ -96,6 +98,7 @@ def skill_resolver_tool(
     registries: Any | None = None,  # MultiRegistryClient | None
     installer: Any | None = None,  # SkillInstaller | None
     paths: OxenclawPaths | None = None,
+    extra_sources: list[SkillSource] | None = None,
 ) -> Tool:
     """Return a FunctionTool named ``skill_resolver``.
 
@@ -127,24 +130,56 @@ def skill_resolver_tool(
         if match is not None:
             return json.dumps(_skill_payload(match))
 
-        # ── 2. Remote search ──────────────────────────────────────────────
-        if registries is None:
-            # No registry configured — report that nothing matched locally.
+        # ── 2. Remote search via parallel SkillSource fan-out ────────────
+        sources: list[SkillSource] = []
+        if registries is not None:
+            try:
+                from oxenclaw.clawhub.sources.clawhub import ClawHubSource
+                sources.append(ClawHubSource(registries))
+            except Exception:
+                pass
+        try:
+            from oxenclaw.clawhub.sources.github import GitHubSource
+            from oxenclaw.clawhub.sources.index import IndexSource
+            sources.append(GitHubSource())
+            idx = IndexSource()
+            if idx.configured:
+                sources.append(idx)
+        except Exception:
+            pass
+        if extra_sources:
+            sources.extend(extra_sources)
+
+        if not sources:
             return json.dumps({"found": "none", "searched": query, "registries": []})
 
         try:
-            client = registries.get_client()
-            results: list[dict[str, Any]] = await client.search_skills(query, limit=10)
+            refs = parallel_search_sources(sources, query, limit=10)
         except Exception as exc:
             return json.dumps({"found": "error", "error": str(exc), "step": "search"})
 
-        if not results:
-            reg_names: list[str] = []
+        # Adapt SkillRef → dict so the existing scoring / install path still works.
+        results: list[dict[str, Any]] = [
+            {
+                "slug": ref.slug,
+                "name": ref.slug,
+                "description": ref.description,
+                "source_id": ref.source_id,
+                "trust": ref.trust_level,
+            }
+            for ref in refs
+        ]
+
+        def _registry_names() -> list[str]:
+            if registries is None:
+                return []
             try:
-                reg_names = list(registries.names())
+                return list(registries.names())
             except Exception:
-                pass
-            return json.dumps({"found": "none", "searched": query, "registries": reg_names})
+                return []
+
+        if not results:
+            return json.dumps({"found": "none", "searched": query, "registries": _registry_names()})
 
         # Pick the top-scored result.
         scored = [(r, _score_remote(r, query)) for r in results]
@@ -152,12 +187,7 @@ def skill_resolver_tool(
         top_result, top_score = scored[0]
 
         if top_score < 0.5:
-            reg_names = []
-            try:
-                reg_names = list(registries.names())
-            except Exception:
-                pass
-            return json.dumps({"found": "none", "searched": query, "registries": reg_names})
+            return json.dumps({"found": "none", "searched": query, "registries": _registry_names()})
 
         slug: str = top_result.get("slug") or top_result.get("name") or ""
         if not slug:

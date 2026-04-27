@@ -13,6 +13,7 @@ from typing import Any
 from pydantic import BaseModel, Field, model_validator
 
 from oxenclaw.agents.tools import FunctionTool, Tool
+from oxenclaw.memory.privacy import scan_memory_threats
 from oxenclaw.memory.retriever import MemoryRetriever
 from oxenclaw.plugin_sdk.runtime_env import get_logger
 
@@ -135,6 +136,26 @@ def memory_save_tool(retriever: MemoryRetriever) -> Tool:
             args.tags or [],
             preview,
         )
+        # Threat scan — memory entries land in the next session's
+        # system prompt, so a stored prompt-injection survives across
+        # sessions until manually scrubbed. Refuse to persist anything
+        # that matches a known injection / role-hijack / exfil pattern
+        # and report the kinds back to the model so it can paraphrase.
+        threats = scan_memory_threats(args.text)
+        if threats:
+            kinds = sorted({t.kind for t in threats})
+            logger.warning(
+                "memory_save: refused write — threats=%s preview=%r",
+                kinds, preview,
+            )
+            return (
+                "memory_save refused: text matches a memory-write threat "
+                f"pattern ({', '.join(kinds)}). Persistent memory feeds "
+                "future system prompts, so injection-shaped content cannot "
+                "be stored. Rephrase as a plain factual statement (no "
+                "instructions, no shell commands, no role-changing meta-"
+                "directives) and try again."
+            )
         report = await retriever.save(args.text, tags=args.tags or None)
         return (
             f"saved to {retriever.inbox_path.name}; reindexed "

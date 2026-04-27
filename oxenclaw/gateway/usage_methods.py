@@ -89,7 +89,16 @@ def _aggregate(rows: list[dict[str, Any]]) -> dict[str, Any]:
     return out
 
 
-def register_usage_methods(router: Router, *, paths: OxenclawPaths | None = None) -> None:
+class _AccountParams(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+def register_usage_methods(
+    router: Router,
+    *,
+    paths: OxenclawPaths | None = None,
+    auth_pool: Any = None,
+) -> None:
     resolved = paths or default_paths()
 
     @router.method("usage.session", _SessionParams)
@@ -120,3 +129,30 @@ def register_usage_methods(router: Router, *, paths: OxenclawPaths | None = None
             "total": _aggregate(all_rows),
             "per_agent": per_agent,
         }
+
+    @router.method("usage.account", _AccountParams)
+    async def _usage_account(_: _AccountParams) -> dict[str, Any]:  # type: ignore[type-arg]
+        """Return per-provider account-usage snapshots for every
+        provider configured in the auth pool. Snapshots that come back
+        as None (no OAuth token, 404, etc.) are dropped from the list."""
+        from oxenclaw.pi.account_usage import fetch_account_usage
+
+        snapshots: list[dict[str, Any]] = []
+        if auth_pool is None:
+            return {"snapshots": snapshots}
+        providers = list(getattr(auth_pool, "by_provider", {}).keys())
+        for provider in providers:
+            try:
+                creds = await auth_pool.get(provider)
+            except Exception:
+                continue
+            if creds is None:
+                continue
+            _, api_key = creds
+            try:
+                snap = await fetch_account_usage(provider, api_key)
+            except Exception:
+                snap = None
+            if snap is not None:
+                snapshots.append(snap.to_dict())
+        return {"snapshots": snapshots}

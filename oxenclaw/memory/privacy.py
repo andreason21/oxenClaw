@@ -9,6 +9,16 @@ Usage::
     cleaned, hits = redact(text, level="light")
     for r in hits:
         print(r.kind, r.span)
+
+Two additional helpers live here for memory-injection hardening:
+
+  - `sanitize_recall_fence(text)` strips `<recalled_memories>` / matching
+    fence tags so a user (or a quoted assistant turn) pasting a
+    previously-injected recall block can't replay it as authoritative.
+  - `scan_memory_threats(text)` returns a list of threat-pattern hits
+    (prompt-injection, role-hijack, exfil shell pipes, invisible
+    unicode, etc.) — `memory_save` rejects non-empty results so a
+    malicious turn can't land in long-term storage.
 """
 
 from __future__ import annotations
@@ -208,3 +218,110 @@ def redact(
         cursor = end
     result_parts.append(text[cursor:])
     return "".join(result_parts), redactions
+
+
+# ── Recall-fence sanitisation (anti-replay on inbound user input) ────────────
+
+# Tags the agent emits into the system prompt for retrieved chunks. If a
+# user message contains them — usually because the user pasted a prior
+# assistant turn or the operator ran a /history dump — we strip them
+# before that text reaches any persistence boundary, so the next
+# `memory_save` can't archive a forged recall block as ground truth.
+_RECALL_FENCE_TAGS = ("recalled_memories", "memory-context", "memory_context")
+_RECALL_FENCE_RE = re.compile(
+    r"<\s*(/?)\s*(" + "|".join(_RECALL_FENCE_TAGS) + r")\b[^>]*>",
+    re.IGNORECASE,
+)
+
+
+def sanitize_recall_fence(text: str) -> str:
+    """Strip `<recalled_memories>` / `<memory-context>` open/close tags.
+
+    Tag *bodies* are preserved (the user's own text inside isn't
+    silently dropped); only the structural fence is removed so a
+    re-ingested block can't be re-injected with the same authority
+    framing.
+    """
+    if not text or "<" not in text:
+        return text
+    return _RECALL_FENCE_RE.sub("", text)
+
+
+# ── Memory-write threat scan ─────────────────────────────────────────────────
+#
+# Memory entries land in the next session's system prompt, so persistent
+# injection is the highest-blast-radius attack against an agent. This
+# scanner is regex-only and runs at write time. It is not intended to
+# catch sophisticated jailbreaks — its job is to prevent obvious
+# prompt-injection, role-hijack, exfil-via-shell, ssh-backdoor, and
+# invisible-unicode payloads from being stored verbatim.
+
+@dataclass
+class MemoryThreat:
+    """One threat-pattern hit at memory_save time."""
+
+    kind: str
+    snippet: str  # short slice around the match for operator logs
+
+
+_INVISIBLE_UNICODE_RE = re.compile(
+    "["
+    "​‌‍⁠﻿"  # zero-width joiners / BOM
+    "‪‫‬‭‮"  # bidi overrides incl. RLO
+    "⁦⁧⁨⁩"        # isolate controls
+    "]"
+)
+
+_THREAT_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
+    # Prompt-injection meta-commands.
+    ("prompt_injection",
+     re.compile(r"(?i)\b(ignore|disregard|forget)\b[^.\n]{0,40}\b(previous|prior|above|system)\b[^.\n]{0,40}\b(instruction|prompt|rule)s?\b")),
+    # Role-hijack: "you are now …" / "from now on you are …".
+    ("role_hijack",
+     re.compile(r"(?i)\b(you\s+are\s+(now|henceforth)|from\s+now\s+on\s+you\s+(are|will|must))\b")),
+    # Tool-bypass directives.
+    ("tool_bypass",
+     re.compile(r"(?i)\b(do\s+not|don'?t|never)\b[^.\n]{0,40}\b(call|use|invoke)\b[^.\n]{0,40}\b(tool|approval|guard|memory)\b")),
+    # Shell-exfil: curl/wget piping secrets to a remote.
+    ("shell_exfil",
+     re.compile(r"(?i)\b(curl|wget|nc|netcat)\b[^|\n]{0,200}\|\s*(sh|bash|zsh|python)\b")),
+    # `curl` posting to a URL.
+    ("network_exfil",
+     re.compile(r"(?i)\b(curl|wget)\b[^.\n]{0,200}\b(--data|-d|-X\s+POST)\b[^.\n]{0,200}https?://")),
+    # SSH authorized_keys backdoor.
+    ("ssh_backdoor",
+     re.compile(r"(?i)(authorized_keys|~/\.ssh/authorized_keys)")),
+    # Reading the host's environment / credential files.
+    ("cred_read",
+     re.compile(r"(?i)(?:/\.aws/credentials|/\.config/gh/hosts\.yml|/\.netrc|/\.ssh/id_rsa|HERMES_ENV|OXENCLAW_ENV)")),
+    # Self-replicating instruction: tell the agent to memorise something.
+    ("memory_self_write",
+     re.compile(r"(?i)\b(call|invoke|use)\s+memory_save\b")),
+    # `<system>` / `<assistant>` impersonation.
+    ("role_tag_inject",
+     re.compile(r"(?i)<\s*(system|assistant|tool_use|tool_result)\b")),
+]
+
+
+def scan_memory_threats(text: str) -> list[MemoryThreat]:
+    """Return non-empty list when `text` looks unsafe to persist.
+
+    Designed to be fast and conservative. Callers should refuse the
+    write outright and surface the kinds back to the operator/agent
+    so the model can rephrase. Empty list = OK to store.
+    """
+    if not text:
+        return []
+    hits: list[MemoryThreat] = []
+    if _INVISIBLE_UNICODE_RE.search(text):
+        m = _INVISIBLE_UNICODE_RE.search(text)
+        s = max(0, m.start() - 16) if m else 0
+        e = min(len(text), (m.end() if m else 0) + 16)
+        hits.append(MemoryThreat(kind="invisible_unicode", snippet=text[s:e]))
+    for kind, pat in _THREAT_PATTERNS:
+        m = pat.search(text)
+        if m is not None:
+            s = max(0, m.start() - 16)
+            e = min(len(text), m.end() + 16)
+            hits.append(MemoryThreat(kind=kind, snippet=text[s:e]))
+    return hits

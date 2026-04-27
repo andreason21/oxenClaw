@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from oxenclaw.agents.history import ConversationHistory
+from oxenclaw.agents.registry import AgentRegistry
 from oxenclaw.config.paths import OxenclawPaths, default_paths
 from oxenclaw.gateway.router import Router
 
@@ -27,7 +28,23 @@ class _ListSessionsParams(BaseModel):
     agent_id: str
 
 
-def register_chat_methods(router: Router, *, paths: OxenclawPaths | None = None) -> None:
+class _DebugPromptParams(BaseModel):
+    """`chat.debug_prompt` — return the assembled system prompt that a
+    given agent would build for a given query. Operator-only diagnostic
+    that lets you see exactly what the model is being told (recalled
+    memories, skill block, base playbook) without running a turn."""
+
+    model_config = ConfigDict(extra="forbid")
+    agent_id: str
+    query: str = Field(..., min_length=1)
+
+
+def register_chat_methods(
+    router: Router,
+    *,
+    paths: OxenclawPaths | None = None,
+    agents: AgentRegistry | None = None,
+) -> None:
     resolved = paths or default_paths()
 
     @router.method("chat.history", _HistoryParams)
@@ -66,3 +83,24 @@ def register_chat_methods(router: Router, *, paths: OxenclawPaths | None = None)
             )
         rows.sort(key=lambda r: r["modified_at"], reverse=True)
         return {"sessions": rows}
+
+    if agents is not None:
+        @router.method("chat.debug_prompt", _DebugPromptParams)
+        async def _debug_prompt(p: _DebugPromptParams) -> dict:  # type: ignore[type-arg]
+            agent = agents.get(p.agent_id)
+            if agent is None:
+                return {"ok": False, "error": f"agent {p.agent_id!r} not registered"}
+            debug = getattr(agent, "debug_assemble", None)
+            if debug is None:
+                return {
+                    "ok": False,
+                    "error": (
+                        f"agent {p.agent_id!r} ({type(agent).__name__}) does not "
+                        "expose debug_assemble — only PiAgent supports this RPC"
+                    ),
+                }
+            try:
+                payload = await debug(p.query)
+            except Exception as exc:
+                return {"ok": False, "error": f"debug_assemble failed: {exc}"}
+            return {"ok": True, **payload}

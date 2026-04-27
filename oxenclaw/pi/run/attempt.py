@@ -7,7 +7,6 @@ to loop again based on the assembled message's `stop_reason`.
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -18,6 +17,7 @@ from oxenclaw.pi.messages import (
     ToolUseBlock,
 )
 from oxenclaw.pi.models import Context, Model
+from oxenclaw.pi.run.json_repair import repair_and_parse
 from oxenclaw.pi.run.runtime import RuntimeConfig
 from oxenclaw.pi.streaming import (
     AssistantMessageEvent,
@@ -32,6 +32,9 @@ from oxenclaw.pi.streaming import (
     UsageEvent,
     stream_simple,
 )
+from oxenclaw.plugin_sdk.runtime_env import get_logger
+
+logger = get_logger("pi.run.attempt")
 
 
 @dataclass
@@ -42,6 +45,11 @@ class AttemptResult:
     usage: dict[str, Any] | None = None
     error: ErrorEvent | None = None
     events: list[AssistantMessageEvent] = field(default_factory=list)
+    # True once at least one TextDeltaEvent reached `on_event` (i.e. user-
+    # visible text was streamed to the channel). The run loop reads this
+    # to decide whether a transport-level error is safely retryable in
+    # the same attempt without duplicating output to the user.
+    text_emitted: bool = False
 
 
 async def run_attempt(
@@ -60,6 +68,12 @@ async def run_attempt(
     streamed event; the run loop uses it to push deltas to a UI/dashboard
     while the attempt is in flight.
     """
+    # Stash the optional rate_limit_tracker on Context.extra so the
+    # provider stream wrappers can call .record(...) after a successful
+    # response without us threading it through SimpleStreamOptions.
+    ctx_extra: dict[str, Any] = {}
+    if getattr(config, "rate_limit_tracker", None) is not None:
+        ctx_extra["rate_limit_tracker"] = config.rate_limit_tracker
     ctx = Context(
         model=model,
         api=api,
@@ -70,6 +84,7 @@ async def run_attempt(
         max_tokens=config.max_tokens,
         thinking=config.thinking,
         cache_control_breakpoints=config.cache_control_breakpoints,
+        extra=ctx_extra,
     )
     opts = SimpleStreamOptions(
         abort_event=config.abort_event,
@@ -87,6 +102,7 @@ async def run_attempt(
     error: ErrorEvent | None = None
     stop_reason: str | None = None
     events: list[AssistantMessageEvent] = []
+    text_emitted = False  # see AttemptResult.text_emitted
 
     async for event in stream_simple(ctx, opts):
         events.append(event)
@@ -95,6 +111,12 @@ async def run_attempt(
 
         if isinstance(event, TextDeltaEvent):
             text_parts.append(event.delta)
+            if event.delta:
+                # Mark as emitted only after a non-empty delta — empty
+                # deltas (most providers send a leading "") shouldn't
+                # block silent retry of a stream that hasn't actually
+                # produced visible output yet.
+                text_emitted = True
         elif isinstance(event, ThinkingDeltaEvent):
             if event.delta:
                 thinking_parts.append(event.delta)
@@ -129,12 +151,24 @@ async def run_attempt(
         content.append(TextContent(text="".join(text_parts)))
     for tid in tool_order:
         slot = tool_buf[tid]
-        try:
-            input_obj = json.loads(slot["args"]) if slot["args"] else {}
-        except json.JSONDecodeError:
-            # Keep the raw args under a `_raw` key so the run loop can
-            # feed back a JSON-error tool result and let the model retry.
-            input_obj = {"_raw": slot["args"], "_parse_error": True}
+        if not slot["args"]:
+            input_obj: Any = {}
+        else:
+            parsed, repair = repair_and_parse(slot["args"])
+            if parsed is None:
+                # Total failure — fall back to the legacy _parse_error
+                # signal so the run loop can feed a JSON-error tool
+                # result back and let the model retry.
+                input_obj = {"_raw": slot["args"], "_parse_error": True}
+            else:
+                if repair:
+                    logger.info(
+                        "json-repair applied to tool=%s id=%s repair=%s",
+                        slot["name"],
+                        tid,
+                        repair,
+                    )
+                input_obj = parsed
         content.append(ToolUseBlock(id=tid, name=slot["name"], input=input_obj))
 
     message = AssistantMessage(
@@ -142,7 +176,13 @@ async def run_attempt(
         stop_reason=stop_reason or ("error" if error else "end_turn"),
         usage=usage,
     )
-    return AttemptResult(message=message, usage=usage, error=error, events=events)
+    return AttemptResult(
+        message=message,
+        usage=usage,
+        error=error,
+        events=events,
+        text_emitted=text_emitted,
+    )
 
 
 __all__ = ["AttemptResult", "run_attempt"]

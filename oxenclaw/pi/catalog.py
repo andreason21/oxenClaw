@@ -10,12 +10,12 @@ Add models here when a new provider wrapper is registered in Phase 3.
 from __future__ import annotations
 
 from oxenclaw.pi.models import Model
-from oxenclaw.pi.registry import InMemoryModelRegistry
+from oxenclaw.pi.models_dev import models_dev_enabled
+from oxenclaw.pi.registry import InMemoryModelRegistry, RemoteModelRegistry
 
 
-def default_registry() -> InMemoryModelRegistry:
-    return InMemoryModelRegistry(
-        models=[
+def _seed_models() -> list[Model]:
+    return [
             # ── Anthropic ──
             Model(
                 id="claude-opus-4-7",
@@ -164,7 +164,17 @@ def default_registry() -> InMemoryModelRegistry:
                 supports_tools=False,
             ),
         ]
-    )
+
+
+def default_registry() -> InMemoryModelRegistry:
+    """Return the seeded registry. If `OXENCLAW_USE_MODELS_DEV=1` the
+    registry is `RemoteModelRegistry`, which lazily resolves unknown
+    model ids via the bundled / cached / remote models.dev catalog —
+    everything in `_seed_models()` keeps working as the fast path."""
+    seed = _seed_models()
+    if models_dev_enabled():
+        return RemoteModelRegistry(models=seed)
+    return InMemoryModelRegistry(models=seed)
 
 
 __all__ = ["default_registry"]

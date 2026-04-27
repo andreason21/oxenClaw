@@ -28,6 +28,7 @@ from websockets.asyncio.server import ServerConnection, serve
 from websockets.http11 import Request, Response
 
 from oxenclaw.gateway.protocol import EventFrame
+from oxenclaw.gateway.restart import GATEWAY_SERVICE_RESTART_EXIT_CODE
 from oxenclaw.gateway.router import Router
 from oxenclaw.plugin_sdk.runtime_env import get_logger
 from oxenclaw.static import app_css, app_html, app_js
@@ -327,6 +328,7 @@ class GatewayServer:
         self._shutdown_drain_seconds = shutdown_drain_seconds
         self._shutdown_event: asyncio.Event | None = None
         self._shutting_down = False
+        self._restart_requested = False
         self._in_flight_tasks: set[asyncio.Task[None]] = set()
         if self._auth_token is None:
             logger.warning(
@@ -403,6 +405,22 @@ class GatewayServer:
         self._shutting_down = True
         if self._shutdown_event is not None and not self._shutdown_event.is_set():
             self._shutdown_event.set()
+
+    def request_restart(self) -> None:
+        """Like `request_shutdown` but flags the exit as a service-restart.
+
+        The CLI entrypoint inspects `restart_requested` after `serve()`
+        returns and uses `GATEWAY_SERVICE_RESTART_EXIT_CODE` so a
+        supervisor (systemd, docker) re-launches the process. Inside
+        `serve()` itself this only triggers the same graceful drain
+        path as a clean shutdown.
+        """
+        self._restart_requested = True
+        self.request_shutdown()
+
+    @property
+    def restart_requested(self) -> bool:
+        return self._restart_requested
 
     async def _drain_in_flight(self) -> None:
         if not self._in_flight_tasks:

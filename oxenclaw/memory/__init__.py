@@ -19,6 +19,11 @@ from oxenclaw.memory.embeddings import (
     build_embedder,
 )
 from oxenclaw.memory.indexer import MemoryIndexer
+from oxenclaw.memory.provider import (
+    BuiltinMemoryProvider,
+    MemoryProvider,
+    MemoryProviderRegistry,
+)
 from oxenclaw.memory.models import (
     FileEntry,
     MemoryChunk,
@@ -39,6 +44,7 @@ __all__ = [
     "DEFAULT_EMBED_BASE_URL",
     "DEFAULT_EMBED_MODEL",
     "AnthropicEmbeddings",
+    "BuiltinMemoryProvider",
     "CohereEmbeddings",
     "Embedder",
     "EmbeddingCache",
@@ -47,6 +53,8 @@ __all__ = [
     "FileEntry",
     "MemoryChunk",
     "MemoryIndexer",
+    "MemoryProvider",
+    "MemoryProviderRegistry",
     "MemoryReadResult",
     "MemoryRetriever",
     "MemorySearchResult",

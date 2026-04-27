@@ -196,7 +196,12 @@ def start(
     if not skip_preflight:
         from oxenclaw.config.preflight import run_preflight
 
-        report = run_preflight()
+        report = run_preflight(
+            chat_provider=provider,
+            chat_model=model,
+            chat_base_url=base_url,
+            chat_api_key=api_key,
+        )
         for finding in report.findings:
             (logger.error if finding.severity == "error" else logger.warning)(
                 "preflight: %s", finding.format()

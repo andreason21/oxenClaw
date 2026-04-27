@@ -529,6 +529,23 @@ const ChatView = {
     let polling = null;
     let alive = true;
 
+    function appendOptimistic(role, bodyHtml, opts = {}) {
+      const wrap = el("div", { class: `chat-msg ${role} pending-optimistic` });
+      wrap.append(el("div", { class: "role" }, role));
+      const body = el("div", {
+        class: "body",
+        style: opts.muted ? "opacity:0.6; font-style:italic;" : "",
+      });
+      body.innerHTML = bodyHtml;
+      wrap.append(body);
+      if (opts.attachments) {
+        wrap.append(el("div", { class: "tool-call" }, `📎 ${opts.attachments} attachment(s)`));
+      }
+      stream.append(wrap);
+      stream.scrollTop = stream.scrollHeight;
+      return wrap;
+    }
+
     async function send() {
       const text = textarea.value.trim();
       const media = pendingMedia.slice();
@@ -539,6 +556,14 @@ const ChatView = {
       // Clear thumbs immediately so the user sees the send happen.
       pendingMedia = [];
       renderThumbs();
+      // Optimistic render: the user's bubble + a "thinking…" placeholder
+      // appear immediately so the user can see their message landed and
+      // the agent is being asked. Both get replaced by `refresh()` once
+      // chat.send returns (renderStream rebuilds the whole stream from
+      // chat.history). On error we keep them and append an inline error
+      // bubble so failure is visible without the user chasing a toast.
+      if (text) appendOptimistic("user", Markdown.render(text), { attachments: media.length });
+      const pendingBubble = appendOptimistic("assistant", "Thinking…", { muted: true });
       try {
         const result = await safeRpc("chat.send", {
           channel: ChatState.channel,
@@ -550,21 +575,31 @@ const ChatView = {
         });
         if (result && result.status === "dropped") {
           // Real drop: no agent ran. Restore text + attachments so user can retry.
-          Toast.error(
-            "message dropped",
-            result.reason || "no agent matched the channel",
-            6000,
-          );
+          const reason = result.reason || "no agent matched the channel";
+          Toast.error("message dropped", reason, 6000);
+          pendingBubble.querySelector(".body").textContent = `⚠ dropped — ${reason}`;
+          pendingBubble.querySelector(".body").style.cssText = "color:#e15c5c;";
           textarea.value = text;
           pendingMedia = media;
           renderThumbs();
-        } else if (result && result.message_id === "local" && result.reason) {
+          return;
+        }
+        if (result && result.message_id === "local" && result.reason) {
           // Agent replied to history (chat.history poll renders it) but
           // wire delivery failed — informational only.
           Toast.info("delivery note", result.reason);
         }
         await refresh();
         startPolling();
+      } catch (e) {
+        // safeRpc already surfaced a toast; keep an inline error bubble so
+        // it stays visible after the toast fades, and restore the textarea
+        // so the user doesn't lose what they typed.
+        pendingBubble.querySelector(".body").textContent = `⚠ ${e.message || e}`;
+        pendingBubble.querySelector(".body").style.cssText = "color:#e15c5c;";
+        textarea.value = text;
+        pendingMedia = media;
+        renderThumbs();
       } finally {
         sendBtn.disabled = false;
         textarea.focus();

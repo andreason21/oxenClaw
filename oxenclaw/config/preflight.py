@@ -218,15 +218,134 @@ def _check_embedding_endpoint(report: PreflightReport) -> None:
         report.add("warning", "embeddings", f"{url} probe failed: {exc}")
 
 
+def check_chat_endpoint(
+    report: PreflightReport,
+    *,
+    provider: str,
+    model: str | None,
+    base_url: str | None,
+    api_key: str | None = None,
+) -> None:
+    """Handshake the chat provider at gateway startup.
+
+    Issues a `GET {base_url}/models` against local-style providers
+    (Ollama, vLLM, LM Studio, llama.cpp, OpenAI-compatible, …) and
+    confirms the requested model id is in the returned list. Surfaces
+    a single, actionable warning when:
+
+    - The endpoint is unreachable (service not started, wrong port).
+    - The HTTP status is non-2xx (auth / version mismatch).
+    - The selected model isn't loaded yet (`ollama pull <model>` hint).
+
+    Hosted providers (anthropic, openai, google, …) are skipped — their
+    `/models` endpoint typically requires auth and a 401 at boot would
+    just be noise. They're also unlikely to silently fail in a way the
+    operator can fix locally.
+    """
+    import json as _json
+    import urllib.error
+    import urllib.request
+
+    from oxenclaw.agents.factory import (
+        LEGACY_ALIASES,
+        PROVIDER_DEFAULT_MODELS,
+    )
+    from oxenclaw.pi.registry import _INLINE_DEFAULT_BASE_URL
+
+    if provider == "echo":
+        return
+    canonical = LEGACY_ALIASES.get(provider, provider)
+    if canonical not in _INLINE_DEFAULT_BASE_URL:
+        # Hosted provider — first real request will surface auth failures
+        # at the LLM call site with a useful message; pinging /models
+        # here just adds boot latency and noisy 401 warnings.
+        return
+
+    effective_base_url = (base_url or _INLINE_DEFAULT_BASE_URL[canonical]).rstrip("/")
+    effective_model = model or PROVIDER_DEFAULT_MODELS.get(canonical)
+    url = f"{effective_base_url}/models"
+    req = urllib.request.Request(url, method="GET")
+    if api_key:
+        req.add_header("Authorization", f"Bearer {api_key}")
+    source = f"chat::{canonical}"
+    try:
+        with urllib.request.urlopen(req, timeout=5.0) as resp:
+            if resp.status >= 400:
+                report.add(
+                    "warning",
+                    source,
+                    f"{url} returned HTTP {resp.status} — chat will fail until this is fixed",
+                )
+                return
+            try:
+                body = _json.loads(resp.read().decode("utf-8"))
+            except Exception:
+                body = None
+    except urllib.error.HTTPError as exc:
+        report.add(
+            "warning",
+            source,
+            f"{url} returned HTTP {exc.code}: {exc.reason}",
+        )
+        return
+    except urllib.error.URLError as exc:
+        hint = ""
+        if canonical == "ollama":
+            hint = " (start it with `ollama serve` or set --base-url to your Ollama host)"
+        elif canonical == "vllm":
+            hint = " (start vLLM with `vllm serve <model> --port 8000` or set --base-url)"
+        report.add(
+            "warning",
+            source,
+            f"{url} unreachable: {exc.reason}.{hint} Chat will fail until the provider is reachable.",
+        )
+        return
+    except Exception as exc:
+        report.add("warning", source, f"{url} probe failed: {exc}")
+        return
+
+    available_ids: list[str] = []
+    if isinstance(body, dict):
+        data = body.get("data")
+        if isinstance(data, list):
+            for entry in data:
+                if isinstance(entry, dict) and isinstance(entry.get("id"), str):
+                    available_ids.append(entry["id"])
+    if effective_model and available_ids and effective_model not in available_ids:
+        pull_hint = (
+            f"`ollama pull {effective_model}`"
+            if canonical == "ollama"
+            else f"load it on your {canonical} server"
+        )
+        report.add(
+            "warning",
+            source,
+            (
+                f"model {effective_model!r} is not loaded on {effective_base_url} "
+                f"(available: {', '.join(available_ids[:5])}"
+                f"{'…' if len(available_ids) > 5 else ''}). Run {pull_hint} "
+                "before sending a chat message."
+            ),
+        )
+
+
 def run_preflight(
     paths: OxenclawPaths | None = None,
     *,
     probe_embeddings: bool = True,
+    chat_provider: str | None = None,
+    chat_model: str | None = None,
+    chat_base_url: str | None = None,
+    chat_api_key: str | None = None,
 ) -> PreflightReport:
     """Run every startup-time check and return an aggregated report.
 
     Set ``probe_embeddings=False`` for offline / unit-test contexts where
     the embedding endpoint isn't expected to be reachable.
+
+    When ``chat_provider`` is supplied, the chat provider's `/models`
+    endpoint is probed too — catches "Ollama not running" and "model not
+    pulled yet" at boot instead of on first message.
     """
     resolved = paths or default_paths()
     report = PreflightReport()
@@ -236,11 +355,20 @@ def run_preflight(
     _check_env_refs_in_files(resolved, report)
     if probe_embeddings:
         _check_embedding_endpoint(report)
+    if chat_provider:
+        check_chat_endpoint(
+            report,
+            provider=chat_provider,
+            model=chat_model,
+            base_url=chat_base_url,
+            api_key=chat_api_key,
+        )
     return report
 
 
 __all__ = [
     "PreflightFinding",
     "PreflightReport",
+    "check_chat_endpoint",
     "run_preflight",
 ]

@@ -420,6 +420,22 @@ async def _run_gateway(
 
     tool_registry.register(_skill_resolver_tool(registries=clawhub_client, installer=skill_installer, paths=paths))
 
+    # Memory tools — let the model actively save facts AND search the
+    # store on demand. Without these the model only saw memories
+    # auto-injected at prompt-assembly time; it had no way to persist
+    # new ones. Registering after build_agent works because tool_registry
+    # is the same mutable object the agent holds via `tools=`.
+    if memory_retriever is not None:
+        from oxenclaw.memory.tools import (
+            memory_get_tool,
+            memory_save_tool,
+            memory_search_tool,
+        )
+
+        tool_registry.register(memory_save_tool(memory_retriever))
+        tool_registry.register(memory_search_tool(memory_retriever))
+        tool_registry.register(memory_get_tool(memory_retriever))
+
     router = _build_router(
         agents=agents,
         dispatcher=dispatcher,

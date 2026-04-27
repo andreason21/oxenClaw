@@ -55,9 +55,11 @@ from oxenclaw.gateway.cron_methods import register_cron_methods
 from oxenclaw.gateway.isolation_methods import register_isolation_methods
 from oxenclaw.gateway.memory_methods import register_memory_methods
 from oxenclaw.gateway.skills_methods import register_skills_methods
+from oxenclaw.gateway.wiki_methods import register_wiki_methods
 from oxenclaw.gateway.plan_methods import register_plan_methods
 from oxenclaw.gateway.usage_methods import register_usage_methods
 from oxenclaw.memory import MemoryRetriever, build_embedder
+from oxenclaw.memory.walker import WalkerConfig
 from oxenclaw.plugin_sdk.channel_contract import (
     ChannelTarget,
     InboundEnvelope,
@@ -348,8 +350,18 @@ async def _run_gateway(
         embed_kwargs["model"] = env_model
     if env_key := os.environ.get("OXENCLAW_EMBED_API_KEY"):
         embed_kwargs["api_key"] = env_key
+    privacy_cfg = config.memory.privacy
+    _walker_cfg = WalkerConfig(
+        allow_globs=privacy_cfg.allow_globs,
+        deny_globs=privacy_cfg.deny_globs,
+        min_size=privacy_cfg.min_file_size,
+        max_size=privacy_cfg.max_file_size,
+    )
     memory_retriever = MemoryRetriever.for_root(
-        paths, build_embedder(embed_provider, **embed_kwargs)  # type: ignore[arg-type]
+        paths,
+        build_embedder(embed_provider, **embed_kwargs),  # type: ignore[arg-type]
+        redact_level=privacy_cfg.redact_level if privacy_cfg.redact_level != "off" else None,
+        walker_config=_walker_cfg,
     )
 
     # Cron scheduler is created early so the cron tool can be wired
@@ -439,6 +451,20 @@ async def _run_gateway(
         tool_registry.register(memory_search_tool(memory_retriever))
         tool_registry.register(memory_get_tool(memory_retriever))
 
+    # Wiki tools — persistent knowledge base (entities, concepts, sources,
+    # syntheses, reports) that survives across sessions.
+    from oxenclaw.tools_pkg.wiki_tools import (
+        wiki_get_tool,
+        wiki_save_tool,
+        wiki_search_tool,
+    )
+    from oxenclaw.wiki.store import WikiVaultStore
+
+    wiki_vault = WikiVaultStore(paths.home / "wiki")
+    tool_registry.register(wiki_search_tool(wiki_vault))
+    tool_registry.register(wiki_get_tool(wiki_vault))
+    tool_registry.register(wiki_save_tool(wiki_vault, approval_manager=approvals))
+
     router = _build_router(
         agents=agents,
         dispatcher=dispatcher,
@@ -450,6 +476,7 @@ async def _run_gateway(
         clawhub_client=clawhub_client,
         skill_installer=skill_installer,
         memory_retriever=memory_retriever,
+        wiki_vault=wiki_vault,
     )
     readiness = build_default_readiness(
         channel_router=channel_router,
@@ -616,6 +643,7 @@ def _build_router(
     clawhub_client: ClawHubClient | MultiRegistryClient | None = None,
     skill_installer: SkillInstaller | None = None,
     memory_retriever: MemoryRetriever | None = None,
+    wiki_vault=None,  # WikiVaultStore | None  # type: ignore[no-untyped-def]
 ) -> Router:
     router = Router()
 
@@ -686,6 +714,8 @@ def _build_router(
     )
     if memory_retriever is not None:
         register_memory_methods(router, memory_retriever)
+    if wiki_vault is not None:
+        register_wiki_methods(router, wiki_vault)
     if clawhub_client is not None:
         register_skills_methods(
             router,

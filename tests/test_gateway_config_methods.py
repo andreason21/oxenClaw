@@ -12,12 +12,12 @@ async def test_get_empty_when_no_config(monkeypatch, tmp_path) -> None:  # type:
     router = Router()
     register_config_methods(router)
     resp = await router.dispatch({"jsonrpc": "2.0", "id": 1, "method": "config.get"})
-    assert resp.result == {
-        "channels": {},
-        "providers": {},
-        "agents": {},
-        "clawhub": None,
-    }
+    # M-8 added a `memory.privacy` block to the default RootConfig.
+    assert resp.result["channels"] == {}
+    assert resp.result["providers"] == {}
+    assert resp.result["agents"] == {}
+    assert resp.result["clawhub"] is None
+    assert resp.result["memory"]["privacy"]["redact_level"] == "light"
 
 
 async def test_reload_reads_written_file(monkeypatch, tmp_path) -> None:  # type: ignore[no-untyped-def]

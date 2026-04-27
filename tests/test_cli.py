@@ -34,12 +34,14 @@ def test_config_show_empty_when_missing(sampy_home) -> None:  # type: ignore[no-
     result = runner.invoke(app, ["config", "show"])
     assert result.exit_code == 0
     data = json.loads(result.stdout)
-    assert data == {
-        "channels": {},
-        "providers": {},
-        "agents": {},
-        "clawhub": None,
-    }
+    # M-8 introduced a `memory.privacy` block (redact_level + walker
+    # globs + size caps) shipped as defaults. The empty-config dump
+    # now carries that alongside the four original sections.
+    assert data["channels"] == {}
+    assert data["providers"] == {}
+    assert data["agents"] == {}
+    assert data["clawhub"] is None
+    assert data["memory"]["privacy"]["redact_level"] == "light"
 
 
 def test_config_validate_ok_when_missing(sampy_home) -> None:  # type: ignore[no-untyped-def]

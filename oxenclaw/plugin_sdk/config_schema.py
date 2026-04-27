@@ -56,6 +56,28 @@ class AgentConfig(BaseModel):
     provider: str | None = None
 
 
+class MemoryPrivacyConfig(BaseModel):
+    """Privacy / redaction settings for the memory pipeline."""
+
+    model_config = ConfigDict(extra="allow")
+
+    redact_level: Literal["off", "light", "strict"] = "light"
+    allow_globs: list[str] = Field(default_factory=list)
+    deny_globs: list[str] = Field(
+        default_factory=lambda: ["*.log", "secrets/**", "credentials/**"]
+    )
+    min_file_size: int = 0
+    max_file_size: int = 1_048_576  # 1 MiB
+
+
+class MemoryConfig(BaseModel):
+    """Top-level ``memory:`` section of config.yaml."""
+
+    model_config = ConfigDict(extra="allow")
+
+    privacy: MemoryPrivacyConfig = Field(default_factory=MemoryPrivacyConfig)
+
+
 class RootConfig(BaseModel):
     """Top-level config.yaml shape."""
 
@@ -64,6 +86,7 @@ class RootConfig(BaseModel):
     channels: dict[str, ChannelConfig] = Field(default_factory=dict)
     providers: dict[str, ProviderConfig] = Field(default_factory=dict)
     agents: dict[str, AgentConfig] = Field(default_factory=dict)
+    memory: MemoryConfig = Field(default_factory=MemoryConfig)
     # Section parsed by `oxenclaw.clawhub.registries.ClawHubRegistries`.
     # Kept as a free-form dict here so the plugin SDK doesn't depend on
     # the clawhub package (avoids import cycles); the gateway pulls it.

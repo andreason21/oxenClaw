@@ -32,6 +32,7 @@ from oxenclaw.memory.temporal_decay import (
     TemporalDecayConfig,
     apply_temporal_decay_to_results,
 )
+from oxenclaw.memory.walker import WalkerConfig
 from oxenclaw.plugin_sdk.runtime_env import get_logger
 
 logger = get_logger("memory.retriever")
@@ -49,11 +50,16 @@ class MemoryRetriever:
         embeddings_cache: EmbeddingCache,
         memory_dir: Path,
         inbox_path: Path,
+        *,
+        redact_level: str | None = None,
+        walker_config: WalkerConfig | None = None,
     ) -> None:
         self._store = store
         self._embeddings = embeddings_cache
         self._memory_dir = memory_dir
         self._inbox_path = inbox_path
+        self._redact_level = redact_level
+        self._walker_config = walker_config
         self._indexer = MemoryIndexer(store, embeddings_cache, memory_dir)
 
     @classmethod
@@ -61,6 +67,9 @@ class MemoryRetriever:
         cls,
         paths: OxenclawPaths,
         embeddings: EmbeddingProvider,
+        *,
+        redact_level: str | None = None,
+        walker_config: WalkerConfig | None = None,
     ) -> MemoryRetriever:
         memory_dir = paths.home / "memory"
         memory_dir.mkdir(parents=True, exist_ok=True)
@@ -68,7 +77,14 @@ class MemoryRetriever:
         store = MemoryStore(db_path)
         cache = EmbeddingCache(embeddings, store)
         inbox_path = memory_dir / DEFAULT_INBOX_FILE
-        return cls(store, cache, memory_dir, inbox_path)
+        return cls(
+            store,
+            cache,
+            memory_dir,
+            inbox_path,
+            redact_level=redact_level,
+            walker_config=walker_config,
+        )
 
     @property
     def store(self) -> MemoryStore:
@@ -168,8 +184,10 @@ class MemoryRetriever:
         text: str,
         *,
         tags: list[str] | None = None,
+        redact_level: str | None = None,
     ) -> SyncReport:
-        append_to_inbox(self._inbox_path, text, tags=tags)
+        effective_level = redact_level if redact_level is not None else self._redact_level
+        append_to_inbox(self._inbox_path, text, tags=tags, redact_level=effective_level)
         return await self._indexer.sync()
 
     def get(

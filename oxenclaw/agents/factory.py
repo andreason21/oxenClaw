@@ -27,6 +27,7 @@ from dataclasses import replace
 
 from oxenclaw.agents.base import Agent
 from oxenclaw.agents.builtin_tools import default_tools
+from oxenclaw.agents.coding_agent import CodingAgent
 from oxenclaw.agents.echo import EchoAgent
 from oxenclaw.agents.pi_agent import PiAgent
 from oxenclaw.agents.tools import Tool, ToolRegistry
@@ -219,8 +220,20 @@ def build_agent(
     api_key: str | None = None,
     memory=None,  # type: ignore[no-untyped-def]
     mcp_tools: list[Tool] | None = None,
+    agent_type: str = "pi",
 ) -> Agent:
-    """Build an agent. All catalog providers route through `PiAgent`."""
+    """Build an agent. All catalog providers route through `PiAgent`.
+
+    Parameters
+    ----------
+    agent_type:
+        ``"pi"`` (default) — standard PiAgent.
+        ``"coding"`` — CodingAgent subclass with curated file-system + shell
+        tools and a plan-first system prompt.  The ``tools`` override is
+        ignored for ``"coding"`` so the curated registry is always intact;
+        pass ``approval_manager`` via a direct CodingAgent construction if
+        approval gating is needed.
+    """
     if provider == "echo":
         return EchoAgent(agent_id=agent_id)
 
@@ -237,13 +250,30 @@ def build_agent(
         )
 
     registry = _registry_for(canonical, resolved_model_id, base_url)
+    auth = InMemoryAuthStorage({canonical: api_key}) if api_key else None
+
+    # CodingAgent builds its own curated tool registry; the generic
+    # mcp_tools / default-tools path is intentionally bypassed so the
+    # coding-specific tool set is always intact.
+    if agent_type == "coding":
+        kwargs: dict = {  # type: ignore[type-arg]
+            "agent_id": agent_id,
+            "model_id": resolved_model_id,
+            "registry": registry,
+        }
+        if auth is not None:
+            kwargs["auth"] = auth
+        if system_prompt is not None:
+            kwargs["system_prompt"] = system_prompt
+        if memory is not None:
+            kwargs["memory"] = memory
+        return CodingAgent(**kwargs)
+
     resolved_tools = tools if tools is not None else _build_default_tools(agent_id, mcp_tools)
     if tools is not None and mcp_tools:
         resolved_tools.register_all(list(mcp_tools))
 
-    auth = InMemoryAuthStorage({canonical: api_key}) if api_key else None
-
-    kwargs: dict = {  # type: ignore[type-arg]
+    kwargs = {  # type: ignore[assignment]
         "agent_id": agent_id,
         "model_id": resolved_model_id,
         "tools": resolved_tools,
@@ -296,6 +326,7 @@ def load_mcp_tools_sync(
 
 __all__ = [
     "CATALOG_PROVIDERS",
+    "CodingAgent",
     "LEGACY_ALIASES",
     "PROVIDER_DEFAULT_MODELS",
     "SUPPORTED_PROVIDERS",

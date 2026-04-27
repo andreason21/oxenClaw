@@ -137,35 +137,58 @@ session HANDOFF so the next operator doesn't chase this.
 
 ## P2 — large efforts
 
-### F. Pi-coding-agent equivalent ✗
-- **Why**: openclaw ships a specialised coding agent
-  (`pi-coding-agent`) with planning, file/diff/shell tooling, and
-  sub-agent spawn. The operator asked for parity.
-- **Plan (skeleton)**:
-  - Define a `CodingAgent(PiAgent)` subclass with a curated tool
-    bundle: `read_file`, `write_file`, `apply_patch`, `shell`,
-    `search`, `list_dir`. Plus `plan(steps[])` and `subagent` tools.
-  - Dedicated session schema variant that tracks the working
-    directory + open files + planned/completed steps.
-  - Dashboard tab "Code" with: file tree, current-file viewer,
-    diff preview, plan progress bar.
-  - Tests: end-to-end that the agent reads a file, proposes a patch,
-    applies it under an approval gate, runs tests.
-- This is genuinely a multi-week effort; track as its own milestone
-  with sub-tasks.
+### F. Pi-coding-agent equivalent ◐ (skeleton shipped)
+**Skeleton shipped — full plan in `docs/CODING_AGENT.md`.**
 
-### G. Session compaction ✗
-- openclaw's biggest performance lever. Truncate old turns into a
-  summary checkpoint, keep the tail. Reduces prompt size, latency,
-  cost.
-- pi-runtime already has a `truncating_summarizer` plugged into
-  `LegacyContextEngine.compact`; need to expose this as an explicit
-  RPC + UI control.
+  - **Class**: `CodingAgent(PiAgent)` in
+    `oxenclaw/agents/coding_agent.py` — plan-first system prompt,
+    curated tool bundle, approval-gated writes when an
+    `ApprovalManager` is injected.
+  - **Tools**: new `oxenclaw/tools_pkg/fs_tools.py` ships
+    `read_file`, `write_file`, `list_dir`, `search_files`,
+    `shell_run`. Read-only tools never gate; writes/shell gate
+    when an approval manager is present.
+  - **Factory**: `build_agent(agent_type="coding")` routes to
+    `CodingAgent`. CLI flag still TODO.
+  - **Tests**: 3 in `tests/test_coding_agent.py`.
 
-### H. Usage / cost RPC + UI ✗
-- `usage.cost`, `usage.status` from openclaw — token + cost roll-up
-  per session. Quietly aggregate from the existing `CacheObserver`
-  data; surface in a new "Usage" tab.
+**Deferred to the next session** (see CODING_AGENT.md "Deferred"):
+dashboard "Code" tab, `apply_patch` tool, plan-event WS stream,
+`--agent-type` CLI flag, sub-agent spawn.
+
+### G. Session compaction ✓
+**Shipped**.
+
+  - **RPC**: `sessions.compact` in `oxenclaw/gateway/sessions_methods.py`;
+    params `id`, `keep_tail_turns=6`, `reason` (optional); calls
+    `decide_compaction` + `apply_compaction` with `truncating_summarizer`
+    and persists the new `CompactionEntry` onto the session via `sm.save`.
+  - **UI**: "Compact" button added per-row in `SessionsView` (`app.js`);
+    confirms before calling, toasts `tokens_before → tokens_after` on
+    success or "below threshold — nothing to do" when no compaction ran.
+  - **Tests**: `test_compact_below_threshold_is_noop` and
+    `test_compact_summarises_old_turns` in
+    `tests/test_gateway_sessions_methods.py` using `InMemorySessionManager`.
+
+### H. Usage / cost RPC ✓ (UI tab pending)
+**Backend shipped**.
+
+  - **RPCs**: `usage.session(agent_id, session_key)` and
+    `usage.totals(agent_id?)` in
+    `oxenclaw/gateway/usage_methods.py`. Reads sibling files at
+    `~/.oxenclaw/agents/<agent>/sessions/<key>.usage.json`.
+  - **PiAgent.persist_usage**: writes the cumulative
+    `(turns, input, output, cache_read, cache_create, hit_rate,
+    cost_usd)` snapshot after each turn. Cost is computed from the
+    model's `pricing` dict (USD per million tokens, mapped from
+    pricing keys like `input_tokens` to summary fields).
+  - **Tests**: 4 in `tests/test_gateway_usage_methods.py` cover
+    missing-file zeros, single-session read, cross-agent
+    aggregation, and `agent_id` filter.
+
+**Pending**: dashboard "Usage" tab (table per agent + total card +
+hit-rate chart). RPC payloads are stable, so the UI work can land
+as a follow-up without backend churn.
 
 ### I. Plan-mode streaming events ✗
 - openclaw's `emitAgentPlanEvent({ phase, title, steps })` lets the

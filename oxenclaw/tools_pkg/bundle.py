@@ -30,17 +30,76 @@ def default_bundled_tools() -> list[Tool]:
     out-of-the-box experience where weather / web / github work
     without any extra config.
     """
+    from oxenclaw.agents.builtin_tools import get_time_tool
+    from oxenclaw.tools_pkg.acp_delegate_tool import acp_delegate_tool
+    from oxenclaw.tools_pkg.acp_tool import acp_spawn_tool
     from oxenclaw.tools_pkg.github import github_tool
     from oxenclaw.tools_pkg.skill_creator import skill_creator_tool
-    from oxenclaw.tools_pkg.weather import weather_tool
+    from oxenclaw.tools_pkg.weather import _wttr, weather_tool
     from oxenclaw.tools_pkg.web import web_fetch_tool, web_search_tool
 
+    # Auto-redirect handlers for `web_search` 0-hit responses. Small
+    # local models (gemma4, qwen2.5:3b) routinely emit `web_search` for
+    # weather/time queries and then IGNORE any text-form recovery hint.
+    # By wiring the specialised tool's logic here, web_search returns
+    # what looks like a successful answer on the first call.
+    weather_keywords = (
+        "날씨", "weather", "기온", "temperature", "forecast", "비 와", "rain", "snow", "눈 와",
+    )
+
+    async def _weather_redirect(query: str) -> str:
+        # Try wttr.in with the raw query first (it accepts arbitrary
+        # location strings + parses common phrasings). If that fails,
+        # try common defaults — we don't have access to user-location
+        # memory from here, so the caller's wider context (active-memory
+        # prelude on the model side) handles location injection.
+        text = await _wttr(query, "metric")
+        if text:
+            return text
+        # Strip the "weather"/"날씨" keyword and try again with bare city.
+        cleaned = query
+        for kw in ("의 날씨", "날씨", "weather in", "weather", "기온", "temperature"):
+            cleaned = cleaned.replace(kw, "").strip()
+        if cleaned and cleaned != query:
+            text = await _wttr(cleaned, "metric")
+            if text:
+                return text
+        return ""
+
+    time_tool = get_time_tool()
+
+    async def _time_redirect(_query: str) -> str:
+        return await time_tool.execute({})
+
+    web_redirect_handlers: list = [
+        (
+            "weather",
+            lambda q: any(k in q for k in weather_keywords),
+            _weather_redirect,
+        ),
+        (
+            "get_time",
+            lambda q: any(k in q for k in (
+                "today", "오늘", "지금", "current time", "what time", "시간", "현재 시각",
+            )),
+            _time_redirect,
+        ),
+    ]
+
     tools: list[Tool] = [
+        # weather still registered as a dedicated tool — auto-redirect
+        # is the safety net, not the primary path.
         weather_tool(),
         web_fetch_tool(),
-        web_search_tool(),
+        web_search_tool(redirect_handlers=web_redirect_handlers),
         github_tool(),
         skill_creator_tool(),
+        acp_spawn_tool(),
+        # Primary ACP value: PiAgent can hand a hard sub-task to a
+        # frontier ACP server (claude/codex/gemini) when the local
+        # model is the wrong tool. Secondary to the above one-shot
+        # `sessions_spawn`, which stays for backwards-compat.
+        acp_delegate_tool(),
     ]
     return tools
 

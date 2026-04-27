@@ -465,6 +465,14 @@ def _build_runtime(name: str) -> AcpRuntime:
             agent._tools.register(memory_save_tool(retriever))
             agent._tools.register(memory_search_tool(retriever))
             agent._tools.register(memory_get_tool(retriever))
+        # The primary ACP-client value: when the local PiAgent model
+        # is the wrong tool for a hard sub-task, the model can call
+        # `delegate_to_acp(runtime="claude", prompt=...)` to hand
+        # that turn to a frontier ACP server. Imported lazily because
+        # the pi backend is the path where this matters most.
+        from oxenclaw.tools_pkg.acp_delegate_tool import acp_delegate_tool
+
+        agent._tools.register(acp_delegate_tool())
         return PiAgentAcpRuntime(agent=agent)
     raise SystemExit(
         f"unknown backend {name!r} (built-in choices: 'fake', 'pi')"

@@ -20,6 +20,70 @@ def _retriever(tmp_path: Path) -> MemoryRetriever:
     return MemoryRetriever.for_root(paths, StubEmbeddings())
 
 
+async def test_memory_save_accepts_content_alias(tmp_path: Path) -> None:
+    """Real-world bug: GPT-4-class models sometimes emit
+    `{content: ..., key: ...}` instead of `{text, tags}`. The schema
+    used to reject those with `extra_forbidden`; the model-level
+    `before` validator now folds aliases in."""
+    r = _retriever(tmp_path)
+    try:
+        tool = memory_save_tool(r)
+        out = await tool.execute(
+            {"content": "사용자는 수원에 거주한다.", "key": "거주지"}
+        )
+        assert "saved" in out
+        # Tag carried through.
+        body = (r.memory_dir / "inbox.md").read_text(encoding="utf-8")
+        assert "수원에 거주" in body
+        assert "거주지" in body
+    finally:
+        await r.aclose()
+
+
+async def test_memory_save_accepts_body_and_tag_aliases(tmp_path: Path) -> None:
+    r = _retriever(tmp_path)
+    try:
+        tool = memory_save_tool(r)
+        out = await tool.execute(
+            {"body": "User prefers Korean replies.", "tag": "preference"}
+        )
+        assert "saved" in out
+    finally:
+        await r.aclose()
+
+
+async def test_memory_save_dedupes_tag_aliases(tmp_path: Path) -> None:
+    """If both `tags` and a singular alias appear with overlap, the
+    list de-duplicates and keeps insertion order."""
+    r = _retriever(tmp_path)
+    try:
+        tool = memory_save_tool(r)
+        await tool.execute(
+            {
+                "text": "x",
+                "tags": ["fact"],
+                "tag": "fact",       # dup → dropped
+                "category": "user",  # new → appended
+            }
+        )
+        body = (r.memory_dir / "inbox.md").read_text(encoding="utf-8")
+        assert body.count("fact") == 1
+        assert "user" in body
+    finally:
+        await r.aclose()
+
+
+async def test_memory_search_accepts_question_alias(tmp_path: Path) -> None:
+    r = _retriever(tmp_path)
+    try:
+        await r.save("alpha bravo charlie")
+        tool = memory_search_tool(r)
+        out = await tool.execute({"question": "alpha", "limit": 3})
+        assert "inbox.md" in out
+    finally:
+        await r.aclose()
+
+
 async def test_memory_save_tool_exposes_text_and_tags(tmp_path: Path) -> None:
     r = _retriever(tmp_path)
     try:

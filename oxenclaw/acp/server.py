@@ -430,8 +430,41 @@ def _build_runtime(name: str) -> AcpRuntime:
     if name == "pi":
         from oxenclaw.acp.pi_agent_runtime import PiAgentAcpRuntime
         from oxenclaw.agents.factory import build_agent
+        from oxenclaw.config import default_paths
+        from oxenclaw.memory import (
+            MemoryRetriever,
+            build_embedder,
+            memory_get_tool,
+            memory_save_tool,
+            memory_search_tool,
+        )
 
-        agent = build_agent(agent_id="pi", provider="ollama")
+        paths = default_paths()
+        # Build a MemoryRetriever using the same default embedder the
+        # gateway uses. Wrapped in try/except: if the operator hasn't
+        # configured an embedder (no OLLAMA_HOST, no API key), the agent
+        # still boots — without memory tools rather than crashing the
+        # ACP server. Mirrors gateway_cmd.py's tolerance pattern.
+        retriever: MemoryRetriever | None = None
+        try:
+            retriever = MemoryRetriever.for_root(
+                paths,
+                build_embedder("ollama"),  # type: ignore[arg-type]
+            )
+        except Exception:  # pragma: no cover — env-dependent
+            retriever = None
+
+        agent = build_agent(
+            agent_id="pi",
+            provider="ollama",
+            memory=retriever,
+        )
+        # Register memory tools on the agent's tool registry — same
+        # post-build wiring pattern gateway_cmd.py uses.
+        if retriever is not None:
+            agent._tools.register(memory_save_tool(retriever))
+            agent._tools.register(memory_search_tool(retriever))
+            agent._tools.register(memory_get_tool(retriever))
         return PiAgentAcpRuntime(agent=agent)
     raise SystemExit(
         f"unknown backend {name!r} (built-in choices: 'fake', 'pi')"

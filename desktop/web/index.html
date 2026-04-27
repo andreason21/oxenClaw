@@ -33,48 +33,188 @@
     <span class="pill">native desktop</span>
     <h1>Connect to oxenClaw</h1>
     <p>Bearer token is stored in Windows Credential Manager (DPAPI-encrypted) — never localStorage, never the WebView state.</p>
+    <div id="diag" style="font-family:ui-monospace,monospace;font-size:11px;color:#7d8290;background:#0e1014;padding:6px 8px;border-radius:4px;margin:8px 0;white-space:pre-wrap;"></div>
 
     <label for="url">Gateway URL</label>
-    <input id="url" type="text" value="http://localhost:7331" spellcheck="false" />
+    <input id="url" type="text" value="http://127.0.0.1:7331" spellcheck="false" />
+    <!-- Default to 127.0.0.1 (IPv4 literal) instead of localhost: WebView2's
+         resolver follows Happy Eyeballs and prefers ::1, but the gateway
+         binds IPv4 only by default — the IPv6 attempt fails and WebView
+         shows ERR_CONNECTION_REFUSED. Users on dual-stack gateways can
+         still type "localhost" or "[::1]" manually. -->
 
     <label for="tok">Bearer token</label>
     <input id="tok" type="password" placeholder="OXENCLAW_GATEWAY_TOKEN" autocomplete="off" />
 
     <button id="go">Save and connect</button>
+    <button id="wsl" class="secondary" style="display:none">Start gateway in WSL and retry</button>
     <button id="forget" class="secondary">Forget stored token</button>
     <div class="err" id="err"></div>
   </div>
 </main>
 
 <script>
-  const inv = (cmd, args) => window.__TAURI__.core.invoke(cmd, args || {});
+  // `withGlobalTauri: true` exposes `window.__TAURI__` in Tauri 2, but the
+  // injection timing can lose against an inline <script>: in that race the
+  // top-level API is undefined while the always-present low-level
+  // `__TAURI_INTERNALS__.invoke` works. Use whichever is available.
+  function _invoke(cmd, args) {
+    const fn =
+      (window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke) ||
+      (window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.invoke);
+    if (!fn) {
+      throw new Error(
+        "no Tauri invoke API found — __TAURI__ and __TAURI_INTERNALS__ both missing"
+      );
+    }
+    return fn(cmd, args || {});
+  }
+  const inv = (cmd, args) => _invoke(cmd, args);
   const $ = (id) => document.getElementById(id);
   const errBox = $("err");
+  const diagBox = $("diag");
+  // Build stamp lets us tell, from a screenshot of the running app, whether
+  // the user is launching the latest .exe or a stale instance from a prior
+  // build. Bumped manually whenever the index.html / connect-flow logic
+  // changes; see desktop/README.md "Verifying you're on the latest build".
+  const BUILD_TAG = "2026-04-27/file-token-store";
   function err(msg) { errBox.textContent = msg || ""; }
+  function diag(msg) { diagBox.textContent = `[${BUILD_TAG}] ${msg}`; }
+  // Boot-time visibility into which Tauri API surface is reachable. Helps
+  // distinguish "stale cached HTML" from "Tauri runtime not injected" in
+  // future failure reports.
+  const _api = (() => {
+    if (window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke) return "global __TAURI__.core.invoke";
+    if (window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.invoke) return "internals __TAURI_INTERNALS__.invoke";
+    return "NONE — Tauri runtime not injected";
+  })();
+  diag(`api=${_api} — ready`);
+
+  // Probe via Rust IPC (native HTTP GET to /healthz) instead of fetch():
+  // the renderer's origin is `tauri://localhost` and a cross-origin
+  // fetch() to the gateway hits Chromium's CORS / Private Network
+  // Access checks. The native side returns a granular status string
+  // (`ok ...` / `connect_failed ...` / `read_empty ...` / etc.) so we
+  // can show *which* layer failed in the alert.
+  async function gatewayReachable(gateway_url) {
+    try {
+      const status = await inv("probe_gateway", { url: gateway_url });
+      window._lastProbeStatus = status;
+      return status.startsWith("ok ");
+    } catch (e) {
+      window._lastProbeStatus = `ipc_error: ${e}`;
+      return false;
+    }
+  }
+
+  async function waitForGateway(gateway_url, timeoutMs = 10000) {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      if (await gatewayReachable(gateway_url)) return true;
+      await new Promise((r) => setTimeout(r, 500));
+    }
+    return false;
+  }
+
+  async function navigateIfReachable(gateway_url) {
+    diag(`probing ${gateway_url}/healthz …`);
+    const probeOk = await gatewayReachable(gateway_url);
+    const status = window._lastProbeStatus || "(no status)";
+    if (!probeOk) {
+      const msg = `probe FAILED — status: ${status}`;
+      diag(msg);
+      err(`Gateway at ${gateway_url} is not responding (${status}).`);
+      $("wsl").style.display = "";
+      alert(
+        `[${BUILD_TAG}]\n\n` +
+        `Probe FAILED.\n` +
+        `URL: ${gateway_url}/healthz\n` +
+        `Status: ${status}\n\n` +
+        `The status string says exactly which layer failed:\n` +
+        `  ok ...                 — should not appear here\n` +
+        `  connect_failed ...     — TCP refused / unreachable\n` +
+        `  read_empty ...         — TCP opened but server closed without responding\n` +
+        `  non_2xx ...            — HTTP responded with non-2xx\n` +
+        `  dns_resolve_failed ... — hostname can't be resolved\n` +
+        `  ipc_error: ...         — Tauri IPC didn't reach Rust at all`
+      );
+      return false;
+    }
+    const url = await inv("connect_url");
+    const sanitised = url.replace(/token=[^&]+/, "token=***");
+    diag(`probe ${status} — navigating to ${sanitised}`);
+    alert(
+      `[${BUILD_TAG}]\n\n` +
+      `Probe OK.\n` +
+      `Status: ${status}\n` +
+      `Navigating to: ${sanitised}\n\n` +
+      `Click OK; report any connection-refused page that follows.`
+    );
+    location.replace(url);
+    return true;
+  }
 
   async function tryAutoConnect() {
+    // Auto-navigate is intentionally DISABLED in this diagnostic build.
+    // Earlier sessions could not surface the navigate-target URL because
+    // the auto-redirect immediately replaced index.html with the gateway
+    // URL — the diag/alert never had a chance to render. Always landing
+    // on the setup form (with the stored URL pre-filled) lets the user
+    // see exactly which host gets attempted on every Connect click.
     try {
       const info = await inv("connection_info");
       if (info.token_set) {
         $("url").value = info.gateway_url;
-        const url = await inv("connect_url");
-        location.replace(url);
+        diag(`stored URL: ${info.gateway_url} — click "Save and connect" to attempt navigation`);
+      } else {
+        diag("no stored token — fill in the form below");
       }
     } catch (e) {
-      // No stored token yet — show the setup form.
+      diag(`connection_info failed: ${e}`);
     }
   }
 
   $("go").addEventListener("click", async () => {
     err("");
+    $("wsl").style.display = "none";
     const gateway_url = $("url").value.trim();
     const token = $("tok").value.trim();
     if (!gateway_url || !token) { err("URL and token are both required"); return; }
     try {
-      await inv("save_token", { token, gatewayUrl: gateway_url, gateway_url });
+      // Tauri 2 IPC convention: camelCase keys → snake_case Rust params.
+      // Sending only `gatewayUrl` here; the prior version also sent
+      // `gateway_url` defensively but unknown extras can disrupt
+      // strict-field deserialization on some Tauri versions.
+      diag(`saving token (len=${token.length}) for ${gateway_url} …`);
+      await inv("save_token", { token, gatewayUrl: gateway_url });
+      // Verify the save actually landed in Credential Manager — keyring
+      // write can silently no-op on some Windows configs (locked store,
+      // group policy). Re-reading via connection_info confirms it.
+      const info = await inv("connection_info");
+      if (!info.token_set) {
+        const msg = "save_token returned ok but token_set is still false — credential store is rejecting writes";
+        diag(msg);
+        err(msg);
+        alert(`[${BUILD_TAG}]\n\n${msg}\n\nCheck Windows Credential Manager via:\n  cmdkey /list:ai.oxenclaw.desktop\n\nIf empty, the keyring write failed silently.`);
+        return;
+      }
+      diag(`token saved — token_set=true, stored URL=${info.gateway_url}`);
+      await navigateIfReachable(gateway_url);
+    } catch (e) { err(String(e)); diag(`save/navigate error: ${e}`); }
+  });
+
+  $("wsl").addEventListener("click", async () => {
+    err("Starting gateway in WSL…");
+    const gateway_url = $("url").value.trim();
+    try {
+      await inv("launch_wsl_gateway", { opts: {} });
+    } catch (e) { err("WSL launch failed: " + String(e)); return; }
+    if (await waitForGateway(gateway_url)) {
       const url = await inv("connect_url");
       location.replace(url);
-    } catch (e) { err(String(e)); }
+    } else {
+      err("WSL launched but gateway didn't come up within 10s. Check the WSL terminal.");
+    }
   });
 
   $("forget").addEventListener("click", async () => {

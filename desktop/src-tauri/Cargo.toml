@@ -28,12 +28,23 @@ tauri-plugin-os = "2"
 # pubkey, and re-register in main.rs when signing is ready (see
 # docs/RELEASING.md).
 tauri-plugin-process = "2"
-keyring = "3"                      # Windows Credential Manager
+# Single-instance: spawning the .exe a second time brings the existing
+# window to front instead of starting a zombie process. Important for the
+# Windows tray-app pattern where users launch from Start menu repeatedly.
+tauri-plugin-single-instance = "2"
+# keyring = "3" was removed — set_password silently no-ops in the
+# cargo-xwin cross-build (returns Ok, never persists). Token storage
+# now lives in a JSON file under %LOCALAPPDATA%\oxenclaw-desktop\
+# (NTFS ACLs already restrict reads to the same user). See token.rs.
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "1"
 log = "0.4"
 env_logger = "0.11"
+url = "2"
+
+[dev-dependencies]
+tempfile = "3"
 
 [features]
 # `custom-protocol` is the Tauri-required feature for production builds.

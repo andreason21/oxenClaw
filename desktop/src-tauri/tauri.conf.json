@@ -31,12 +31,6 @@
     "security": {
       "csp": "default-src 'self' tauri:; script-src 'self' tauri: 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self' tauri: ws://localhost:* http://localhost:* ws://127.0.0.1:* http://127.0.0.1:*; img-src 'self' data: blob:; font-src 'self' data:",
       "freezePrototype": true
-    },
-    "trayIcon": {
-      "iconPath": "icons/icon.png",
-      "iconAsTemplate": false,
-      "menuOnLeftClick": false,
-      "tooltip": "oxenClaw"
     }
   },
   "bundle": {

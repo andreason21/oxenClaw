@@ -12,3 +12,7 @@ build/
 .omc/
 .claude/
 soak.csv
+
+# Desktop (Tauri) build artefacts
+desktop/src-tauri/target/
+desktop/src-tauri/gen/

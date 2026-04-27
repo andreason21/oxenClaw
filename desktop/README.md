@@ -87,6 +87,65 @@ cargo tauri build --bundles msi nsis
 > `.exe` is included for ad-hoc per-user installs that don't need
 > admin rights.
 
+### Verifying you're on the latest local build
+
+The setup card shows `[BUILD_TAG]` at the top (gray box) — this is hand-bumped
+in `desktop/web/index.html` whenever the connect-flow logic changes. On
+diagnostic builds, navigation is gated behind an `alert()` that prints the
+exact URL WebView2 is about to navigate to, so a screenshot of the popup
+unambiguously identifies which host/port/scheme is being tried. If the alert
+or build-tag is missing, the user is launching a stale `.exe` (zombie tray
+process or a previously installed copy).
+
+To force a clean state:
+
+```powershell
+Get-Process -Name oxenclaw* -ErrorAction SilentlyContinue | Stop-Process -Force
+Remove-Item -Recurse -Force "$env:LOCALAPPDATA\ai.oxenclaw.desktop" -ErrorAction SilentlyContinue
+```
+
+Then launch the `.exe` exactly once.
+
+### Local cross-build from WSL2 (dev only)
+
+For quick smoke testing on a Windows host, you can cross-build the raw
+`.exe` from WSL2 — no installer, no WiX, no NSIS bundler. Tauri can't
+drive the bundlers from Linux, but `cargo-xwin` produces the bare
+PE32+ binary that runs the app directly.
+
+> **Critical: `--features custom-protocol` is required.** `cargo tauri
+> build` adds this flag automatically; raw `cargo xwin build` does not.
+> Without it, Tauri 2 ignores `frontendDist` and tries to load
+> `devUrl` (`http://localhost:1420`) at runtime, so the WebView always
+> shows `ERR_CONNECTION_REFUSED` and the embedded `index.html` never
+> runs. The helper script `scripts/build-windows-exe.sh` already
+> passes the flag.
+>
+> **Critical: do NOT run the built `.exe` from `\\wsl$\...`.** Running
+> from a UNC path puts the process in a security context where Win32
+> Credential Manager APIs silently fail (`set_password` returns ok but
+> writes nothing → the bearer token never persists → every connect
+> attempt fails with "no token stored"). The helper script copies the
+> binary to `%LOCALAPPDATA%\oxenclaw-dev\oxenclaw-desktop.exe` and
+> prints that path; launch the local copy.
+
+
+```bash
+# one-time
+rustup target add x86_64-pc-windows-msvc
+cargo install cargo-xwin
+cargo install tauri-cli --version "^2.0"
+
+# every build
+./scripts/build-windows-exe.sh
+# → desktop/src-tauri/target/x86_64-pc-windows-msvc/release/oxenclaw-desktop.exe
+```
+
+The script prints a `\\wsl$\<distro>\...` path you can paste into
+Explorer to copy/run from Windows. This bypass exists only for dev
+loops; user-facing distribution still goes through the signed `.msi`/
+`.exe` pipeline in `release.yml`.
+
 ## Code-signing the bundles
 
 For corporate distribution, sign both:
@@ -106,10 +165,19 @@ CI: `.github/workflows/desktop-build.yml` builds the unsigned `.msi`
 
 On first launch the app shows a setup screen asking for:
 
-- **Gateway URL** (default `http://localhost:7331`)
+- **Gateway URL** (default `http://127.0.0.1:7331` — IPv4 literal,
+  not `localhost`, see "IPv6 trap" below)
 - **Bearer token** (paste once; stored in Credential Manager)
 - **WSL auto-launch** (off by default; turn on if the WSL distro and
   `oxenclaw gateway start` should be spawned by the desktop app)
+
+> **IPv6 trap.** WebView2 follows Happy Eyeballs and prefers `[::1]`
+> when given `localhost`; the gateway only listens on IPv4 by default
+> so that path 502s with `ERR_CONNECTION_REFUSED`. The desktop app
+> sanitises stored URLs (`localhost` → `127.0.0.1`) on every read,
+> and the gateway since rc.20 dual-stack-binds when `host == 127.0.0.1`,
+> so both sides cooperate. If you must keep a `localhost` URL (corp
+> proxy, custom resolver), bind the gateway with `--host 0.0.0.0`.
 
 These land in `%APPDATA%\oxenclaw-desktop\config.json` for non-secret
 values; the token only ever hits Credential Manager.

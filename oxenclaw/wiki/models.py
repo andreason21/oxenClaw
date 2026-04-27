@@ -61,6 +61,7 @@ class WikiClaim:
     confidence: float | None = None
     asserted_at: float | None = None
     last_verified_at: float | None = None
+    claim_id: str | None = None  # stable 8-hex id; set by claims.add_claim
 
 
 @dataclass

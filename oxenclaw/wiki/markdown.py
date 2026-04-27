@@ -188,6 +188,8 @@ def _dump_claim(c: WikiClaim) -> dict[str, Any]:
         out["asserted_at"] = c.asserted_at
     if c.last_verified_at is not None:
         out["last_verified_at"] = c.last_verified_at
+    if c.claim_id is not None:
+        out["claim_id"] = c.claim_id
     return out
 
 
@@ -290,6 +292,7 @@ def parse_wiki_markdown(content: str) -> WikiPage:
                     confidence=raw.get("confidence"),
                     asserted_at=raw.get("asserted_at"),
                     last_verified_at=raw.get("last_verified_at"),
+                    claim_id=raw.get("claim_id") or None,
                 )
             )
 

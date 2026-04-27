@@ -199,6 +199,24 @@ as a follow-up without backend churn.
 - openclaw spawns child agents via the Agent Control Plane. Less
   urgent for in-house dashboard use but unlocks complex flows.
 
+### K. Cron tab quick-add wizard ✓
+**Shipped**.
+
+  - Topbar `+ New job` button + prominent quick-add card at the top
+    of the Cron tab. Preset grid: Every morning / Every evening /
+    Hourly / Weekdays / Weekly / Every 5 minutes — each card maps
+    to a 5-field cron expression internally so users don't have to
+    write `0 8 * * *` themselves.
+  - Quick form has just three inputs (prompt textarea, agent_id,
+    chat_id); defaults to the active ChatState values. The advanced
+    5-field form below stays for power users / non-preset
+    schedules.
+  - CSS `.cron-preset` / `.cron-preset-grid` mirrors openclaw's
+    cron-quick-create.ts visual idiom.
+  - Dashboard E2E:
+    `test_cron_view_quick_add_wizard_renders_presets` (presets
+    count, active-state toggle, topbar button).
+
 ---
 
 ## Parallelism map

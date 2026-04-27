@@ -1138,12 +1138,91 @@ const ChannelsView = {
 const CronView = {
   title: "Cron",
   async render(root, actions) {
+    const quickCard = el("div", { class: "card cron-quick" });
     const list = el("div");
     const formCard = el("div", { class: "card", style: "margin-top:16px" });
-    root.append(list, formCard);
+    root.append(quickCard, list, formCard);
 
     const refreshBtn = el("button", { class: "btn btn-ghost btn-sm", onclick: () => refresh() }, "↻ Refresh");
-    actions.append(refreshBtn);
+    const newJobBtn = el("button", {
+      class: "btn btn-primary btn-sm",
+      title: "Open the quick-add wizard",
+      onclick: () => {
+        quickCard.scrollIntoView({ behavior: "smooth", block: "start" });
+        const ta = quickCard.querySelector("textarea");
+        if (ta) ta.focus();
+      },
+    }, "+ New job");
+    actions.append(newJobBtn, refreshBtn);
+
+    // Quick-add wizard — preset-driven, two-line form. Mirrors openclaw's
+    // cron-quick-create UX: pick "what should the agent do" + a schedule
+    // preset card; the advanced 5-field cron form below is still available
+    // for power users.
+    const SCHEDULE_PRESETS = [
+      { id: "every-morning", icon: "🌅", label: "Every morning",   desc: "Daily at 8:00",        cron: "0 8 * * *"   },
+      { id: "every-evening", icon: "🌙", label: "Every evening",   desc: "Daily at 18:00",       cron: "0 18 * * *"  },
+      { id: "hourly",        icon: "🔄", label: "Hourly",          desc: "Every hour, on the :00", cron: "0 * * * *" },
+      { id: "weekdays",      icon: "📅", label: "Weekdays",        desc: "Mon–Fri at 9:00",      cron: "0 9 * * 1-5" },
+      { id: "weekly",        icon: "📆", label: "Weekly",          desc: "Mondays at 9:00",      cron: "0 9 * * 1"   },
+      { id: "every5min",     icon: "⚡", label: "Every 5 minutes", desc: "Mostly for testing",   cron: "*/5 * * * *" },
+    ];
+    let activePreset = SCHEDULE_PRESETS[0].id;
+    quickCard.append(el("h3", { class: "card-title" }, "+ Quick add"));
+    quickCard.append(el("div", { class: "card-meta" },
+      "Pick what the agent should do, choose a schedule preset, click Create. " +
+      "The advanced form below is still there for cron expressions outside the presets."
+    ));
+    const presetGrid = el("div", { class: "cron-preset-grid" });
+    for (const p of SCHEDULE_PRESETS) {
+      const card = el("button", {
+        class: "cron-preset" + (p.id === activePreset ? " active" : ""),
+        type: "button",
+        onclick: () => {
+          activePreset = p.id;
+          for (const c of presetGrid.children) c.classList.remove("active");
+          card.classList.add("active");
+        },
+      });
+      card.append(
+        el("div", { class: "cron-preset__icon" }, p.icon),
+        el("div", { class: "cron-preset__label" }, p.label),
+        el("div", { class: "cron-preset__desc" }, p.desc),
+      );
+      presetGrid.append(card);
+    }
+    quickCard.append(presetGrid);
+    const quickPrompt = el("textarea", {
+      class: "cron-quick__prompt",
+      placeholder: "What should the agent do? e.g. 'Summarise overnight Slack DMs'",
+    });
+    const quickAgent = el("input", { type: "text", value: ChatState.agentId || "assistant", placeholder: "agent_id" });
+    const quickChatId = el("input", { type: "text", value: ChatState.chatId || "demo", placeholder: "chat_id" });
+    const quickRow = el("div", { class: "row" },
+      el("div", { class: "field" }, el("label", {}, "agent_id"), quickAgent),
+      el("div", { class: "field" }, el("label", {}, "chat_id (where to deliver)"), quickChatId),
+    );
+    const quickCreate = el("button", { class: "btn btn-primary cron-quick__submit" }, "Create");
+    quickCreate.onclick = async () => {
+      const prompt = quickPrompt.value.trim();
+      const agent_id = quickAgent.value.trim() || "assistant";
+      const chat_id = quickChatId.value.trim() || "demo";
+      if (!prompt) { Toast.warn("Enter what the agent should do."); quickPrompt.focus(); return; }
+      const preset = SCHEDULE_PRESETS.find((p) => p.id === activePreset) || SCHEDULE_PRESETS[0];
+      try {
+        const res = await Rpc.call("cron.create", {
+          schedule: preset.cron,
+          agent_id, channel: "dashboard", account_id: "main", chat_id,
+          prompt,
+        });
+        Toast.success(`created ${res.id.slice(0, 8)}`, `${preset.label} · ${preset.cron}`);
+        quickPrompt.value = "";
+        await refresh();
+      } catch (e) {
+        Toast.error("create failed", e.message);
+      }
+    };
+    quickCard.append(quickPrompt, quickRow, quickCreate);
 
     async function refresh() {
       const jobs = await safeRpc("cron.list", {}, { quiet: true });

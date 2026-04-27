@@ -282,6 +282,26 @@ async def test_chat_view_tool_call_card_renders_with_elapsed(page) -> None:
     assert "ms" in elapsed or "s" in elapsed
 
 
+async def test_cron_view_quick_add_wizard_renders_presets(page) -> None:
+    """The Cron tab must surface a preset-driven Quick add wizard mirroring
+    openclaw's cron-quick-create. Presets render as clickable cards;
+    the user shouldn't have to author a 5-field cron expression by hand
+    for the common cases."""
+    await _click_nav(page, "cron")
+    await page.wait_for_selector(".cron-quick", timeout=3000)
+    # Six presets configured in app.js.
+    assert await page.locator(".cron-preset").count() == 6
+    # First card defaults active.
+    assert await page.locator(".cron-preset.active").count() == 1
+    # Click another preset; active state must move.
+    cards = page.locator(".cron-preset")
+    await cards.nth(2).click()
+    active_label = await page.locator(".cron-preset.active .cron-preset__label").first.text_content()
+    assert active_label.strip() == "Hourly"
+    # Topbar New job button focuses the prompt textarea.
+    assert await page.locator("#topbar-actions button", has_text="New job").count() == 1
+
+
 async def test_chat_view_attach_button_renders_thumb(page) -> None:
     """Drop a 1×1 PNG into the file input → a thumb should appear."""
     await _click_nav(page, "chat")

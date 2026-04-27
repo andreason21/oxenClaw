@@ -37,9 +37,9 @@ def _paths(tmp_path: Path) -> OxenclawPaths:
 
 def _inbound(text: str = "hello") -> InboundEnvelope:
     return InboundEnvelope(
-        channel="telegram",
+        channel="dashboard",
         account_id="main",
-        target=ChannelTarget(channel="telegram", account_id="main", chat_id="42"),
+        target=ChannelTarget(channel="dashboard", account_id="main", chat_id="42"),
         sender_id="user-1",
         text=text,
         received_at=0.0,
@@ -194,3 +194,45 @@ async def test_pi_agent_persists_transcript_across_turns(tmp_path: Path) -> None
     # Second turn must see the transcript built by the first.
     assert seen_messages[0] == 1  # only the new user
     assert seen_messages[1] >= 3  # prior user, prior asst, new user
+
+
+# ─── Dashboard-format ConversationHistory persistence ────────────────
+
+
+async def test_pi_agent_writes_dashboard_conversation_history(tmp_path: Path) -> None:
+    """Regression: PiAgent must populate ConversationHistory so the
+    dashboard's `chat.history` poll surfaces the turn. Pre-fix the pi
+    runtime persisted the rich transcript only via SessionManager and
+    the dashboard saw an empty conversation."""
+    import json
+
+    async def fake_stream(ctx, opts):  # type: ignore[no-untyped-def]
+        yield TextDeltaEvent(delta="answer text")
+        yield StopEvent(reason="end_turn")
+
+    register_provider_stream("piagent_dashlog", fake_stream)
+    reg = _registry_with("test-model", "piagent_dashlog")
+    paths = _paths(tmp_path)
+    agent = PiAgent(
+        agent_id="t",
+        model_id="test-model",
+        registry=reg,
+        auth=_auth_with_key(reg.list()[0].provider),
+        sessions=InMemorySessionManager(),
+        paths=paths,
+    )
+    ctx = AgentContext(agent_id="t", session_key="dashboard:main:42")
+    async for _ in agent.handle(_inbound("question"), ctx):
+        pass
+
+    session_file = paths.session_file("t", "dashboard:main:42")
+    assert session_file.exists(), f"expected dashboard history at {session_file}"
+    data = json.loads(session_file.read_text())
+    msgs = data.get("messages", [])
+    roles = [m["role"] for m in msgs]
+    assert "user" in roles and "assistant" in roles, roles
+    # The user turn must carry the inbound text and the assistant turn the reply.
+    user_msg = next(m for m in msgs if m["role"] == "user")
+    asst_msg = next(m for m in msgs if m["role"] == "assistant")
+    assert user_msg["content"] == "question"
+    assert asst_msg["content"] == "answer text"

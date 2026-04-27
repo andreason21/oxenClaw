@@ -32,7 +32,7 @@ class _CronArgs(BaseModel):
         None, description="5-field crontab expression. Required for `add`."
     )
     agent_id: str | None = Field(None, description="Target agent id (default: caller).")
-    channel: str | None = Field(None, description="Channel id (e.g. 'telegram').")
+    channel: str | None = Field(None, description="Channel id (e.g. 'slack', 'dashboard').")
     account_id: str | None = Field(None, description="Account id within the channel.")
     chat_id: str | None = Field(None, description="Chat id (where to dispatch).")
     thread_id: str | None = Field(None)

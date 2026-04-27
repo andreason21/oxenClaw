@@ -18,7 +18,7 @@ oxenClaw gateway with Ollama-backed local LLM, in 15–25 minutes.
 - **Windows 11**, or **Windows 10 build 19044+** (most current installs).
 - **Admin rights** on first-time WSL setup.
 - **8 GB+ RAM**; 16 GB recommended if running a 7B-class model alongside other apps.
-- **Internet** for `pip install`, `ollama pull`, and Telegram outbound (if used).
+- **Internet** for `pip install`, `ollama pull`, and Slack outbound (if used).
 - **NVIDIA GPU** is optional — Ollama runs on CPU just fine for the recommended `gemma4:latest`.
 
 ---
@@ -270,13 +270,12 @@ disown
 
 ---
 
-## 10. Telegram on WSL2
+## 10. Slack outbound on WSL2
 
-Telegram bot inbound is **outbound-only** — your gateway long-polls
-Telegram's servers. No port forwarding, no public IP, no Windows
-Firewall changes required. Just put your token at
-`~/.oxenclaw/credentials/telegram/main.json` and add the binding to
-`config.yaml` exactly as in the main README.
+Slack outbound just makes HTTPS calls to `slack.com/api/chat.postMessage`
+— no inbound listener, no port forwarding, no Windows Firewall changes.
+Drop your token at `~/.oxenclaw/credentials/slack/main.json` and add
+the binding to `config.yaml` exactly as in the main README.
 
 ---
 
@@ -331,7 +330,7 @@ oxenClaw 게이트웨이까지 15–25분 소요.
 - **Windows 11**, 또는 **Windows 10 빌드 19044+**
 - 첫 WSL 설정 시 **관리자 권한**
 - **RAM 8GB 이상** (7B 모델 동시 실행 시 16GB 권장)
-- 인터넷 (pip / ollama pull / Telegram outbound)
+- 인터넷 (pip / ollama pull / Slack 아웃바운드)
 - **NVIDIA GPU 선택** — 권장 모델 `gemma4:latest`은 CPU로도 충분
 
 ### 2. WSL2 + Ubuntu 설치
@@ -499,11 +498,12 @@ nohup oxenclaw gateway start --provider ollama > ~/oxenclaw.log 2>&1 &
 disown
 ```
 
-### 10. Telegram on WSL2
+### 10. Slack 아웃바운드 on WSL2
 
-Telegram은 outbound-only — 게이트웨이가 Telegram 서버에 long-polling.
-포트 포워딩, 공인 IP, 방화벽 설정 모두 불필요. README와 동일하게
-`~/.oxenclaw/credentials/telegram/main.json` 작성 + `config.yaml`에 바인딩만 추가.
+Slack 아웃바운드는 `slack.com/api/chat.postMessage`로의 HTTPS 호출만
+사용 — 포트 포워딩, 공인 IP, 방화벽 설정 모두 불필요. README와
+동일하게 `~/.oxenclaw/credentials/slack/main.json` 작성 +
+`config.yaml`에 바인딩만 추가.
 
 ### 11. 자주 겪는 문제
 

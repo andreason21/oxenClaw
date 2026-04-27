@@ -37,7 +37,7 @@ def test_load_config_from_text_validates() -> None:
     cfg = load_config_from_text(
         """
         channels:
-          telegram:
+          dashboard:
             accounts:
               - account_id: main
                 display_name: Bot
@@ -50,9 +50,9 @@ def test_load_config_from_text_validates() -> None:
             provider: anthropic
         """
     )
-    assert "telegram" in cfg.channels
-    assert cfg.channels["telegram"].dm_policy == "open"
-    assert cfg.channels["telegram"].allow_from == ["user-1"]
+    assert "dashboard" in cfg.channels
+    assert cfg.channels["dashboard"].dm_policy == "open"
+    assert cfg.channels["dashboard"].allow_from == ["user-1"]
     assert cfg.agents["assistant"].provider == "anthropic"
 
 
@@ -73,18 +73,18 @@ def test_credential_store_roundtrip(tmp_path) -> None:  # type: ignore[no-untype
     paths.ensure_home()
     store = CredentialStore(paths)
 
-    assert store.read("telegram", "main") is None
+    assert store.read("dashboard", "main") is None
 
-    store.write("telegram", "main", {"token": "abc123"})
-    assert store.read("telegram", "main") == {"token": "abc123"}
-    assert store.list_accounts("telegram") == ["main"]
+    store.write("dashboard", "main", {"token": "abc123"})
+    assert store.read("dashboard", "main") == {"token": "abc123"}
+    assert store.list_accounts("dashboard") == ["main"]
 
-    store.write("telegram", "secondary", {"token": "def456"})
-    assert store.list_accounts("telegram") == ["main", "secondary"]
+    store.write("dashboard", "secondary", {"token": "def456"})
+    assert store.list_accounts("dashboard") == ["main", "secondary"]
 
-    assert store.delete("telegram", "main") is True
-    assert store.delete("telegram", "main") is False
-    assert store.list_accounts("telegram") == ["secondary"]
+    assert store.delete("dashboard", "main") is True
+    assert store.delete("dashboard", "main") is False
+    assert store.list_accounts("dashboard") == ["secondary"]
 
 
 def test_credential_file_permissions(tmp_path) -> None:  # type: ignore[no-untyped-def]
@@ -93,6 +93,6 @@ def test_credential_file_permissions(tmp_path) -> None:  # type: ignore[no-untyp
     paths = OxenclawPaths(home=tmp_path)
     paths.ensure_home()
     store = CredentialStore(paths)
-    store.write("telegram", "main", {"token": "secret"})
-    mode = paths.credential_file("telegram", "main").stat().st_mode
+    store.write("dashboard", "main", {"token": "secret"})
+    mode = paths.credential_file("dashboard", "main").stat().st_mode
     assert stat.S_IMODE(mode) == 0o600

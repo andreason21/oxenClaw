@@ -1,8 +1,8 @@
 """JSON-RPC 2.0 message framing + EventFrame + openclaw method payloads.
 
 Port of openclaw `src/gateway/protocol/index.ts`. Method schemas are code-first
-Pydantic models (mirror Zod on the TS side). Only the subset needed for the
-Telegram B-phase flow is defined here; expand in phase A.
+Pydantic models (mirror Zod on the TS side). Covers the dashboard / desktop
+chat surface plus Slack outbound — extend as new methods land.
 """
 
 from __future__ import annotations
@@ -91,15 +91,15 @@ class EventFrame(BaseModel):
     body: EventBody
 
 
-# ---- Method payloads (Telegram-flow minimum) ----
+# ---- Method payloads ----
 
 
 class ChatSendParams(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    channel: str
-    account_id: str
-    chat_id: str
+    channel: str = Field(min_length=1)
+    account_id: str = Field(min_length=1)
+    chat_id: str = Field(min_length=1)
     text: str
     thread_id: str | None = None
     reply_to_message_id: str | None = None

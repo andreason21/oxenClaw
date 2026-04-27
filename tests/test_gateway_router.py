@@ -39,7 +39,7 @@ async def test_dispatch_validates_params_and_returns_result(router: Router) -> N
             "id": 1,
             "method": "chat.send",
             "params": {
-                "channel": "telegram",
+                "channel": "dashboard",
                 "account_id": "main",
                 "chat_id": "42",
                 "text": "hi",

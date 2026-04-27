@@ -40,8 +40,8 @@ def test_normalize_truncates_with_hash_suffix() -> None:
 
 
 def test_derive_session_key_includes_thread() -> None:
-    a = derive_session_key(channel="telegram", account_id="main", chat_id="42")
-    b = derive_session_key(channel="telegram", account_id="main", chat_id="42", thread_id="9")
+    a = derive_session_key(channel="dashboard", account_id="main", chat_id="42")
+    b = derive_session_key(channel="dashboard", account_id="main", chat_id="42", thread_id="9")
     assert a != b
     assert "t:9" in b
 
@@ -116,7 +116,7 @@ def test_policy_round_trip_through_metadata() -> None:
             extra_params={"top_p": 0.9},
         ),
         provenance=InputProvenance(
-            channel="telegram",
+            channel="dashboard",
             account_id="main",
             chat_id="42",
             sender_id="u",

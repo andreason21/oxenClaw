@@ -37,7 +37,7 @@ class _RecordingAgent:
         yield SendParams(target=inbound.target, text=f"reply to {inbound.text}")
 
 
-def _envelope(*, channel: str = "telegram", sender_id: str = "cli", text: str = "hi"):
+def _envelope(*, channel: str = "dashboard", sender_id: str = "cli", text: str = "hi"):
     return InboundEnvelope(
         channel=channel,
         account_id="main",
@@ -90,7 +90,7 @@ async def test_explicit_routing_still_wins_over_single_agent_fallback():
         agents={
             "main": AgentConfig(
                 id="main",
-                channels={"telegram": AgentChannelRouting()},
+                channels={"dashboard": AgentChannelRouting()},
             )
         }
     )
@@ -111,7 +111,7 @@ async def test_multiple_agents_no_routing_drops_with_reason():
     outcome = await dispatcher.dispatch_with_outcome(_envelope())
     assert outcome.agent_id is None
     assert outcome.drop_reason is not None
-    assert "telegram" in outcome.drop_reason
+    assert "dashboard" in outcome.drop_reason
     assert not a.received and not b.received
 
 
@@ -138,7 +138,7 @@ async def test_allow_from_blocks_sender_and_does_not_fall_through():
         agents={
             "assistant": AgentConfig(
                 id="assistant",
-                channels={"telegram": AgentChannelRouting(allow_from=["alice"])},
+                channels={"dashboard": AgentChannelRouting(allow_from=["alice"])},
             )
         }
     )
@@ -157,7 +157,7 @@ async def test_allow_from_permits_listed_sender():
         agents={
             "assistant": AgentConfig(
                 id="assistant",
-                channels={"telegram": AgentChannelRouting(allow_from=["alice"])},
+                channels={"dashboard": AgentChannelRouting(allow_from=["alice"])},
             )
         }
     )
@@ -177,7 +177,7 @@ async def test_routing_to_unregistered_agent_drops_with_diagnostic_reason():
         agents={
             "ghost": AgentConfig(
                 id="ghost",
-                channels={"telegram": AgentChannelRouting()},
+                channels={"dashboard": AgentChannelRouting()},
             )
         }
     )

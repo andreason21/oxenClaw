@@ -428,10 +428,26 @@ const ChatView = {
     right.append(targetCard, stream, compose);
 
     const fields = ["agentId", "channel", "accountId", "chatId", "threadId"];
+    // `threadId` is the only field allowed to be blank; the others are
+    // required for a valid `chat.send` payload (gateway rejects empty
+    // channel/account_id/chat_id with min_length=1).
+    const requiredFields = new Set(["agentId", "channel", "accountId", "chatId"]);
+    const defaults = { agentId: "default", channel: "dashboard", accountId: "main", chatId: "demo", threadId: "" };
     const inputs = {};
     for (const f of fields) {
       inputs[f] = el("input", { type: "text", value: ChatState[f], placeholder: f });
-      inputs[f].addEventListener("change", () => { ChatState[f] = inputs[f].value.trim(); ChatState.save(); refresh(); });
+      inputs[f].addEventListener("change", () => {
+        const next = inputs[f].value.trim();
+        if (!next && requiredFields.has(f)) {
+          // Reject the blank — keep prior value, restore it in the UI.
+          inputs[f].value = ChatState[f] || defaults[f];
+          ChatState[f] = inputs[f].value;
+        } else {
+          ChatState[f] = next;
+        }
+        ChatState.save();
+        refresh();
+      });
     }
     targetCard.append(
       el("div", { class: "row" },
@@ -959,8 +975,8 @@ const ChannelsView = {
         root.append(el("div", { class: "card" },
           el("h3", { class: "card-title" }, "No channels loaded"),
           el("div", { class: "card-meta" },
-            "Add Telegram credentials at ~/.oxenclaw/credentials/telegram/<account>.json " +
-            "and declare the account in config.yaml under channels.telegram.accounts, then call config.reload."),
+            "Add Slack credentials at ~/.oxenclaw/credentials/slack/<account>.json " +
+            "and declare the account in config.yaml under channels.slack.accounts, then call config.reload."),
         ));
         return;
       }
@@ -1078,7 +1094,7 @@ const CronView = {
     const inputs = {
       schedule: el("input", { type: "text", placeholder: "*/5 * * * *" }),
       agent_id: el("input", { type: "text", placeholder: "assistant", value: "assistant" }),
-      channel: el("input", { type: "text", placeholder: "telegram", value: "telegram" }),
+      channel: el("input", { type: "text", placeholder: "dashboard", value: "dashboard" }),
       account_id: el("input", { type: "text", placeholder: "main", value: "main" }),
       chat_id: el("input", { type: "text", placeholder: "chat_id" }),
       thread_id: el("input", { type: "text", placeholder: "thread_id (optional)" }),

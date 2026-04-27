@@ -12,7 +12,7 @@ def test_new_cron_job_accepts_valid_expression() -> None:
     NewCronJob(
         schedule="0 9 * * *",
         agent_id="a",
-        channel="telegram",
+        channel="dashboard",
         account_id="main",
         chat_id="42",
         prompt="morning summary",
@@ -24,7 +24,7 @@ def test_new_cron_job_rejects_malformed_expression() -> None:
         NewCronJob(
             schedule="not a cron",
             agent_id="a",
-            channel="telegram",
+            channel="dashboard",
             account_id="main",
             chat_id="42",
             prompt="x",
@@ -35,7 +35,7 @@ def test_cron_job_assigns_stable_id() -> None:
     new = NewCronJob(
         schedule="*/5 * * * *",
         agent_id="a",
-        channel="telegram",
+        channel="dashboard",
         account_id="main",
         chat_id="1",
         prompt="x",

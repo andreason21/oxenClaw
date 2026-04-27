@@ -81,7 +81,7 @@ def test_preflight_no_warning_when_env_set(tmp_path: Path, monkeypatch):
 
 def test_preflight_flags_malformed_credentials(tmp_path: Path):
     paths = _paths(tmp_path)
-    cred_dir = paths.credentials_dir / "telegram"
+    cred_dir = paths.credentials_dir / "dashboard"
     cred_dir.mkdir(parents=True)
     (cred_dir / "main.json").write_text("{not json")
     report = run_preflight(paths, probe_embeddings=False)

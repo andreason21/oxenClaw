@@ -199,7 +199,7 @@ async def test_metrics_increments_after_ws_rpc(router: Router) -> None:
                         "id": 1,
                         "method": "chat.send",
                         "params": {
-                            "channel": "telegram",
+                            "channel": "dashboard",
                             "account_id": "main",
                             "chat_id": "1",
                             "text": "hi",
@@ -238,7 +238,7 @@ async def test_websocket_upgrade_still_works(router: Router) -> None:
                         "id": 1,
                         "method": "chat.send",
                         "params": {
-                            "channel": "telegram",
+                            "channel": "dashboard",
                             "account_id": "main",
                             "chat_id": "9",
                             "text": "hi",
@@ -438,7 +438,7 @@ async def test_ws_upgrade_still_requires_token_when_auth_configured(
                         "id": 1,
                         "method": "chat.send",
                         "params": {
-                            "channel": "telegram",
+                            "channel": "dashboard",
                             "account_id": "main",
                             "chat_id": "1",
                             "text": "hi",
@@ -491,7 +491,7 @@ async def test_ws_upgrade_rejected_for_unlisted_origin(router: Router) -> None:
                         "id": 1,
                         "method": "chat.send",
                         "params": {
-                            "channel": "telegram",
+                            "channel": "dashboard",
                             "account_id": "main",
                             "chat_id": "1",
                             "text": "hi",

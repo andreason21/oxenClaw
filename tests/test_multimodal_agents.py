@@ -40,9 +40,9 @@ def _envelope(*, text: str | None = None, photo_b64: str | None = None) -> Inbou
             )
         )
     return InboundEnvelope(
-        channel="telegram",
+        channel="dashboard",
         account_id="main",
-        target=ChannelTarget(channel="telegram", account_id="main", chat_id="42"),
+        target=ChannelTarget(channel="dashboard", account_id="main", chat_id="42"),
         sender_id="100",
         text=text,
         media=media,

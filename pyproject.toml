@@ -11,7 +11,7 @@ license = { text = "MIT" }
 requires-python = ">=3.11"
 authors = [{ name = "oxenClaw contributors" }]
 keywords = [
-    "ai", "agent", "assistant", "telegram", "slack",
+    "ai", "agent", "assistant", "slack",
     "anthropic", "claude", "ollama", "vllm", "llm",
     "mcp", "gateway", "websocket",
 ]
@@ -33,7 +33,6 @@ classifiers = [
 ]
 
 dependencies = [
-    "aiogram>=3.13",
     "aiohttp>=3.10",
     "anthropic>=0.40",
     "apscheduler>=3.10",
@@ -77,8 +76,7 @@ Changelog     = "https://github.com/andreason21/oxenClaw/releases"
 oxenclaw = "oxenclaw.cli.__main__:app"
 
 [project.entry-points."oxenclaw.plugins"]
-telegram = "oxenclaw.extensions.telegram.plugin_entry:TELEGRAM_PLUGIN"
-slack    = "oxenclaw.extensions.slack.plugin_entry:SLACK_PLUGIN"
+slack = "oxenclaw.extensions.slack.plugin_entry:SLACK_PLUGIN"
 
 [tool.hatch.build.targets.wheel]
 packages = ["oxenclaw"]
@@ -133,5 +131,5 @@ include = ["oxenclaw", "tests"]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 markers = [
-    "integration: requires a live external service (Ollama, Telegram, etc.)",
+    "integration: requires a live external service (Ollama, Slack, etc.)",
 ]

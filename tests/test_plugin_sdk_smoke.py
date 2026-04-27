@@ -17,7 +17,7 @@ from oxenclaw.plugin_sdk.reply_runtime import chunk_text
 
 def test_send_params_roundtrip() -> None:
     params = SendParams(
-        target=ChannelTarget(channel="telegram", account_id="acct", chat_id="123"),
+        target=ChannelTarget(channel="dashboard", account_id="acct", chat_id="123"),
         text="hello",
     )
     dumped = params.model_dump()
@@ -28,9 +28,9 @@ def test_send_params_roundtrip() -> None:
 
 def test_inbound_envelope_minimal() -> None:
     env = InboundEnvelope(
-        channel="telegram",
+        channel="dashboard",
         account_id="acct",
-        target=ChannelTarget(channel="telegram", account_id="acct", chat_id="123"),
+        target=ChannelTarget(channel="dashboard", account_id="acct", chat_id="123"),
         sender_id="user-1",
         received_at=0.0,
     )

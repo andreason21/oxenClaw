@@ -25,9 +25,9 @@ from oxenclaw.plugin_sdk.config_schema import (
 
 def _env(text: str = "hi", sender: str = "user-1") -> InboundEnvelope:
     return InboundEnvelope(
-        channel="telegram",
+        channel="dashboard",
         account_id="main",
-        target=ChannelTarget(channel="telegram", account_id="main", chat_id="42"),
+        target=ChannelTarget(channel="dashboard", account_id="main", chat_id="42"),
         sender_id=sender,
         text=text,
         received_at=0.0,
@@ -35,13 +35,13 @@ def _env(text: str = "hi", sender: str = "user-1") -> InboundEnvelope:
 
 
 def test_session_key_includes_thread_when_present() -> None:
-    t = ChannelTarget(channel="telegram", account_id="main", chat_id="42", thread_id="99")
-    assert session_key_for(t) == "telegram:main:42:99"
+    t = ChannelTarget(channel="dashboard", account_id="main", chat_id="42", thread_id="99")
+    assert session_key_for(t) == "dashboard:main:42:99"
 
 
 def test_session_key_without_thread() -> None:
-    t = ChannelTarget(channel="telegram", account_id="main", chat_id="42")
-    assert session_key_for(t) == "telegram:main:42"
+    t = ChannelTarget(channel="dashboard", account_id="main", chat_id="42")
+    assert session_key_for(t) == "dashboard:main:42"
 
 
 def test_registry_register_and_lookup() -> None:
@@ -93,7 +93,7 @@ async def test_dispatcher_routes_to_matching_agent_and_sends() -> None:
         agents={
             "echo": AgentConfig(
                 id="echo",
-                channels={"telegram": AgentChannelRouting(allow_from=[])},
+                channels={"dashboard": AgentChannelRouting(allow_from=[])},
             )
         }
     )
@@ -118,7 +118,7 @@ async def test_dispatcher_respects_allow_from() -> None:
         agents={
             "echo": AgentConfig(
                 id="echo",
-                channels={"telegram": AgentChannelRouting(allow_from=["user-allowed"])},
+                channels={"dashboard": AgentChannelRouting(allow_from=["user-allowed"])},
             )
         }
     )
@@ -148,7 +148,7 @@ async def test_dispatcher_drops_when_agent_id_unregistered() -> None:
         agents={
             "echo": AgentConfig(
                 id="echo",
-                channels={"telegram": AgentChannelRouting(allow_from=[])},
+                channels={"dashboard": AgentChannelRouting(allow_from=[])},
             )
         }
     )
@@ -167,7 +167,7 @@ async def test_dispatcher_reuses_session_context_across_turns() -> None:
         agents={
             "echo": AgentConfig(
                 id="echo",
-                channels={"telegram": AgentChannelRouting(allow_from=[])},
+                channels={"dashboard": AgentChannelRouting(allow_from=[])},
             )
         }
     )
@@ -178,5 +178,5 @@ async def test_dispatcher_reuses_session_context_across_turns() -> None:
     d = Dispatcher(agents=agents, config=config, send=_send)
     await d.dispatch(_env("first"))
     await d.dispatch(_env("second"))
-    ctx = d._sessions[("echo", "telegram:main:42")]
+    ctx = d._sessions[("echo", "dashboard:main:42")]
     assert len(ctx.history) == 4

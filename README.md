@@ -4,10 +4,12 @@
 [![python](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/)
 [![license](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-A self-hosted, multi-channel AI assistant gateway in Python. Bring your
+A self-hosted, in-house AI assistant gateway in Python. Bring your
 own model (local Ollama, Anthropic, or 22 providers via the bundled `pi`
-runner), wire it to messengers like Telegram, give it tools and skills,
-and run it as a long-lived service with production-grade observability.
+runner), talk to it from the bundled web dashboard or the native
+desktop app (Windows / Ubuntu), give it tools and skills, and let it
+push outbound alerts to Slack — all on a long-lived service with
+production-grade observability.
 
 > Python port of [openclaw](https://github.com/openclaw/openclaw) — the
 > server/CLI surface, hardened and documented for self-hosting.
@@ -21,7 +23,7 @@ and run it as a long-lived service with production-grade observability.
 | | |
 |---|---|
 | 🦙 **Bring your own model** | Local Ollama by default (any tool-capable model). Anthropic, OpenAI-compatible, Bedrock, Google, Groq, DeepSeek, Mistral, Together, Fireworks, … 22 providers via `pi`. |
-| 🖼️ **Multimodal in/out of the box** | Send a photo through Telegram **or attach one in the dashboard chat** (📎 button) and a vision-capable model (gemma4 / Claude 3+ / GPT-4o / Gemini 1.5+ / llava / etc.) sees it. Models without vision get a dropped-image notice in their text context. |
+| 🖼️ **Multimodal in/out of the box** | Attach a photo in the dashboard chat (📎 button) or the desktop client and a vision-capable model (gemma4 / Claude 3+ / GPT-4o / Gemini 1.5+ / llava / etc.) sees it. Models without vision get a dropped-image notice in their text context. |
 | 🖥️ **Bundled dashboard SPA** | Light/dark theme toggle, Ctrl+K command palette, sessions browser (list/preview/reset/fork/archive), responsive mobile drawer, in-app login gate. No build step, served on the same port as the JSON-RPC websocket. |
 | 💻 **Native desktop app (Windows + Ubuntu)** | Tauri client for Windows 11 (`.msi` / NSIS `.exe`), Ubuntu 22.04 + 24.04 (`.deb`), or any glibc Linux (`.AppImage`). OS keychain–backed tokens, native toast notifications, system tray, Origin-locked WS upgrade, Ed25519-signed auto-updates. See [`docs/DESKTOP_APP.md`](docs/DESKTOP_APP.md). |
 | 🔌 **Open by design** | Plugin SDK + entry-point discovery. New channels and skills install with `pip install`. |
@@ -121,23 +123,23 @@ agents:
       You are a helpful assistant.
 ```
 
-### 2. Optional — connect Telegram
+### 2. Optional — wire Slack outbound alerts
 
-Get a bot token from [@BotFather](https://t.me/botfather) and write
-`~/.oxenclaw/credentials/telegram/main.json`:
+Slack is the only outbound integration. Drop a workspace bot token at
+`~/.oxenclaw/credentials/slack/main.json`:
 
 ```json
-{ "bot_token": "123456:ABC..." }
+{ "token": "xoxb-..." }
 ```
 
 Add the binding to `config.yaml`:
 
 ```yaml
 channels:
-  telegram:
+  slack:
     accounts:
       - account_id: main
-        display_name: "Personal Bot"
+        display_name: "Workspace Alerts"
 ```
 
 ### 3. Start the gateway
@@ -168,8 +170,8 @@ token out of the address bar so it doesn't leak via screenshots or
 browser history. `/healthz`, `/readyz`, `/metrics` always remain
 unauthenticated for orchestrator probes.
 
-Send a Telegram DM to your bot — it replies via the local model with
-full tool access.
+Open the dashboard or the desktop client and send a message — the
+agent replies via the local model with full tool access.
 
 ### 4. Send a one-off message via CLI
 
@@ -239,26 +241,23 @@ through `apt` instead.
 
 Full guide: [`docs/DESKTOP_APP.md`](docs/DESKTOP_APP.md).
 
-### Messaging channels (Telegram, Slack, …)
+### Outbound channels (Slack)
 
-Channels are how the agent reaches users on platforms they already
-use. Configure them in `~/.oxenclaw/config.yaml`:
+The dashboard and desktop client are the bidirectional chat surfaces.
+Slack is outbound-only — for cron alerts, agent-initiated pings, or
+any other notification the agent needs to push into a workspace
+channel. Configure in `~/.oxenclaw/config.yaml`:
 
 ```yaml
 channels:
-  telegram:
-    accounts:
-      - account_id: main         # bidirectional — DMs become InboundEnvelopes
   slack:
     accounts:
       - account_id: alerts       # outbound-only — for #alerts notifications
 ```
 
-Then drop the bot token at `~/.oxenclaw/credentials/<channel>/<account_id>.json`
-(mode 0600). After `oxenclaw gateway start` picks them up:
+Drop the bot token at `~/.oxenclaw/credentials/slack/<account_id>.json`
+(mode 0600). After `oxenclaw gateway start` picks it up:
 
-- **Telegram** — DM the bot; the agent runs full turns with tool use.
-  See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the deep dive.
 - **Slack** — push notifications via `chat.postMessage`. Walk-through
   for Enterprise Grid + corp proxies in [`docs/SLACK.md`](docs/SLACK.md).
 - **Custom channel** — ship a Python plugin with a
@@ -271,10 +270,10 @@ Then drop the bot token at `~/.oxenclaw/credentials/<channel>/<account_id>.json`
 
 ```
    ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐
-   │ Tauri desktop    │  │ Browser dashboard│  │ Channels         │
-   │ (Win .msi /      │  │ (built-in SPA at │  │ - Telegram (in)  │
-   │  Ubuntu .deb /   │  │  port 7331)      │  │ - Slack outbound │
-   │  .AppImage)      │  │                  │  │ - …pluggable     │
+   │ Tauri desktop    │  │ Browser dashboard│  │ Outbound         │
+   │ (Win .msi /      │  │ (built-in SPA at │  │ - Slack          │
+   │  Ubuntu .deb /   │  │  port 7331)      │  │ - …pluggable     │
+   │  .AppImage)      │  │                  │  │                  │
    └────────┬─────────┘  └─────────┬────────┘  └────────┬─────────┘
             │ WS+token, Origin-locked│                   │
             └───────────────┬────────┴───────────────────┘
@@ -304,7 +303,8 @@ Then drop the bot token at `~/.oxenclaw/credentials/<channel>/<account_id>.json`
 | `gateway/` | WS JSON-RPC server, HTTP routes (`/metrics`, `/healthz`, `/readyz`, dashboard), per-connection concurrency cap, bearer auth, graceful shutdown |
 | `agents/` | Agent registry, factory, `LocalAgent` (Ollama / vLLM / OpenAI-compatible), `PiAgent` (22 providers via `pi/`), `EchoAgent` |
 | `channels/` | Channel abstraction, router, runner supervisor (restart-on-error with backoff) |
-| `extensions/telegram/` | First-party Telegram plugin (aiogram) — file-for-file mirror of openclaw's TS module |
+| `extensions/slack/` | First-party Slack outbound plugin (Web API `chat.postMessage`) |
+| `extensions/dashboard/` | Built-in dashboard / desktop-client channel — agent replies surface via `chat.history` |
 | `pi/` | The pi-embedded-runner port — provider wrappers, run loop, compaction, persistence, system-prompt assembly, cache observability, tool runtime, MCP client |
 | `memory/` | sqlite-vec vector store + FTS5 + MMR + embedding cache |
 | `wiki/` | "Memory wiki" — durable, claim-tracked knowledge base |
@@ -415,7 +415,7 @@ Highlights:
 
 | Component | Status |
 |---|---|
-| Core gateway, agent runtime, Telegram channel | ✅ Production-ready |
+| Core gateway, agent runtime, dashboard + desktop chat surface | ✅ Production-ready |
 | Memory + sessions + wiki | ✅ |
 | MCP **client** (import existing servers) | ✅ |
 | Browser tools (BR-1, fail-closed Playwright) | ✅ Opt-in via `OXENCLAW_ENABLE_BROWSER=1` |
@@ -464,10 +464,12 @@ MIT.
 
 ## 한국어
 
-자체 호스팅 가능한 멀티 채널 AI 어시스턴트 게이트웨이. Python 구현.
-사용자 자신의 모델 (로컬 Ollama, Anthropic, 또는 `pi` 런너로 22개
-프로바이더) 을 메신저(Telegram 등)에 연결하고, 도구·스킬을 부여해서
-프로덕션급 관측성을 갖춘 장기 실행 서비스로 운영할 수 있다.
+자체 호스팅 가능한 사내용 AI 어시스턴트 게이트웨이. Python 구현.
+사용자 자신의 모델(로컬 Ollama, Anthropic, 또는 `pi` 런너로 22개
+프로바이더)을 번들 웹 대시보드 또는 네이티브 데스크톱 앱(Windows /
+Ubuntu)으로 사용하고, 도구·스킬을 부여한 뒤 특별한 알림은 Slack
+아웃바운드로 흘려보낸다 — 모두 프로덕션급 관측성을 갖춘 장기 실행
+서비스 위에서.
 
 > [openclaw](https://github.com/openclaw/openclaw)의 Python 포트 —
 > 서버/CLI 부분만 추려서 자체 호스팅이 가능하도록 강화·문서화한 버전.
@@ -477,7 +479,7 @@ MIT.
 | | |
 |---|---|
 | 🦙 **모델 자유** | 기본은 로컬 Ollama (도구 호출 가능한 모델 아무거나). Anthropic, OpenAI 호환, Bedrock, Google, Groq, DeepSeek, Mistral, Together, Fireworks 등 `pi` 통해 22개 프로바이더 지원. |
-| 🖼️ **멀티모달 기본 지원** | Telegram에서 사진을 보내거나 **대시보드 chat에서 📎 버튼으로 첨부**하면 vision 가능 모델(gemma4 / Claude 3+ / GPT-4o / Gemini 1.5+ / llava 등)이 그 자리에서 본다. Vision 미지원 모델은 텍스트 컨텍스트에 "이미지 N장 드롭됨" 안내가 자동으로 들어간다. |
+| 🖼️ **멀티모달 기본 지원** | 대시보드 chat 또는 데스크톱 앱에서 📎 버튼으로 사진을 첨부하면 vision 가능 모델(gemma4 / Claude 3+ / GPT-4o / Gemini 1.5+ / llava 등)이 그 자리에서 본다. Vision 미지원 모델은 텍스트 컨텍스트에 "이미지 N장 드롭됨" 안내가 자동으로 들어간다. |
 | 🖥️ **번들 대시보드 SPA** | 라이트/다크 테마 토글, Ctrl+K command palette, 세션 브라우저(리스트/미리보기/리셋/포크/아카이브), 모바일 반응형 drawer, in-app 로그인 게이트. 빌드 단계 없음, JSON-RPC 웹소켓과 동일 포트에서 서빙. |
 | 💻 **네이티브 데스크톱 앱 (Windows + Ubuntu)** | Tauri 기반 클라이언트 — Windows 11 (`.msi` / NSIS `.exe`), Ubuntu 22.04 + 24.04 (`.deb`), 범용 Linux (`.AppImage`). OS 키체인 토큰 저장, 네이티브 토스트 알림, 시스템 트레이, Origin 제한 WS upgrade, Ed25519 서명 자동 업데이트. [`docs/DESKTOP_APP.md`](docs/DESKTOP_APP.md) 참고. |
 | 🔌 **개방형 설계** | Plugin SDK + entry-point 자동 디스커버리. 새 채널·스킬은 `pip install`로 끝. |
@@ -568,23 +570,24 @@ agents:
       You are a helpful assistant.
 ```
 
-#### 2. (선택) Telegram 연결
+#### 2. (선택) Slack 아웃바운드 연결
 
-[@BotFather](https://t.me/botfather)에서 봇 토큰 발급 →
-`~/.oxenclaw/credentials/telegram/main.json`:
+특별한 경우(크론 알림, 에이전트 발신 푸시 등)에만 Slack으로 아웃바운드.
+워크스페이스 봇 토큰을 `~/.oxenclaw/credentials/slack/main.json`에
+저장:
 
 ```json
-{ "bot_token": "123456:ABC..." }
+{ "token": "xoxb-..." }
 ```
 
 `config.yaml`에 바인딩 추가:
 
 ```yaml
 channels:
-  telegram:
+  slack:
     accounts:
       - account_id: main
-        display_name: "Personal Bot"
+        display_name: "Workspace Alerts"
 ```
 
 #### 3. 게이트웨이 실행
@@ -612,7 +615,7 @@ URL 한 방으로 끝내고 싶으면 `http://127.0.0.1:7331/?token=<OXENCLAW_GA
 제거 (스크린샷·브라우저 히스토리 누출 방지). `/healthz`, `/readyz`,
 `/metrics`는 오케스트레이터 프로브용으로 항상 비인증 유지.
 
-Telegram DM을 보내면 로컬 모델이 도구를 사용해 답한다.
+대시보드 또는 데스크톱 앱에서 메시지를 보내면 로컬 모델이 도구를 사용해 답한다.
 
 #### 4. CLI에서 일회성 메시지
 
@@ -677,26 +680,22 @@ OS에 맞는 파일을 받는다:
 
 전체 가이드: [`docs/DESKTOP_APP.md`](docs/DESKTOP_APP.md).
 
-#### 메시징 채널 (Telegram, Slack, …)
+#### 아웃바운드 채널 (Slack)
 
-채널은 사용자가 평소 쓰는 플랫폼에서 에이전트와 대화하기 위한 통로.
+대시보드 / 데스크톱 앱이 양방향 chat surface. Slack은 아웃바운드
+전용 — cron 알림이나 에이전트 발신 푸시 같은 특별한 경우에만 사용.
 `~/.oxenclaw/config.yaml`에서 설정:
 
 ```yaml
 channels:
-  telegram:
-    accounts:
-      - account_id: main         # 양방향 — DM이 InboundEnvelope로 들어옴
   slack:
     accounts:
       - account_id: alerts       # 아웃바운드 전용 — #alerts 알림용
 ```
 
-봇 토큰은 `~/.oxenclaw/credentials/<channel>/<account_id>.json`
+봇 토큰은 `~/.oxenclaw/credentials/slack/<account_id>.json`
 (권한 0600) 에 저장. 게이트웨이 재시작 시 자동 로드:
 
-- **Telegram** — 봇에 DM 보내면 도구 사용 포함 풀 턴 실행. 자세한 흐름은
-  [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) 참고.
 - **Slack** — `chat.postMessage` 통한 알림 발송. Enterprise Grid +
   사내 프록시 셋업은 [`docs/SLACK.md`](docs/SLACK.md).
 - **커스텀 채널** — `oxenclaw.plugins` entry point 가진 Python 패키지
@@ -706,10 +705,10 @@ channels:
 
 ```
    ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐
-   │ Tauri 데스크톱앱 │  │ 브라우저 대시보드│  │ 채널              │
-   │ (Win .msi /      │  │ (번들 SPA,       │  │ - Telegram (양방향)│
-   │  Ubuntu .deb /   │  │  port 7331)      │  │ - Slack 아웃바운드│
-   │  .AppImage)      │  │                  │  │ - …플러그인 가능  │
+   │ Tauri 데스크톱앱 │  │ 브라우저 대시보드│  │ 아웃바운드        │
+   │ (Win .msi /      │  │ (번들 SPA,       │  │ - Slack           │
+   │  Ubuntu .deb /   │  │  port 7331)      │  │ - …플러그인 가능  │
+   │  .AppImage)      │  │                  │  │                   │
    └────────┬─────────┘  └─────────┬────────┘  └────────┬─────────┘
             │ WS+토큰, Origin 잠금│                     │
             └───────────────┬─────┴─────────────────────┘
@@ -739,7 +738,8 @@ channels:
 | `gateway/` | WS JSON-RPC 서버, HTTP 라우트, 연결당 동시성 한도, Bearer 인증, 그레이스풀 종료 |
 | `agents/` | 에이전트 레지스트리·팩토리, LocalAgent / PiAgent / EchoAgent |
 | `channels/` | 채널 추상화, 라우터, 슈퍼바이저(에러 시 백오프 재시작) |
-| `extensions/telegram/` | 1st-party Telegram 플러그인 (aiogram). openclaw TS 모듈을 파일 단위로 미러링 |
+| `extensions/slack/` | 1st-party Slack 아웃바운드 플러그인 (Web API `chat.postMessage`) |
+| `extensions/dashboard/` | 번들 dashboard / 데스크톱 클라이언트 채널 — 에이전트 답변은 `chat.history`로 surface |
 | `pi/` | pi-embedded-runner 포트 — 프로바이더 래퍼, 런 루프, 압축, 영속, 시스템 프롬프트 조립, 캐시 옵저버, 도구 런타임, MCP 클라이언트 |
 | `memory/` | sqlite-vec + FTS5 + MMR + 임베딩 캐시 |
 | `wiki/` | "memory wiki" — 영속 지식 베이스 |
@@ -840,7 +840,7 @@ discord = "my_pkg.discord_plugin:DISCORD_PLUGIN"
 
 | 구성 요소 | 상태 |
 |---|---|
-| 코어 게이트웨이, 에이전트 런타임, Telegram | ✅ 프로덕션 가능 |
+| 코어 게이트웨이, 에이전트 런타임, 대시보드 + 데스크톱 chat surface | ✅ 프로덕션 가능 |
 | 메모리 + 세션 + 위키 | ✅ |
 | MCP **클라이언트** (외부 서버 흡수) | ✅ |
 | 브라우저 도구 (BR-1, fail-closed Playwright) | ✅ `OXENCLAW_ENABLE_BROWSER=1` 옵트인 |

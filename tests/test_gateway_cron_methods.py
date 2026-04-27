@@ -28,7 +28,7 @@ def _dispatcher():  # type: ignore[no-untyped-def]
             agents={
                 "assistant": AgentConfig(
                     id="assistant",
-                    channels={"telegram": AgentChannelRouting(allow_from=[])},
+                    channels={"dashboard": AgentChannelRouting(allow_from=[])},
                 )
             }
         ),
@@ -48,7 +48,7 @@ def _create_params(**overrides):  # type: ignore[no-untyped-def]
     base = {
         "schedule": "*/5 * * * *",
         "agent_id": "assistant",
-        "channel": "telegram",
+        "channel": "dashboard",
         "account_id": "main",
         "chat_id": "42",
         "prompt": "ping",

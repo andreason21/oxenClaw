@@ -44,9 +44,9 @@ from oxenclaw.plugin_sdk.channel_contract import ChannelTarget, InboundEnvelope
 
 def _envelope(text: str) -> InboundEnvelope:
     return InboundEnvelope(
-        channel="telegram",
+        channel="dashboard",
         account_id="main",
-        target=ChannelTarget(channel="telegram", account_id="main", chat_id="42"),
+        target=ChannelTarget(channel="dashboard", account_id="main", chat_id="42"),
         sender_id="integration",
         text=text,
         received_at=time.time(),

@@ -1,8 +1,8 @@
 """Slack bot token resolution.
 
 Lookup order for a given account:
-1. `~/.oxenclaw/credentials/slack/<account_id>.json` — the same
-   CredentialStore Telegram uses, mode 0600.
+1. `~/.oxenclaw/credentials/slack/<account_id>.json` — the bundled
+   `CredentialStore`, mode 0600.
 2. `SLACK_BOT_TOKEN` env var (single-bot shortcut, only when the
    account is `main`).
 

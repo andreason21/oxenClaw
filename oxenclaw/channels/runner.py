@@ -5,8 +5,8 @@ if `monitor()` returns cleanly or raises, the runner sleeps with
 exponential backoff + jitter and reinvokes it. Shutdown is driven by
 `stop()` + task cancellation — `monitor()` must respect CancelledError.
 
-Generalises `oxenclaw.extensions.telegram.polling_runner.PollingRunner`
-to any channel that implements the SDK contract.
+Channel-agnostic supervisor for any plugin that implements the SDK
+`ChannelPlugin.monitor()` contract.
 """
 
 from __future__ import annotations

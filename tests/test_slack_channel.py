@@ -213,7 +213,7 @@ async def test_channel_is_outbound_only(monkeypatch) -> None:  # type: ignore[no
 async def test_channel_send_rejects_wrong_target_channel() -> None:
     ch = SlackChannel(token="xoxb-x")
     params = SendParams(
-        target=ChannelTarget(channel="telegram", account_id="a", chat_id="42"),
+        target=ChannelTarget(channel="dashboard", account_id="a", chat_id="42"),
         text="hi",
     )
     with pytest.raises(UserVisibleError):

@@ -54,7 +54,7 @@ async def test_roundtrip_and_event_push(router: Router) -> None:
                         "id": 1,
                         "method": "chat.send",
                         "params": {
-                            "channel": "telegram",
+                            "channel": "dashboard",
                             "account_id": "main",
                             "chat_id": "99",
                             "text": "hi",
@@ -109,7 +109,7 @@ async def test_request_shutdown_returns_serve_cleanly(router: Router) -> None:
                         "id": 1,
                         "method": "chat.send",
                         "params": {
-                            "channel": "telegram",
+                            "channel": "dashboard",
                             "account_id": "main",
                             "chat_id": "1",
                             "text": "hi",

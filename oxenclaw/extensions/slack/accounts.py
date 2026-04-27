@@ -1,8 +1,8 @@
 """Multi-account Slack channel registry.
 
 Constructs one SlackChannel per account declared in config, resolving
-tokens via SlackTokenResolver. Mirrors the Telegram pattern so the
-plugin loader behaviour is uniform.
+tokens via SlackTokenResolver. Follows the bundled-plugin loader pattern
+so the plugin loader behaviour is uniform.
 
 Each `accounts[].extra` may carry:
 - `base_url`: corp-internal Slack proxy override (default `https://slack.com/api`).

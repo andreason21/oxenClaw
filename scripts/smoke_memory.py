@@ -43,8 +43,8 @@ The user avoids dairy. Favourite dish is spicy tofu stew.
 """,
     "projects/oxenclaw.md": """# oxenClaw project
 
-Python port of the openclaw TypeScript monorepo. Phase B pilot ports the
-Telegram extension end-to-end.
+Python port of the openclaw TypeScript monorepo. Dashboard + desktop
+clients are the primary chat surface; Slack is outbound-only.
 
 ## Build system
 

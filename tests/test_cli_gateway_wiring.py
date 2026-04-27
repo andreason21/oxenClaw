@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -17,7 +17,13 @@ from oxenclaw.cli.gateway_cmd import (
 )
 from oxenclaw.config.paths import OxenclawPaths
 from oxenclaw.cron import CronJobStore, CronScheduler
-from oxenclaw.extensions.telegram.channel import TelegramChannel
+from oxenclaw.plugin_sdk.channel_contract import (
+    MonitorOpts,
+    ProbeOpts,
+    ProbeResult,
+    SendParams,
+    SendResult,
+)
 from oxenclaw.plugin_sdk.config_schema import (
     AgentChannelRouting,
     AgentConfig,
@@ -25,43 +31,48 @@ from oxenclaw.plugin_sdk.config_schema import (
 )
 
 
-@pytest.fixture()
-def mocked_bot_factory(monkeypatch):  # type: ignore[no-untyped-def]
-    created: list[MagicMock] = []
+class _StubChannel:
+    """Minimal ChannelPlugin used to drive monitor + send wiring in tests."""
 
-    def _fake(token: str) -> MagicMock:
-        bot = MagicMock()
-        bot.session = MagicMock()
-        bot.session.close = AsyncMock()
-        sent = MagicMock()
-        sent.message_id = 1
-        sent.date = datetime(2026, 4, 25, tzinfo=UTC)
-        bot.send_message = AsyncMock(return_value=sent)
-        created.append(bot)
-        return bot
+    def __init__(self, *, channel_id: str = "stub", account_id: str = "main") -> None:
+        self.id = channel_id
+        self.account_id = account_id
+        self.sent: list[SendParams] = []
 
-    monkeypatch.setattr("oxenclaw.extensions.telegram.channel.create_bot", _fake)
-    return created
+    async def send(self, params: SendParams) -> SendResult:
+        self.sent.append(params)
+        return SendResult(message_id="1", timestamp=0.0)
+
+    async def monitor(self, opts: MonitorOpts) -> None:
+        # Idle forever — the supervisor cancels via task.cancel().
+        await asyncio.Event().wait()
+
+    async def probe(self, opts: ProbeOpts) -> ProbeResult:
+        return ProbeResult(ok=True, account_id=opts.account_id)
+
+    async def aclose(self) -> None:
+        return None
 
 
-def _config_one_account() -> RootConfig:
+def _config_one_account(channel_id: str = "stub") -> RootConfig:
     return RootConfig(
         agents={
             "echo": AgentConfig(
                 id="echo",
-                channels={"telegram": AgentChannelRouting(allow_from=[])},
+                channels={channel_id: AgentChannelRouting(allow_from=[])},
             )
         }
     )
 
 
-def _setup_gateway(tmp_path, mocked_bot_factory):  # type: ignore[no-untyped-def]
+def _setup_gateway(tmp_path):  # type: ignore[no-untyped-def]
     config = _config_one_account()
     agents = AgentRegistry()
     agents.register(EchoAgent())
 
     cr = ChannelRouter()
-    cr.register("telegram", "main", TelegramChannel(token="t", account_id="main"))
+    stub = _StubChannel(channel_id="stub", account_id="main")
+    cr.register("stub", "main", stub)
 
     dispatcher = Dispatcher(agents=agents, config=config, send=cr.send)
     cron = CronScheduler(store=CronJobStore(path=tmp_path / "cron.json"), dispatcher=dispatcher)
@@ -77,11 +88,11 @@ def _setup_gateway(tmp_path, mocked_bot_factory):  # type: ignore[no-untyped-def
         approvals=approvals,
         paths_home=paths,
     )
-    return router, cr, agents, cron, approvals
+    return router, cr, agents, cron, approvals, stub
 
 
-async def test_build_router_registers_every_method_group(tmp_path, mocked_bot_factory) -> None:  # type: ignore[no-untyped-def]
-    router, _, _, _, _ = _setup_gateway(tmp_path, mocked_bot_factory)
+async def test_build_router_registers_every_method_group(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    router, *_ = _setup_gateway(tmp_path)
     for name in [
         "chat.send",
         "chat.history",
@@ -106,17 +117,15 @@ async def test_build_router_registers_every_method_group(tmp_path, mocked_bot_fa
         assert router.has(name), f"missing: {name}"
 
 
-async def test_chat_send_runs_dispatcher_through_channel_router(
-    tmp_path, mocked_bot_factory
-) -> None:  # type: ignore[no-untyped-def]
-    router, _, _, _, _ = _setup_gateway(tmp_path, mocked_bot_factory)
+async def test_chat_send_runs_dispatcher_through_channel_router(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    router, _cr, _agents, _cron, _appr, stub = _setup_gateway(tmp_path)
     resp = await router.dispatch(
         {
             "jsonrpc": "2.0",
             "id": 1,
             "method": "chat.send",
             "params": {
-                "channel": "telegram",
+                "channel": "stub",
                 "account_id": "main",
                 "chat_id": "42",
                 "text": "hello",
@@ -125,8 +134,8 @@ async def test_chat_send_runs_dispatcher_through_channel_router(
     )
     assert resp.error is None
     assert resp.result["message_id"] == "1"
-    mocked_bot_factory[0].send_message.assert_awaited_once()
-    assert mocked_bot_factory[0].send_message.call_args.kwargs["text"] == "echo: hello"
+    assert len(stub.sent) == 1
+    assert stub.sent[0].text == "echo: hello"
 
 
 async def test_outbound_only_channel_skips_monitor_supervisor(tmp_path) -> None:  # type: ignore[no-untyped-def]
@@ -135,13 +144,15 @@ async def test_outbound_only_channel_skips_monitor_supervisor(tmp_path) -> None:
     Slack channel sets this so calling .monitor() (NotImplementedError)
     isn't tripped by the supervisor on every restart.
     """
-    from oxenclaw.cli.gateway_cmd import _supervise_monitors
     from oxenclaw.extensions.slack.channel import SlackChannel
 
     agents = AgentRegistry()
     agents.register(EchoAgent())
     cr = ChannelRouter()
-    slack_ch = SlackChannel(token="xoxb-x", account_id="alerts")
+    fake_client = MagicMock()
+    fake_client._call = AsyncMock(return_value={"ok": True})
+    fake_client.aclose = AsyncMock()
+    slack_ch = SlackChannel(token="xoxb-x", account_id="alerts", client=fake_client)
     cr.register("slack", "alerts", slack_ch)
     dispatcher = Dispatcher(agents=agents, config=RootConfig(), send=cr.send)
 
@@ -151,33 +162,31 @@ async def test_outbound_only_channel_skips_monitor_supervisor(tmp_path) -> None:
 
 
 async def test_chat_send_passes_media_into_inbound_envelope(
-    tmp_path, mocked_bot_factory, monkeypatch
+    tmp_path, monkeypatch
 ) -> None:  # type: ignore[no-untyped-def]
     """Dashboard image-upload path: `chat.send` accepts a `media` array
     and the items reach the dispatcher's InboundEnvelope unchanged."""
-    router, _, _, _, _ = _setup_gateway(tmp_path, mocked_bot_factory)
+    router, *_ = _setup_gateway(tmp_path)
 
-    # Capture the envelope the dispatcher receives. Patch on the
-    # Dispatcher class so we don't need to dig out the live instance.
     captured = {}
-    from oxenclaw.agents.dispatch import Dispatcher
+    from oxenclaw.agents.dispatch import Dispatcher as _Dispatcher
 
-    real = Dispatcher.dispatch_with_outcome
+    real = _Dispatcher.dispatch_with_outcome
 
     async def _spy(self, envelope):  # type: ignore[no-untyped-def]
         captured["envelope"] = envelope
         return await real(self, envelope)
 
-    monkeypatch.setattr(Dispatcher, "dispatch_with_outcome", _spy)
+    monkeypatch.setattr(_Dispatcher, "dispatch_with_outcome", _spy)
 
-    tiny_jpeg = "data:image/jpeg;base64,/9j/4AAQSkZJRg=="  # not a real JPEG, just shape
+    tiny_jpeg = "data:image/jpeg;base64,/9j/4AAQSkZJRg=="
     resp = await router.dispatch(
         {
             "jsonrpc": "2.0",
             "id": 1,
             "method": "chat.send",
             "params": {
-                "channel": "telegram",
+                "channel": "stub",
                 "account_id": "main",
                 "chat_id": "42",
                 "text": "describe",
@@ -202,15 +211,13 @@ async def test_chat_send_passes_media_into_inbound_envelope(
     assert env.media[0].filename == "snap.jpg"
 
 
-async def test_chat_send_unrouted_returns_local_ok_with_warning(
-    tmp_path, mocked_bot_factory
-) -> None:  # type: ignore[no-untyped-def]
-    # Fresh agents + empty channel router → no telegram:main registered.
+async def test_chat_send_unrouted_returns_local_ok_with_warning(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    # Fresh agents + empty channel router → no dashboard:main registered.
     config = RootConfig(
         agents={
             "echo": AgentConfig(
                 id="echo",
-                channels={"telegram": AgentChannelRouting(allow_from=[])},
+                channels={"dashboard": AgentChannelRouting(allow_from=[])},
             )
         }
     )
@@ -236,7 +243,7 @@ async def test_chat_send_unrouted_returns_local_ok_with_warning(
             "id": 1,
             "method": "chat.send",
             "params": {
-                "channel": "telegram",
+                "channel": "dashboard",
                 "account_id": "main",
                 "chat_id": "42",
                 "text": "hi",
@@ -250,16 +257,13 @@ async def test_chat_send_unrouted_returns_local_ok_with_warning(
     assert resp.result["status"] == "ok"
     assert resp.result["message_id"] == "local"
     assert resp.result["agent_id"] == "echo"
-    # The send failure surfaces as a non-blocking reason hint.
     assert resp.result["reason"] is not None
-    assert "telegram" in resp.result["reason"]
+    assert "dashboard" in resp.result["reason"]
 
 
 async def test_supervise_monitors_spawns_and_cancels_tasks(
-    tmp_path, mocked_bot_factory, monkeypatch
+    tmp_path, monkeypatch
 ) -> None:  # type: ignore[no-untyped-def]
-    spawned_tasks = []
-
     class _FakeRunner:
         def __init__(self, channel, opts, **kwargs):  # type: ignore[no-untyped-def]
             self.channel = channel
@@ -267,8 +271,6 @@ async def test_supervise_monitors_spawns_and_cancels_tasks(
             self.stopped = False
 
         async def run_forever(self) -> None:
-            import asyncio
-
             while not self.stopped:
                 await asyncio.sleep(0.01)
 
@@ -278,8 +280,8 @@ async def test_supervise_monitors_spawns_and_cancels_tasks(
     monkeypatch.setattr("oxenclaw.cli.gateway_cmd.ChannelRunner", _FakeRunner)
 
     cr = ChannelRouter()
-    cr.register("telegram", "main", TelegramChannel(token="t", account_id="main"))
-    cr.register("telegram", "secondary", TelegramChannel(token="t", account_id="secondary"))
+    cr.register("stub", "main", _StubChannel(channel_id="stub", account_id="main"))
+    cr.register("stub", "secondary", _StubChannel(channel_id="stub", account_id="secondary"))
 
     agents = AgentRegistry()
     agents.register(EchoAgent())
@@ -287,7 +289,7 @@ async def test_supervise_monitors_spawns_and_cancels_tasks(
         agents={
             "echo": AgentConfig(
                 id="echo",
-                channels={"telegram": AgentChannelRouting(allow_from=[])},
+                channels={"stub": AgentChannelRouting(allow_from=[])},
             )
         }
     )
@@ -295,11 +297,7 @@ async def test_supervise_monitors_spawns_and_cancels_tasks(
 
     async with _supervise_monitors(cr, dispatcher) as runners:
         assert len(runners) == 2
-        import asyncio
-
-        # All monitor tasks must be alive at this point.
         await asyncio.sleep(0)
-        spawned_tasks.extend(asyncio.all_tasks())
 
 
 def test_build_channel_router_uses_plugin_discovery(monkeypatch, tmp_path) -> None:  # type: ignore[no-untyped-def]

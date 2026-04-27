@@ -24,7 +24,7 @@ def _populate_home(home: Path) -> None:
     (home / "config.yaml").write_text("channels: {}\n")
     (home / "mcp.json").write_text(json.dumps({"mcpServers": {"x": {"command": "echo"}}}))
     (home / "approvals.json").write_text(json.dumps({"pending": []}))
-    creds = home / "credentials" / "telegram"
+    creds = home / "credentials" / "dashboard"
     creds.mkdir(parents=True, exist_ok=True)
     (creds / "main.json").write_text(json.dumps({"token": "abc"}))
     cron = home / "cron"
@@ -55,7 +55,7 @@ def test_create_backup_produces_valid_archive(tmp_path: Path):
     # All expected files present in manifest
     assert "config.yaml" in result.manifest.files
     assert "mcp.json" in result.manifest.files
-    assert "credentials/telegram/main.json" in result.manifest.files
+    assert "credentials/dashboard/main.json" in result.manifest.files
     assert "memory.db" in result.manifest.files
     # Archive is a valid tar.gz with MANIFEST.json
     with tarfile.open(result.archive_path, "r:gz") as tar:
@@ -100,7 +100,7 @@ def test_restore_reconstructs_home_dir(tmp_path: Path):
     assert rr.target == restore_dir
     assert restore_dir.exists()
     assert (restore_dir / "config.yaml").read_text() == "channels: {}\n"
-    assert (restore_dir / "credentials/telegram/main.json").read_text() == json.dumps(
+    assert (restore_dir / "credentials/dashboard/main.json").read_text() == json.dumps(
         {"token": "abc"}
     )
     # SQLite snapshot survived: rows still there.

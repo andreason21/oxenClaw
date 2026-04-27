@@ -2,8 +2,9 @@
 
 Port of openclaw `src/plugin-sdk/reply-runtime.ts` and `reply-dispatch-runtime.ts`.
 
-Long replies get split into channel-compatible chunks (e.g., Telegram's 4096 char
-limit). Chunks preserve code blocks and Markdown semantics where possible.
+Long replies get split into channel-compatible chunks (e.g., Slack's 40 000
+char block limit). Chunks preserve code blocks and Markdown semantics where
+possible.
 """
 
 from __future__ import annotations

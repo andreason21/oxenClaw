@@ -31,9 +31,9 @@ from oxenclaw.tools_pkg.canvas import default_canvas_tools
 
 def _envelope(text: str) -> InboundEnvelope:
     return InboundEnvelope(
-        channel="telegram",
+        channel="dashboard",
         account_id="main",
-        target=ChannelTarget(channel="telegram", account_id="main", chat_id="42"),
+        target=ChannelTarget(channel="dashboard", account_id="main", chat_id="42"),
         sender_id="canvas-probe",
         text=text,
         received_at=time.time(),

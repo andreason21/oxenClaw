@@ -24,7 +24,7 @@ from oxenclaw.tools_pkg.message_tool import message_tool
 
 
 class _FakeChannel:
-    id = "telegram"
+    id = "dashboard"
 
     def __init__(self) -> None:
         self.sent: list[SendParams] = []
@@ -63,7 +63,7 @@ async def test_cron_tool_add_then_list_then_remove(tmp_path: Path) -> None:
     tool = cron_tool(
         sch,
         default_agent_id="echo",
-        default_channel="telegram",
+        default_channel="dashboard",
         default_account_id="main",
         default_chat_id="42",
     )
@@ -128,10 +128,10 @@ async def test_cron_tool_remove_requires_id(tmp_path: Path) -> None:
 async def test_message_tool_sends_via_router() -> None:
     router = ChannelRouter()
     fake = _FakeChannel()
-    router.register("telegram", "main", fake)
+    router.register("dashboard", "main", fake)
     tool = message_tool(router)
     out = await tool.execute(
-        {"channel": "telegram", "account_id": "main", "chat_id": "42", "text": "hi from agent"}
+        {"channel": "dashboard", "account_id": "main", "chat_id": "42", "text": "hi from agent"}
     )
     assert "sent message_id=m1" in out
     assert fake.sent and fake.sent[0].text == "hi from agent"
@@ -141,7 +141,7 @@ async def test_message_tool_surfaces_no_route_error() -> None:
     router = ChannelRouter()  # nothing registered
     tool = message_tool(router)
     out = await tool.execute(
-        {"channel": "telegram", "account_id": "main", "chat_id": "42", "text": "hi"}
+        {"channel": "dashboard", "account_id": "main", "chat_id": "42", "text": "hi"}
     )
     assert "message error" in out
     assert "no channel plugin" in out
@@ -150,11 +150,11 @@ async def test_message_tool_surfaces_no_route_error() -> None:
 async def test_message_tool_passes_thread_and_reply_meta() -> None:
     router = ChannelRouter()
     fake = _FakeChannel()
-    router.register("telegram", "main", fake)
+    router.register("dashboard", "main", fake)
     tool = message_tool(router)
     await tool.execute(
         {
-            "channel": "telegram",
+            "channel": "dashboard",
             "account_id": "main",
             "chat_id": "42",
             "text": "ping",

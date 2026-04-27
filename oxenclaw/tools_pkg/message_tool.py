@@ -19,7 +19,7 @@ from oxenclaw.plugin_sdk.error_runtime import UserVisibleError
 
 
 class _MessageArgs(BaseModel):
-    channel: str = Field(..., description="Channel id (e.g. 'telegram').")
+    channel: str = Field(..., description="Channel id (e.g. 'slack', 'dashboard').")
     account_id: str = Field(..., description="Account id within the channel.")
     chat_id: str = Field(..., description="Chat / room / user id.")
     text: str = Field(..., description="Message body to send.")

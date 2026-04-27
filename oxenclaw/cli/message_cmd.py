@@ -14,7 +14,7 @@ app = typer.Typer(help="Send messages via a running gateway.", no_args_is_help=T
 @app.command("send")
 def send(
     text: str = typer.Argument(..., help="Message text."),
-    channel: str = typer.Option("telegram", help="Channel id."),
+    channel: str = typer.Option("dashboard", help="Channel id."),
     account_id: str = typer.Option("main", help="Account id."),
     chat_id: str = typer.Option(..., help="Destination chat id."),
     thread_id: str | None = typer.Option(None, help="Thread/topic id (optional)."),

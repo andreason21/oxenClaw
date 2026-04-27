@@ -69,9 +69,9 @@ def _paths(tmp_path) -> OxenclawPaths:  # type: ignore[no-untyped-def]
 
 def _inbound(text: str = "hello") -> InboundEnvelope:
     return InboundEnvelope(
-        channel="telegram",
+        channel="dashboard",
         account_id="main",
-        target=ChannelTarget(channel="telegram", account_id="main", chat_id="42"),
+        target=ChannelTarget(channel="dashboard", account_id="main", chat_id="42"),
         sender_id="user-1",
         text=text,
         received_at=0.0,

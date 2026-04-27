@@ -1,18 +1,21 @@
 # Example oxenclaw config. Copy to ~/.oxenclaw/config.yaml.
 #
-# Credentials go in a sibling directory and are never stored in this file:
-#   ~/.oxenclaw/credentials/telegram/<account_id>.json  →  {"token": "..."}
+# Chat surface: the bundled `dashboard` channel (web SPA + native desktop
+# clients on Windows/Ubuntu) is registered automatically and needs no config.
 #
-# A single-bot shortcut: leave the `main` account and export
-# TELEGRAM_BOT_TOKEN in your shell instead of writing credentials/telegram/main.json.
+# Slack is outbound-only — used for special-case alerts. Credentials live in
+# a sibling directory and are never stored in this file:
+#   ~/.oxenclaw/credentials/slack/<account_id>.json  →  {"token": "xoxb-..."}
+#
+# Single-workspace shortcut: leave the `main` account and export
+# SLACK_BOT_TOKEN in your shell instead of writing credentials/slack/main.json.
 
 channels:
-  telegram:
-    dm_policy: pairing
+  # Outbound-only Slack. Remove this block if you don't need Slack alerts.
+  slack:
     accounts:
       - account_id: main
-        display_name: "Personal Bot"
-    allow_from: []
+        display_name: "Workspace Alerts"
 
 agents:
   # Default provider is `local` — a self-hosted OpenAI-compatible server
@@ -23,13 +26,13 @@ agents:
     provider: local
     model: gemma4:latest
     channels:
-      telegram:
+      dashboard:
         allow_from: []
   echo:
     id: echo
     provider: echo
     channels:
-      telegram:
+      dashboard:
         allow_from: []
 
 # ClawHub registries — list every "verified" mirror you want skills installed

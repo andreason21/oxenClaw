@@ -3,7 +3,8 @@
 A `PluginEntry` pairs a `Manifest` (the declarative control-plane data)
 with a `factory` callable that builds a channel instance bound to a
 specific account. Third-party plugins populate this via entry points;
-bundled plugins (telegram) register themselves from `oxenclaw.extensions.*`.
+bundled plugins (slack, dashboard) register themselves from
+`oxenclaw.extensions.*`.
 """
 
 from __future__ import annotations

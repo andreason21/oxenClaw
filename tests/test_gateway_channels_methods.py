@@ -7,37 +7,33 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from oxenclaw.channels import ChannelRouter
-from oxenclaw.extensions.telegram.channel import TelegramChannel
+from oxenclaw.extensions.slack.channel import SlackChannel
 from oxenclaw.gateway.channels_methods import register_channels_methods
 from oxenclaw.gateway.router import Router
 
 
+def _slack_channel(account_id: str) -> SlackChannel:
+    client = MagicMock()
+    client._call = AsyncMock(return_value={"ok": True, "team": "acme", "user": "bot"})
+    client.aclose = AsyncMock()
+    return SlackChannel(token="xoxb-test", account_id=account_id, client=client)
+
+
 @pytest.fixture()
-def patched_bot(monkeypatch):  # type: ignore[no-untyped-def]
-    def _fake(token: str) -> MagicMock:
-        bot = MagicMock()
-        bot.session = MagicMock()
-        bot.session.close = AsyncMock()
-        me = MagicMock()
-        me.username = "bot_user"
-        me.full_name = "Bot User"
-        bot.get_me = AsyncMock(return_value=me)
-        return bot
-
-    monkeypatch.setattr("oxenclaw.extensions.telegram.channel.create_bot", _fake)
-    return monkeypatch
+def patched_slack() -> None:
+    return None
 
 
-async def test_list_groups_accounts_by_channel(patched_bot) -> None:  # type: ignore[no-untyped-def]
+async def test_list_groups_accounts_by_channel() -> None:
     cr = ChannelRouter()
-    cr.register("telegram", "main", TelegramChannel(token="t", account_id="main"))
-    cr.register("telegram", "secondary", TelegramChannel(token="t", account_id="secondary"))
+    cr.register("slack", "main", _slack_channel("main"))
+    cr.register("slack", "secondary", _slack_channel("secondary"))
 
     router = Router()
     register_channels_methods(router, cr)
 
     resp = await router.dispatch({"jsonrpc": "2.0", "id": 1, "method": "channels.list"})
-    assert resp.result == {"telegram": ["main", "secondary"]}
+    assert resp.result == {"slack": ["main", "secondary"]}
 
 
 async def test_list_empty_registry() -> None:
@@ -47,9 +43,9 @@ async def test_list_empty_registry() -> None:
     assert resp.result == {}
 
 
-async def test_probe_happy(patched_bot) -> None:  # type: ignore[no-untyped-def]
+async def test_probe_happy() -> None:
     cr = ChannelRouter()
-    cr.register("telegram", "main", TelegramChannel(token="t", account_id="main"))
+    cr.register("slack", "main", _slack_channel("main"))
     router = Router()
     register_channels_methods(router, cr)
     resp = await router.dispatch(
@@ -57,11 +53,11 @@ async def test_probe_happy(patched_bot) -> None:  # type: ignore[no-untyped-def]
             "jsonrpc": "2.0",
             "id": 1,
             "method": "channels.probe",
-            "params": {"channel": "telegram", "account_id": "main"},
+            "params": {"channel": "slack", "account_id": "main"},
         }
     )
     assert resp.result["ok"] is True
-    assert resp.result["display_name"] == "bot_user"
+    assert resp.result["display_name"] == "bot@acme"
 
 
 async def test_probe_unknown_binding() -> None:

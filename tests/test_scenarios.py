@@ -123,9 +123,9 @@ def _auth(provider: str) -> InMemoryAuthStorage:
 
 def _inbound(text: str, *, chat_id: str = "42") -> InboundEnvelope:
     return InboundEnvelope(
-        channel="telegram",
+        channel="dashboard",
         account_id="main",
-        target=ChannelTarget(channel="telegram", account_id="main", chat_id=chat_id),
+        target=ChannelTarget(channel="dashboard", account_id="main", chat_id=chat_id),
         sender_id="user-1",
         text=text,
         received_at=0.0,

@@ -22,6 +22,7 @@ pi pipeline by registering a `PiAgent` instead.
 
 from __future__ import annotations
 
+import time
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -42,6 +43,7 @@ from oxenclaw.pi import (
     ModelRegistry,
     SessionManager,
     TextContent,
+    ToolUseBlock,
     UserMessage,
     default_registry,
     resolve_api,
@@ -269,6 +271,7 @@ class PiAgent:
 
         pre_prompt_count = len(session.messages)
 
+        ts_turn_start = time.time()
         result = await run_agent_turn(
             model=self._model,
             api=api,
@@ -318,6 +321,62 @@ class PiAgent:
 
         await self._sessions.save(session)
 
+        # Build a lookup of tool execution results keyed by tool-use id so we
+        # can correlate ToolUseBlock entries in appended messages with their
+        # timing data. `result.tool_executions` is populated by the run loop;
+        # use getattr() because some test mocks return a SimpleNamespace
+        # that omits the field.
+        exec_by_id = {
+            e.id: e for e in (getattr(result, "tool_executions", None) or [])
+        }
+
+        # Walk appended messages to persist tool-call timing into the dashboard
+        # history. We use `ts_turn_start` (wall clock captured before the run)
+        # as the anchor; per-tool offsets are derived from `duration_seconds`
+        # in ToolExecutionResult (monotonic, sequential within the turn). Since
+        # pi-runtime does not expose before/after_tool hooks, we reconstruct
+        # wall-clock start/end by accumulating durations in the order tools
+        # executed. Tool results come from result.tool_executions, not from
+        # ToolResultMessage blocks, so we don't need to parse the message list
+        # for result content.
+        accumulated_seconds = 0.0
+        for msg in result.appended_messages:
+            if not isinstance(msg, AssistantMessage):
+                continue
+            tool_uses = [b for b in msg.content if isinstance(b, ToolUseBlock)]
+            if not tool_uses:
+                continue
+            tool_calls_payload: list[dict[str, Any]] = []
+            for tu in tool_uses:
+                exec_result = exec_by_id.get(tu.id)
+                dur = exec_result.duration_seconds if exec_result else 0.0
+                ts_start = ts_turn_start + accumulated_seconds
+                ts_end = ts_start + dur
+                accumulated_seconds += dur
+                status = "error" if (exec_result and exec_result.is_error) else "ok"
+                raw_output = (exec_result.output if exec_result else "") or ""
+                tool_calls_payload.append(
+                    {
+                        "id": tu.id,
+                        "name": tu.name,
+                        "args": tu.input,
+                        "started_at": ts_start,
+                        "ended_at": ts_end,
+                        "status": status,
+                        "output_preview": raw_output[:200],
+                    }
+                )
+            text_parts_tc = [b.text for b in msg.content if isinstance(b, TextContent)]
+            assistant_text_tc = "\n".join(p for p in text_parts_tc if p).strip()
+            dashboard_history.append(
+                {
+                    "role": "assistant",
+                    "content": assistant_text_tc,
+                    "tool_calls": tool_calls_payload,
+                }
+            )
+        dashboard_history.save()
+
         # Emit final text chunked for channel limits.
         if isinstance(result.final_message, AssistantMessage):
             text_parts = [
@@ -326,8 +385,16 @@ class PiAgent:
             reply = "\n".join(p for p in text_parts if p).strip()
             if not reply:
                 return
-            dashboard_history.append({"role": "assistant", "content": reply})
-            dashboard_history.save()
+            # Only append the final assistant text message if it doesn't already
+            # have tool_calls (i.e. if it was purely a text turn or the final
+            # answer after tools). Avoid duplicating messages already appended
+            # above in the tool-call walk.
+            tool_uses_in_final = [
+                b for b in result.final_message.content if isinstance(b, ToolUseBlock)
+            ]
+            if not tool_uses_in_final:
+                dashboard_history.append({"role": "assistant", "content": reply})
+                dashboard_history.save()
             for chunk in chunk_text(reply, self._chunk_limit):
                 yield SendParams(target=inbound.target, text=chunk)
 

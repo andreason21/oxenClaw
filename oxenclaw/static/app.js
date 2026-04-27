@@ -411,6 +411,18 @@ const ChatState = {
     localStorage.setItem("samp.chatId", this.chatId);
     localStorage.setItem("samp.threadId", this.threadId);
   },
+  // Generate a fresh `chat_id` and clear `thread_id`, leaving agent/
+  // channel/account untouched. PiAgent's `_ensure_session` creates a
+  // brand-new ConversationHistory the first time a message is sent
+  // against this chat-id, so this is all that's needed to "start a
+  // new chat" — no backend RPC required.
+  newChat() {
+    const stamp = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14);
+    const rand = Math.random().toString(16).slice(2, 6);
+    this.chatId = `chat-${stamp}-${rand}`;
+    this.threadId = "";
+    this.save();
+  },
 };
 
 const ChatView = {
@@ -462,6 +474,14 @@ const ChatView = {
     const textarea = el("textarea", { placeholder: "type a message…\nCtrl+Enter to send" });
     const sendBtn = el("button", { class: "btn btn-primary" }, "Send");
     const clearBtn = el("button", { class: "btn btn-danger btn-sm", onclick: () => clearHistory() }, "Clear");
+    // "+ New chat" — fresh chat-id, fresh ConversationHistory on first send.
+    // Listed first in the topbar actions row so it's the most prominent
+    // affordance for "start a new conversation" (operator's request).
+    const newChatBtn = el("button", {
+      class: "btn btn-sm",
+      title: "Start a new chat (Ctrl+Shift+N)",
+      onclick: () => startNewChat({ inputs }),
+    }, "+ New chat");
 
     // Image attach: hidden file input + 📎 button + thumbnail strip.
     // Files are read as data URIs (`data:image/...;base64,...`) and shipped
@@ -534,7 +554,7 @@ const ChatView = {
     compose.append(attachInput, attachBtn, textarea, sendBtn);
     right.insertBefore(thumbs, compose);
     renderThumbs();
-    actions.append(clearBtn);
+    actions.append(newChatBtn, clearBtn);
 
     function labelled(name, input) {
       const wrap = el("div", { class: "field", style: "margin: 0; flex: 1;" });
@@ -633,6 +653,21 @@ const ChatView = {
       Toast.success("History cleared");
     }
 
+    // Start a fresh chat: pick a new chat-id, sync the chat-target
+    // inputs, refresh the stream pane, focus the compose box. PiAgent
+    // creates the matching ConversationHistory file lazily on first
+    // chat.send so there's no setup RPC needed.
+    async function startNewChat({ inputs }) {
+      ChatState.newChat();
+      if (inputs && inputs.chatId) inputs.chatId.value = ChatState.chatId;
+      if (inputs && inputs.threadId) inputs.threadId.value = ChatState.threadId;
+      await refresh();
+      try { await loadSessions(); } catch { /* sessions panel optional */ }
+      const ta = document.querySelector(".chat-compose textarea");
+      if (ta) ta.focus();
+      Toast.info("New chat started", `chat_id = ${ChatState.chatId}`);
+    }
+
     async function loadSessions() {
       try {
         const data = await Rpc.call("chat.list_sessions", { agent_id: ChatState.agentId });
@@ -688,6 +723,21 @@ const ChatView = {
       }
     }
 
+    // Listen for "new chat" events triggered from outside the ChatView
+    // (Ctrl+Shift+N global shortcut, command palette). The shortcut
+    // already mutates ChatState; we just need to re-sync the inputs
+    // and refresh. ChatView's render is re-run on hashchange so this
+    // listener naturally lives until the next view swap; bindShortcuts
+    // dispatches the event AFTER potentially navigating to chat, so
+    // the freshly-rendered handler always sees it.
+    const onExternalNewChat = () => {
+      for (const f of fields) inputs[f].value = ChatState[f] ?? "";
+      refresh();
+      const ta = document.querySelector(".chat-compose textarea");
+      if (ta) ta.focus();
+    };
+    window.addEventListener("samp:new-chat", onExternalNewChat);
+
     function renderStream(messages) {
       stream.innerHTML = "";
       for (const m of messages) {
@@ -719,7 +769,16 @@ const ChatView = {
           body.textContent = text;
         }
         if (text) wrap.append(body);
-        // Tool calls inline summary.
+        // PiAgent persists tool calls with timing as `m.tool_calls`:
+        //   [{ id, name, args, started_at, ended_at, status, output_preview }]
+        // Render each as an expandable card with tool name + elapsed ms.
+        if (Array.isArray(m.tool_calls) && m.tool_calls.length) {
+          for (const t of m.tool_calls) {
+            wrap.append(renderToolCallCard(t));
+          }
+        }
+        // Older schema (LocalAgent / inline content blocks) keeps using
+        // the simple summary form below.
         if (Array.isArray(m.content)) {
           for (const b of m.content) {
             if (b.type === "tool_use") {
@@ -764,6 +823,44 @@ const ChatView = {
       return JSON.stringify(content);
     }
 
+    // Render an expandable tool-call card for PiAgent's tool_calls schema.
+    // Shape: { id, name, args, started_at, ended_at, status, output_preview }
+    // The summary line shows tool name + elapsed (ms or s) + status icon;
+    // clicking the row toggles a details panel with the args JSON and the
+    // output preview. Mirrors openclaw's tool-cards.ts visual idiom.
+    function renderToolCallCard(t) {
+      const elapsedMs = (typeof t.started_at === "number" && typeof t.ended_at === "number")
+        ? Math.max(0, (t.ended_at - t.started_at) * 1000) : null;
+      const elapsedTxt = elapsedMs == null
+        ? "—"
+        : (elapsedMs >= 1000 ? `${(elapsedMs / 1000).toFixed(2)}s` : `${Math.round(elapsedMs)}ms`);
+      const statusIcon = t.status === "error" ? "⚠" : t.status === "ok" ? "✓" : "•";
+      const card = el("details", { class: `tool-call-card status-${t.status || "unknown"}` });
+      const summary = el("summary", { class: "tool-call-card__summary" });
+      summary.append(
+        el("span", { class: "tool-call-card__icon" }, "🔧"),
+        el("span", { class: "tool-call-card__name" }, t.name || "(unnamed tool)"),
+        el("span", { class: "tool-call-card__elapsed" }, elapsedTxt),
+        el("span", { class: "tool-call-card__status" }, statusIcon),
+      );
+      card.append(summary);
+      const body = el("div", { class: "tool-call-card__body" });
+      if (t.args !== undefined) {
+        body.append(
+          el("div", { class: "tool-call-card__label" }, "args"),
+          el("pre", { class: "tool-call-card__pre" }, JSON.stringify(t.args, null, 2)),
+        );
+      }
+      if (t.output_preview) {
+        body.append(
+          el("div", { class: "tool-call-card__label" }, "output preview"),
+          el("pre", { class: "tool-call-card__pre" }, t.output_preview),
+        );
+      }
+      card.append(body);
+      return card;
+    }
+
     let pollCount = 0;
     function startPolling() {
       if (polling) return;
@@ -781,7 +878,11 @@ const ChatView = {
 
     await refresh();
 
-    return () => { alive = false; stopPolling(); };
+    return () => {
+      alive = false;
+      stopPolling();
+      window.removeEventListener("samp:new-chat", onExternalNewChat);
+    };
   },
 };
 
@@ -1703,6 +1804,18 @@ function bindShortcuts() {
       return;
     }
     if (e.ctrlKey && e.key === "/") { e.preventDefault(); toggleHelp(); return; }
+    // Ctrl+Shift+N — start a fresh chat from anywhere. The handler
+    // dispatches a custom event so the active ChatView (if rendered)
+    // picks it up and can sync its inputs; if Chat isn't current we
+    // navigate to it first.
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "n" || e.key === "N")) {
+      e.preventDefault();
+      ChatState.newChat();
+      if (Router.active !== "chat") Router.go("chat");
+      else window.dispatchEvent(new CustomEvent("samp:new-chat"));
+      Toast.info("New chat started", `chat_id = ${ChatState.chatId}`);
+      return;
+    }
     if (e.key === "Escape") { hideHelp(); Palette.hide(); return; }
     if (isInput) return;
     if (pendingG) {
@@ -1801,6 +1914,13 @@ const Palette = (() => {
     { id: "go-rpc",        group: "Go to", icon: "📜", title: "RPC log",    hint: "",     run: () => Router.go("rpc") },
     { id: "theme-cycle",   group: "Action", icon: "🌓", title: "Cycle theme (system → light → dark)", hint: "",
       run: () => { /* call inside Theme module */ document.getElementById("theme-toggle").click(); } },
+    { id: "new-chat", group: "Action", icon: "💬", title: "Start a new chat", hint: "Ctrl+Shift+N",
+      run: () => {
+        ChatState.newChat();
+        if (Router.active !== "chat") Router.go("chat");
+        else window.dispatchEvent(new CustomEvent("samp:new-chat"));
+        Toast.info("New chat started", `chat_id = ${ChatState.chatId}`);
+      } },
     { id: "config-reload", group: "Action", icon: "↻", title: "Reload config from disk", hint: "",
       run: async () => {
         try { const r = await Rpc.call("config.reload", {});

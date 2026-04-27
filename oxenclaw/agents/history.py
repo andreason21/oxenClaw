@@ -5,6 +5,38 @@ Per (agent_id, session_key) JSON file at
 via tmpfile + rename so a crash can't leave a corrupt history.
 
 Port of openclaw's per-session transcript store.
+
+Message schema
+--------------
+Each entry in the `messages` list is a dict with at minimum:
+
+    {"role": "user"|"assistant"|"system", "content": str}
+
+When an assistant turn included one or more tool calls the entry also carries
+a ``tool_calls`` list:
+
+    {
+        "role": "assistant",
+        "content": str,          # text portion of the block (may be empty)
+        "tool_calls": [
+            {
+                "id":             str,   # provider tool-use id (opaque)
+                "name":           str,   # registered tool name
+                "args":           dict,  # JSON-serialisable input the model sent
+                "started_at":     float, # epoch seconds (wall clock, ±accuracy note below)
+                "ended_at":       float, # epoch seconds
+                "status":         "ok" | "error",
+                "output_preview": str,   # first 200 chars of tool output
+            },
+            ...
+        ]
+    }
+
+Timing accuracy note: ``started_at`` / ``ended_at`` are reconstructed from a
+wall-clock anchor recorded just before ``run_agent_turn`` plus per-tool
+``duration_seconds`` values (monotonic) returned by the pi runner's
+``ToolExecutionResult``. Sequential tool calls accumulate correctly; parallel
+batches share the same anchor so their start times are approximate.
 """
 
 from __future__ import annotations

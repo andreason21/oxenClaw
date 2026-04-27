@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import json
 from pathlib import Path
 
 from pydantic import BaseModel
@@ -236,3 +238,72 @@ async def test_pi_agent_writes_dashboard_conversation_history(tmp_path: Path) ->
     asst_msg = next(m for m in msgs if m["role"] == "assistant")
     assert user_msg["content"] == "question"
     assert asst_msg["content"] == "answer text"
+
+
+# ─── Tool-call timing telemetry ──────────────────────────────────────
+
+
+async def test_pi_agent_records_tool_call_timing(tmp_path: Path) -> None:
+    """Regression: after a tool-call turn PiAgent must persist timing metadata
+    into ConversationHistory so the dashboard can render tool-call cards."""
+    state = {"calls": 0}
+
+    async def fake_stream(ctx, opts):  # type: ignore[no-untyped-def]
+        state["calls"] += 1
+        if state["calls"] == 1:
+            yield ToolUseStartEvent(id="tc1", name="slow_tool")
+            yield ToolUseInputDeltaEvent(id="tc1", input_delta='{"n":3}')
+            yield ToolUseEndEvent(id="tc1")
+            yield StopEvent(reason="tool_use")
+        else:
+            yield TextDeltaEvent(delta="done")
+            yield StopEvent(reason="end_turn")
+
+    register_provider_stream("piagent_timing", fake_stream)
+
+    class _In(BaseModel):
+        n: int
+
+    async def _slow_handler(args: _In) -> str:
+        await asyncio.sleep(0.05)
+        return f"result-{args.n}"
+
+    tools = ToolRegistry()
+    tools.register(
+        FunctionTool(name="slow_tool", description="a slow tool", input_model=_In, handler=_slow_handler)
+    )
+
+    reg = _registry_with("test-model", "piagent_timing")
+    paths = _paths(tmp_path)
+    agent = PiAgent(
+        agent_id="t",
+        model_id="test-model",
+        registry=reg,
+        auth=_auth_with_key(reg.list()[0].provider),
+        sessions=InMemorySessionManager(),
+        tools=tools,
+        paths=paths,
+    )
+    ctx = AgentContext(agent_id="t", session_key="timing-session")
+    outs = [sp async for sp in agent.handle(_inbound("run tool"), ctx)]
+    assert outs and outs[0].text == "done"
+
+    session_file = paths.session_file("t", "timing-session")
+    assert session_file.exists(), f"expected session file at {session_file}"
+    data = json.loads(session_file.read_text())
+    msgs = data.get("messages", [])
+
+    # Find the assistant message that carried the tool call.
+    tool_call_msgs = [m for m in msgs if m.get("role") == "assistant" and m.get("tool_calls")]
+    assert tool_call_msgs, f"no assistant message with tool_calls found; messages={msgs}"
+    tc_msg = tool_call_msgs[0]
+    tool_calls = tc_msg["tool_calls"]
+    assert len(tool_calls) == 1
+
+    tc = tool_calls[0]
+    assert tc["name"] == "slow_tool", tc
+    assert tc["status"] == "ok", tc
+    assert tc["started_at"] < tc["ended_at"], "started_at must precede ended_at"
+    assert tc["ended_at"] - tc["started_at"] >= 0.04, "expected at least ~50ms duration"
+    assert tc["output_preview"], "output_preview must be non-empty"
+    assert "result-3" in tc["output_preview"], tc["output_preview"]

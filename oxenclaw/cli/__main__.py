@@ -9,6 +9,7 @@ from __future__ import annotations
 import typer
 
 from oxenclaw.cli import (
+    acp_cmd,
     backup_cmd,
     config_cmd,
     flows_cmd,
@@ -29,6 +30,11 @@ app.add_typer(memory_cmd.app, name="memory", help="Manage long-term memory.")
 app.add_typer(sessions_cmd.app, name="session", help="Inspect and manage agent sessions.")
 app.add_typer(wiki_cmd.app, name="wiki", help="Browse and curate the durable knowledge wiki.")
 app.add_typer(backup_cmd.app, name="backup", help="Backup and restore the home directory.")
+app.add_typer(
+    acp_cmd.app,
+    name="acp",
+    help="Run oxenclaw as an ACP agent over stdio (for IDEs like Zed).",
+)
 app.add_typer(
     flows_cmd.doctor_app, name="doctor", help="Aggregated health check across subsystems."
 )

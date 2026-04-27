@@ -1664,6 +1664,7 @@ const SessionsView = {
           ),
           el("div", { class: "actions" },
             el("button", { class: "btn btn-sm", onclick: () => preview(s) }, "Preview"),
+            el("button", { class: "btn btn-sm", onclick: () => compact(s) }, "Compact"),
             el("button", { class: "btn btn-sm", onclick: () => reset(s) }, "Reset"),
             el("button", { class: "btn btn-sm", onclick: () => fork(s) }, "Fork"),
             el("button", { class: "btn btn-sm", onclick: () => archive(s) }, "Archive"),
@@ -1682,6 +1683,20 @@ const SessionsView = {
         const text = (res && res.preview) || JSON.stringify(res, null, 2);
         Toast.info("preview", text.slice(0, 400));
       } catch {}
+    }
+    async function compact(s) {
+      if (!confirm(`Compact session ${s.session_key || s.id}? Old turns will be summarised.`)) return;
+      try {
+        const res = await Rpc.call("sessions.compact", { id: s.id, keep_tail_turns: 6 });
+        if (res && res.compacted) {
+          Toast.success(`compacted: ${res.tokens_before} → ${res.tokens_after} tokens`);
+        } else {
+          Toast.info("compact", "below threshold — nothing to do");
+        }
+      } catch (e) {
+        Toast.error(`compact failed: ${e.message}`);
+      }
+      refresh();
     }
     async function reset(s) {
       if (!confirm(`Reset session ${s.session_key}? Messages will be cleared.`)) return;

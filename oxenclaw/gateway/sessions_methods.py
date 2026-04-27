@@ -93,6 +93,13 @@ class _DeleteParams(BaseModel):
     id: str
 
 
+class _CompactParams(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: str
+    keep_tail_turns: int = 6
+    reason: str | None = None
+
+
 # ─── helpers ─────────────────────────────────────────────────────────
 
 
@@ -276,6 +283,44 @@ def register_sessions_methods(
     async def _delete(p: _DeleteParams) -> dict[str, Any]:
         ok = await sm.delete(p.id)
         return {"deleted": ok}
+
+    @router.method("sessions.compact", _CompactParams)
+    async def _compact(p: _CompactParams) -> dict[str, Any]:
+        from oxenclaw.pi.compaction import (
+            apply_compaction,
+            decide_compaction,
+            truncating_summarizer,
+        )
+
+        s = await sm.get(p.id)
+        if s is None:
+            return {"ok": False, "compacted": False, "reason": "session not found"}
+        if len(s.messages) == 0 or len(s.messages) <= p.keep_tail_turns:
+            return {"ok": True, "compacted": False, "reason": "below threshold"}
+
+        plan = decide_compaction(
+            s.messages,
+            model_context_tokens=200_000,
+            keep_tail_turns=p.keep_tail_turns,
+            reason=p.reason or "manual",
+            force=True,
+        )
+        if not plan.needed:
+            return {"ok": True, "compacted": False, "reason": "below threshold"}
+
+        new_messages, entry = await apply_compaction(
+            s.messages, plan, truncating_summarizer
+        )
+        s.messages = new_messages
+        s.compactions.append(entry)
+        await sm.save(s)
+        return {
+            "ok": True,
+            "compacted": True,
+            "checkpoint_id": entry.id,
+            "tokens_before": entry.tokens_before,
+            "tokens_after": entry.tokens_after,
+        }
 
 
 __all__ = ["register_sessions_methods"]

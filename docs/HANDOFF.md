@@ -296,3 +296,111 @@ powershell.exe -NoProfile -Command 'Remove-Item -Recurse -Force "$env:LOCALAPPDA
 
 Repository invariant the user emphasised: **code change → test → docs is
 one set**. Memory: `~/.claude/projects/.../memory/feedback_change_set.md`.
+
+---
+
+## 2026-04-27 (late) — "agent doesn't remember" investigation tooling
+
+User: "다 시도해보자 원인 잡아야지" — keep digging until we know whether
+the recall block reaches the model and whether the model is the
+bottleneck. Three diagnostic surfaces landed:
+
+1. **`chat.debug_prompt` RPC** (`oxenclaw/gateway/chat_methods.py`).
+   Returns the assembled system prompt that a given agent would build
+   for a given query, plus per-hit recall metadata (chunk_id, score,
+   citation, text preview, weak-threshold). Wired through the existing
+   AgentRegistry so EchoAgent and other non-Pi agents are rejected
+   with a structured error. New `register_chat_methods(..., agents=...)`
+   keyword; passed from `oxenclaw/cli/gateway_cmd.py`.
+
+2. **PiAgent recall instrumentation**
+   (`oxenclaw/agents/pi_agent.py`).
+   - `_assemble_system(query)` now factored out of `_system_for` so
+     `debug_assemble(query)` can return the same artefacts.
+   - Recall log line gained `scores=[0.45,0.41,0.40]` per-hit
+     breakdown.
+   - WARNING when top score is below `memory_weak_threshold` (default
+     0.30, constructor knob). The block is still injected — operators
+     decide whether to tune the threshold per embedding model.
+   - `set_model_id(model_id)` hot-swaps the underlying Model and
+     clears cache observers (cache markers are provider-specific).
+
+3. **`agents.set_model` + `agents.models` RPCs**
+   (`oxenclaw/gateway/agents_methods.py`).
+   A/B-test recall attention across local models (gemma vs llama vs
+   qwen) without restarting the gateway. `agents.models` enumerates
+   the first PiAgent's `ModelRegistry` for a UI picker.
+
+**Dashboard hook.** `oxenclaw/static/app.js` Chat panel: new
+"🔍 Debug prompt" button next to "+ New chat" / Clear, opens a
+`<dialog>` showing memory hits (sortable score / citation / preview)
++ the full assembled system prompt + a "Copy prompt" button.
+CSS in `oxenclaw/static/app.css` under `.debug-prompt-dialog`.
+
+**Tests added** (1335 total now; 1 environmental shell-tool skip on
+this WSL2 host):
+- `tests/test_gateway_chat_methods.py` — debug_prompt: success,
+  unknown agent, agent without method, internal failure surfaces as
+  structured error, RPC unregistered when `agents=` omitted.
+- `tests/test_gateway_agents_methods.py` — set_model swap, unknown
+  agent, EchoAgent rejected, unknown model returns KeyError, models
+  list, empty when no PiAgent.
+- `tests/test_pi_agent.py` — debug_assemble structured payload,
+  debug_assemble surfaces recalled memories with citations,
+  set_model_id swap clears observers, set_model_id rejects unknown,
+  weak-recall path still injects block AND logs WARNING with
+  per-hit scores.
+
+**How to use the new flow when "agent doesn't remember" recurs**:
+1. Open Chat → type the query → click 🔍 Debug prompt → confirm the
+   recall hits surface and the `<recalled_memories>` block actually
+   appears in the assembled prompt. If it doesn't: bug is in recall
+   (embedding model / hybrid weights / chunk text). If it does: bug
+   is in the model's attention.
+2. For the latter, call `agents.set_model` swapping in another local
+   model (e.g. `llama3.1:8b` instead of `gemma4:latest`) and re-run
+   the same chat. If recall surfaces in the new model's reply, the
+   gemma model is the weak link.
+3. `gateway.log` now shows `scores=[...]` per turn so you can see
+   which queries pull weak recall (top score < 0.30 logs WARNING).
+
+---
+
+## 2026-04-28 — ACP harness landed (9 commits, +75 tests)
+
+A complete Agent Client Protocol surface ported from openclaw's
+`src/acp/` and shipped end-to-end. oxenclaw can now be **driven by**
+external ACP clients (Zed, etc.) AND **drive** child ACP servers
+of its own. Full reference + scenario walkthrough lives at
+[`docs/ACP.md`](ACP.md).
+
+| commit | what landed |
+|---|---|
+| `f7ea92a` | Split `acp_spawn.py` (subprocess track) from `acp_runtime.py` (Protocol). `AcpRuntime` + `AcpRuntimeOptional` mirror openclaw's `runtime/types.ts`. |
+| `a21be9c` | `oxenclaw/acp/framing.py` (NDJSON reader/writer) + `protocol.py` (pydantic models for the four foundational verbs). PROTOCOL_VERSION pinned at 0.19.0. |
+| `66ac0c2` | `acp_parent_stream.py` — JSONL audit log + 60s stall watchdog + 6h lifetime cap. |
+| `c65fe0b` | `AcpSessionManager` singleton + `runtime_registry` + `InMemoryFakeRuntime`. |
+| `e1409dd` | `SubprocessAcpRuntime` — first real NDJSON wire client. Spawns a child, reader/stderr loops, request-response correlation, session/update notification routing. |
+| `74cfc77` | `AcpServer` + `oxenclaw acp` CLI + loopback E2E. |
+| `e677366` | `PiAgentAcpRuntime` — wrap a real PiAgent for `--backend pi`. |
+| `fee6452` | Tool-call telemetry — HookRunner before/after_tool_use → `tool_call`/`tool_call_update` notifications mid-flight. |
+| `dfb859c` | **Root-cause fix**: `oxenclaw acp --backend pi` was building a memoryless agent. Now wires `MemoryRetriever` + `memory_save/search/get` tools to mirror gateway. New tests pin the wiring + close the recall→tool-args loop in the Suwon-weather two-turn scenario. |
+
+**Test count**: 1827 passed, 1 skipped, 0 failed (was 1754 at start
+of arc — +73 net). All 84 ACP tests live under
+`tests/test_acp_*.py`.
+
+**Worked scenario (the regression-catching one)**:
+"나는 수원 살아" → memory_save fires → memory persists → "내가 사는
+곳 날씨 알려줘" → recall prelude prepends Suwon to the user message →
+model resolves the deictic phrase → fires `weather(location="Suwon")`
+→ tool_call card pair on the wire → final 한국어 reply. Pinned in
+`tests/test_acp_two_turn_memory_disambig.py`. Verified out-of-band
+that flipping `memory_inject_into_user=False` makes the test fail
+with a clear diagnostic — i.e. the test actually closes the loop
+instead of being tautological.
+
+**Still missing** (next-arc candidates): capability negotiation in
+`InitializeResult`, `setMode`/`setConfigOption` round-trips,
+image/resource content blocks, `session/load` resume, plan/usage
+projection.

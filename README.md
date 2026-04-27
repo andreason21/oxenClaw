@@ -241,6 +241,43 @@ through `apt` instead.
 
 Full guide: [`docs/DESKTOP_APP.md`](docs/DESKTOP_APP.md).
 
+### IDE / agent integration via ACP
+
+oxenClaw also speaks the **Agent Client Protocol** (Zed's
+`@agentclientprotocol/sdk` 0.19.x) over stdio in **both**
+directions — as an agent any ACP client can spawn, and as a client
+that can drive a child ACP server.
+
+Run oxenclaw as an ACP agent:
+
+```bash
+oxenclaw acp --backend pi
+```
+
+Reads NDJSON JSON-RPC from stdin, streams `agent_message_chunk` /
+`tool_call` / `tool_call_update` notifications to stdout, returns
+a `stopReason` per prompt. Two backends ship in core:
+
+| `--backend` | what it is |
+|---|---|
+| `fake` (default) | echoes the prompt — for IDE-side wiring sanity checks |
+| `pi` | a real PiAgent (Ollama / `gemma4:latest` by default) with memory tools (`memory_save`/`search`/`get`) auto-registered and tool-call telemetry projected mid-flight |
+
+Connect Zed by adding to `~/.config/zed/agent_servers.json`:
+
+```json
+{
+  "oxenclaw": {
+    "command": "oxenclaw",
+    "args": ["acp", "--backend", "pi"]
+  }
+}
+```
+
+Full reference + scenario walkthrough (memory-driven tool-call
+disambiguation across two turns):
+[`docs/ACP.md`](docs/ACP.md).
+
 ### Outbound channels (Slack)
 
 The dashboard and desktop client are the bidirectional chat surfaces.
@@ -442,6 +479,7 @@ MCP-client integration.
 
 | Document | Purpose |
 |---|---|
+| [`docs/ACP.md`](docs/ACP.md) | Agent Client Protocol — `oxenclaw acp` agent + `SubprocessAcpRuntime` client + worked Suwon-weather scenario |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Reference architecture extracted from openclaw |
 | [`docs/INSTALL_WSL.md`](docs/INSTALL_WSL.md) | Windows install via WSL2 (English + Korean) |
 | [`docs/PORTING_PLAN.md`](docs/PORTING_PLAN.md) | Phased roadmap (D → B → A → M → PROD) |
@@ -680,6 +718,42 @@ OS에 맞는 파일을 받는다:
 
 전체 가이드: [`docs/DESKTOP_APP.md`](docs/DESKTOP_APP.md).
 
+#### IDE / 에이전트 통합 (ACP)
+
+oxenClaw는 **Agent Client Protocol** (Zed의 `@agentclientprotocol/sdk`
+0.19.x) 도 stdio로 **양방향** 지원한다 — ACP 클라이언트가 우리를
+자식으로 띄울 수도 있고, 우리가 자식 ACP 서버를 부려서 사용할 수도
+있다.
+
+ACP 에이전트로 실행:
+
+```bash
+oxenclaw acp --backend pi
+```
+
+stdin에서 NDJSON JSON-RPC를 읽어 `agent_message_chunk` /
+`tool_call` / `tool_call_update` 알림을 stdout으로 스트리밍하고
+프롬프트마다 `stopReason`을 반환한다. 코어에 두 백엔드:
+
+| `--backend` | 내용 |
+|---|---|
+| `fake` (기본) | 프롬프트를 그대로 echo — IDE 연결 sanity-check용 |
+| `pi` | 실제 PiAgent (Ollama / `gemma4:latest` 기본). memory 툴 (`memory_save`/`search`/`get`) 자동 등록, tool-call telemetry mid-flight 사영 |
+
+Zed에 연결 — `~/.config/zed/agent_servers.json`에:
+
+```json
+{
+  "oxenclaw": {
+    "command": "oxenclaw",
+    "args": ["acp", "--backend", "pi"]
+  }
+}
+```
+
+전체 레퍼런스 + 시나리오 (두 턴짜리 메모리 기반 도구 호출
+디스앰비귀에이션): [`docs/ACP.md`](docs/ACP.md).
+
 #### 아웃바운드 채널 (Slack)
 
 대시보드 / 데스크톱 앱이 양방향 chat surface. Slack은 아웃바운드
@@ -860,6 +934,7 @@ Chromium 시스템 라이브러리 없을 때 자동 skip, 자세한 건
 
 | 문서 | 용도 |
 |---|---|
+| [`docs/ACP.md`](docs/ACP.md) | Agent Client Protocol — `oxenclaw acp` 에이전트 + `SubprocessAcpRuntime` 클라이언트 + 수원 날씨 시나리오 |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | openclaw에서 추출한 레퍼런스 아키텍처 |
 | [`docs/INSTALL_WSL.md`](docs/INSTALL_WSL.md) | Windows WSL2 설치 가이드 (영문 + 한글) |
 | [`docs/PORTING_PLAN.md`](docs/PORTING_PLAN.md) | 단계별 로드맵 (D → B → A → M → PROD) |

@@ -195,9 +195,46 @@ as a follow-up without backend churn.
   UI render the model's plan before execution. Useful for the
   coding-agent flow but applies to all agents.
 
-### J. Multi-agent / sub-agent spawn (ACP-style) ✗
-- openclaw spawns child agents via the Agent Control Plane. Less
-  urgent for in-house dashboard use but unlocks complex flows.
+### J. Multi-agent / sub-agent spawn (ACP-style) ◐ (foundation shipped)
+**Shipped (2026-04-28)** — full Agent Client Protocol harness
+ported in 9 commits. oxenclaw is now bidirectional ACP:
+
+  - **Wire layer**: `oxenclaw/acp/framing.py` (NDJSON) +
+    `protocol.py` (pydantic schemas for the four foundational
+    verbs, PROTOCOL_VERSION 0.19.0).
+  - **Control plane**: `AcpSessionManager` singleton + backend
+    registry + `InMemoryFakeRuntime` reference impl.
+  - **Client direction**: `SubprocessAcpRuntime` — spawn a child
+    ACP server, drive `initialize → session/new → session/prompt
+    → session/cancel`. `aclose()` idempotent; pending requests
+    fail with `AcpWireError(-32001)` on shutdown.
+  - **Server direction**: `oxenclaw acp [--backend fake|pi]` CLI
+    that reads NDJSON from stdin and dispatches to a runtime.
+    `pi` backend wraps PiAgent + MemoryRetriever + memory tools
+    (matches gateway wiring exactly).
+  - **Telemetry**: tool_call / tool_call_update notifications
+    projected mid-flight from the agent's HookRunner so an ACP
+    client sees live tool-execution cards. JSONL audit log + 60s
+    stall watchdog + 6h lifetime cap when DRIVING a child.
+  - **Loopback E2E**: oxenclaw client ↔ oxenclaw server over real
+    stdio pipes is in the test suite.
+  - **Memory-driven scenario test**: "나는 수원 살아" → "내가
+    사는 곳 날씨 알려줘" closes the recall→tool-args loop with a
+    fake stream that conditionally resolves the deictic phrase
+    based on what the prelude actually contains.
+
+Test count: 84 ACP-specific tests across
+`tests/test_acp_*.py`. Suite total 1827 passed.
+Reference: [`docs/ACP.md`](ACP.md).
+
+**Still missing** (separate roadmap items):
+  - Capability negotiation in `InitializeResult.capabilities`
+  - `setMode` / `setConfigOption` round-trips
+  - Image / resource content blocks in `prompt[]`
+  - `session/load` resume
+  - Plan / usage projection
+  - Sub-agent depth / child-count policy gates
+    (openclaw `acp-spawn.ts:1033-1120`)
 
 ### N. Cron tab full openclaw parity ✓
 **Shipped** — operator asked to bring the Cron tab UX to openclaw
@@ -259,6 +296,43 @@ unconditionally and were Telegram-era leftovers.
     accounts. `samp:new-chat` listener and the sessions-panel
     click handler keep the chip and advanced inputs synchronised.
   - Dashboard E2E: `test_chat_view_compact_target_bar_default_only_shows_agent_and_chip`.
+
+### O. openclaw system-prompt port (Execution Bias / Skills mandatory / Memory Recall / Project Context) ✓
+**Shipped** — operator asked to port the behavioural sections of
+openclaw's `buildAgentSystemPrompt` into oxenClaw so small local
+models pick up the same instruction-following uplift openclaw gets
+from its long system prompt. Per the standing rule
+(`feedback_apply_openclaw_guides`) we mirror the wording closely
+enough that side-by-side outputs stay comparable.
+
+  - **Backend** (`oxenclaw/pi/system_prompt.py`): four new
+    contribution helpers — `execution_bias_contribution()` (always
+    on; "actionable → act, weak result → vary, mutable → live
+    check, evidence-backed final"), `skills_mandatory_contribution()`
+    (procedure: scan `<available_skills>` → exactly 1 read → follow),
+    `memory_recall_contribution()` (trigger conditions + `[mem:<id>]`
+    citation rule), and a `load_project_context_files(project_dir)`
+    helper that walks the canonical openclaw filename set
+    (`AGENTS.md` / `SOUL.md` / `identity.md` / `user.md` / `tools.md` /
+    `bootstrap.md` / `memory.md`) in fixed order with per-file
+    truncation. Priorities: 15 (exec_bias) / 18 (skills_proc) / 20
+    (skills_xml, existing) / 30 (project_context) / 70 (memory_proc) /
+    80 (memory_xml, existing) → procedure always sits above the data
+    it describes.
+  - **Wiring** (`oxenclaw/agents/pi_agent.py`): `PiAgent` gains
+    `include_execution_bias=True` (default-on) and
+    `project_context_dir: Path | None = None` (opt-in) constructor
+    args. `_assemble_system` now appends the new contributions in the
+    documented order; `debug_assemble` surfaces them so the dashboard
+    "Debug prompt" RPC can show operators what the model is actually
+    seeing.
+  - **Tests**: `tests/test_pi_system_prompt.py` (12 unit tests:
+    contribution priorities, body keywords, project-context loader
+    behaviour incl. case-insensitive lookup, runaway-file truncation,
+    canonical filename set lockdown) +
+    `test_pi_agent_assembles_openclaw_ported_sections` and
+    `test_pi_agent_skips_execution_bias_when_disabled` in the
+    integration suite. 93 passed across the touched modules.
 
 ### L. web_search → web_fetch chaining + multi-backend fallback ✓
 **Shipped** — operator reported that openclaw answers

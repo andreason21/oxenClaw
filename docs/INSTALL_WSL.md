@@ -279,6 +279,50 @@ the binding to `config.yaml` exactly as in the main README.
 
 ---
 
+## 10b. Connect Zed (or any ACP client) via stdio
+
+oxenClaw also speaks ACP over stdio so an IDE on the Windows side can
+spawn the WSL2 binary directly — no port forwarding, no token. Two
+shapes work, depending on whether Zed runs on Windows or inside WSL2.
+
+**Zed inside WSL2** — same filesystem, simplest. Edit
+`~/.config/zed/agent_servers.json`:
+
+```json
+{
+  "oxenclaw": {
+    "command": "oxenclaw",
+    "args": ["acp", "--backend", "pi"]
+  }
+}
+```
+
+**Zed on Windows host** — invoke via `wsl.exe`:
+
+```json
+{
+  "oxenclaw": {
+    "command": "wsl.exe",
+    "args": ["-e", "oxenclaw", "acp", "--backend", "pi"]
+  }
+}
+```
+
+Smoke test from a WSL2 terminal first to confirm the agent boots:
+
+```bash
+echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"0.19.0"}}' \
+  | oxenclaw acp --backend fake
+# expected: a single line of NDJSON with the initialize result.
+```
+
+The `pi` backend reads `~/.oxenclaw/` for Ollama embedding access
+(memory tools auto-register). If you started the gateway in step 7
+your `OLLAMA_HOST` is already set up — `oxenclaw acp --backend pi`
+inherits it. Full ACP reference: [`docs/ACP.md`](ACP.md).
+
+---
+
 ## 11. Common gotchas
 
 | Symptom | Cause / fix |
@@ -504,6 +548,46 @@ Slack 아웃바운드는 `slack.com/api/chat.postMessage`로의 HTTPS 호출만
 사용 — 포트 포워딩, 공인 IP, 방화벽 설정 모두 불필요. README와
 동일하게 `~/.oxenclaw/credentials/slack/main.json` 작성 +
 `config.yaml`에 바인딩만 추가.
+
+### 10b. Zed (또는 임의의 ACP 클라이언트) stdio 연결
+
+oxenClaw는 stdio로 ACP를 말하기 때문에 Windows 쪽 IDE가 WSL2 바이너리를
+바로 자식 프로세스로 띄울 수 있다 — 포트 포워딩 / 토큰 / 방화벽 무관.
+
+**Zed가 WSL2 안** — 같은 파일시스템. `~/.config/zed/agent_servers.json`:
+
+```json
+{
+  "oxenclaw": {
+    "command": "oxenclaw",
+    "args": ["acp", "--backend", "pi"]
+  }
+}
+```
+
+**Zed가 Windows 호스트** — `wsl.exe`로 우회:
+
+```json
+{
+  "oxenclaw": {
+    "command": "wsl.exe",
+    "args": ["-e", "oxenclaw", "acp", "--backend", "pi"]
+  }
+}
+```
+
+연결 전에 WSL 터미널에서 smoke check:
+
+```bash
+echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"0.19.0"}}' \
+  | oxenclaw acp --backend fake
+# 기대값: initialize result 한 줄 NDJSON
+```
+
+`pi` 백엔드는 `~/.oxenclaw/`에서 Ollama 임베더에 접근 (memory 툴 자동
+등록). 7번 단계로 게이트웨이가 떠 있다면 `OLLAMA_HOST` 가 이미 잡혀
+있고 ACP 백엔드도 그대로 상속받음. 전체 레퍼런스:
+[`docs/ACP.md`](ACP.md).
 
 ### 11. 자주 겪는 문제
 

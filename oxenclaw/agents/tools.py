@@ -63,21 +63,90 @@ class FunctionTool(Generic[M]):
         return await result  # type: ignore[no-any-return]
 
 
+def _canonicalise_tool_name(name: str) -> str:
+    """Normalise an LLM-emitted tool name so common drift collapses to
+    one canonical key. Handles `:` / `.` / `-` separators (openclaw-
+    namespaced `memory:set_fact`, RPC-style `memory.save`, hyphen
+    forms) and case variations. Pure name-shape canonicalisation —
+    semantic aliasing (e.g. `set_fact` → `save`) lives in
+    `_TOOL_NAME_ALIASES`."""
+    return name.strip().lower().replace(":", "_").replace(".", "_").replace("-", "_")
+
+
+# Registry-level aliases: every key here is the canonicalised form an
+# LLM might emit instead of the canonical tool name. Mirrors openclaw's
+# permissive tool resolver. Add lines here when production logs surface
+# new hallucinated names — `tool 'X' is not registered` is the signal.
+_TOOL_NAME_ALIASES: dict[str, str] = {
+    # memory_save variants
+    "memory_set_fact": "memory_save",      # openclaw-style colon namespace
+    "set_fact": "memory_save",
+    "remember": "memory_save",
+    "remember_fact": "memory_save",
+    "save_memory": "memory_save",
+    "memory_set": "memory_save",
+    "memory_add": "memory_save",
+    "memory_save_fact": "memory_save",
+    "memory_save_to_inbox": "memory_save",
+    "store_memory": "memory_save",
+    "memory_remember": "memory_save",
+    # memory_search variants
+    "memory_recall": "memory_search",
+    "recall": "memory_search",
+    "memory_query": "memory_search",
+    "memory_lookup": "memory_search",
+    "memory_find": "memory_search",
+    "memory_get_fact": "memory_search",
+    # memory_get variants
+    "memory_read": "memory_get",
+    "memory_fetch": "memory_get",
+    # wiki tool variants
+    "wiki_create": "wiki_save",
+    "wiki_update": "wiki_save",
+    "wiki_edit": "wiki_save",
+    "wiki_query": "wiki_search",
+    "wiki_lookup": "wiki_search",
+    # skill resolver variants
+    "skill_install": "skill_resolver",
+    "skill_find": "skill_resolver",
+    "find_skill": "skill_resolver",
+    "install_skill": "skill_resolver",
+}
+
+
 class ToolRegistry:
     def __init__(self) -> None:
         self._tools: dict[str, Tool] = {}
+        # Keyed by canonicalised name for fast alias-tolerant lookup.
+        self._by_canon: dict[str, Tool] = {}
 
     def register(self, tool: Tool) -> None:
         if tool.name in self._tools:
             raise ValueError(f"duplicate tool: {tool.name}")
         self._tools[tool.name] = tool
+        self._by_canon[_canonicalise_tool_name(tool.name)] = tool
 
     def register_all(self, tools: list[Tool]) -> None:
         for t in tools:
             self.register(t)
 
     def get(self, name: str) -> Tool | None:
-        return self._tools.get(name)
+        # 1) Exact name (fast path).
+        direct = self._tools.get(name)
+        if direct is not None:
+            return direct
+        # 2) Canonicalised lookup — handles `memory:set_fact` /
+        #    `memory.save` / `Memory_Save` style drift.
+        canon = _canonicalise_tool_name(name)
+        canon_hit = self._by_canon.get(canon)
+        if canon_hit is not None:
+            return canon_hit
+        # 3) Semantic alias table — handles outright wrong-but-plausible
+        #    names like `remember`, `set_fact`, `save_memory`.
+        aliased = _TOOL_NAME_ALIASES.get(canon)
+        if aliased is not None:
+            return self._tools.get(aliased)
+        return None
 
     def names(self) -> list[str]:
         return sorted(self._tools)

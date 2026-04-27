@@ -20,6 +20,48 @@ def _retriever(tmp_path: Path) -> MemoryRetriever:
     return MemoryRetriever.for_root(paths, StubEmbeddings())
 
 
+async def test_tool_registry_resolves_namespaced_drift(tmp_path: Path) -> None:
+    """Production hit: model called `memory:set_fact` (openclaw-style
+    namespaced) — we register the tool as `memory_save`. The registry's
+    canonicalise + semantic-alias table should fold it."""
+    from oxenclaw.agents.tools import ToolRegistry
+    r = _retriever(tmp_path)
+    try:
+        reg = ToolRegistry()
+        reg.register(memory_save_tool(r))
+        # Each of these is a real LLM emission seen in the wild OR a
+        # plausible drift the alias table guards against.
+        for variant in (
+            "memory:set_fact",   # openclaw namespaced colon
+            "memory.save",       # RPC dot notation
+            "Memory_Save",       # case drift
+            "memory-save",       # hyphen drift
+            "remember",          # plain English
+            "set_fact",          # bare verb
+            "save_memory",       # noun-verb swap
+            "memory_set",        # set/save confusion
+        ):
+            tool = reg.get(variant)
+            assert tool is not None, f"registry should have folded {variant!r}"
+            assert tool.name == "memory_save"
+    finally:
+        await r.aclose()
+
+
+async def test_tool_registry_returns_none_for_truly_unknown(tmp_path: Path) -> None:
+    """Sanity: bogus names that don't match any alias still return None
+    so the run loop's 'tool X is not registered' path stays reachable."""
+    from oxenclaw.agents.tools import ToolRegistry
+    r = _retriever(tmp_path)
+    try:
+        reg = ToolRegistry()
+        reg.register(memory_save_tool(r))
+        assert reg.get("totally_made_up_tool") is None
+        assert reg.get("xyzzy_42") is None
+    finally:
+        await r.aclose()
+
+
 async def test_memory_save_accepts_content_alias(tmp_path: Path) -> None:
     """Real-world bug: GPT-4-class models sometimes emit
     `{content: ..., key: ...}` instead of `{text, tags}`. The schema

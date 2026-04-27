@@ -104,6 +104,27 @@ async def _run_tools(
     async def _one(req: ToolUseBlock) -> ToolExecutionResult:
         tool = tools_by_name.get(req.name)
         if tool is None:
+            # LLM tool-name drift recovery: ToolRegistry has a
+            # canonicalisation + semantic-alias table for common
+            # hallucinations like `memory:set_fact`, `remember`,
+            # `wiki.create`. Try that path before giving up. Only
+            # fires when the live `tools_by_name` mapping was built
+            # from a ToolRegistry; otherwise no-op.
+            from oxenclaw.agents.tools import (
+                ToolRegistry as _Reg,
+                _canonicalise_tool_name as _canon,
+                _TOOL_NAME_ALIASES as _aliases,
+            )
+            canon = _canon(req.name)
+            for live_name, live_tool in tools_by_name.items():
+                if _canon(live_name) == canon:
+                    tool = live_tool
+                    break
+            if tool is None:
+                aliased = _aliases.get(canon)
+                if aliased is not None:
+                    tool = tools_by_name.get(aliased)
+        if tool is None:
             return ToolExecutionResult(
                 id=req.id,
                 name=req.name,

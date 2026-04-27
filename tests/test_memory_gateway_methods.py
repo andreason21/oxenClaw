@@ -99,3 +99,83 @@ async def test_memory_sync_dispatch(tmp_path: Path) -> None:
         assert "report" in res
     finally:
         await retriever.aclose()
+
+
+async def test_memory_delete_by_path_clears_chunks(tmp_path: Path) -> None:
+    """memory.delete with path arg removes the file row + every chunk
+    keyed off that path across vec / fts / chunks tables."""
+    router, retriever = _setup(tmp_path)
+    try:
+        await _call(router, "memory.save", {"text": "to be deleted"})
+        before = await _call(router, "memory.list", {})
+        assert any(f["path"] == "inbox.md" for f in before["files"])
+        res = await _call(router, "memory.delete", {"path": "inbox.md"})
+        assert res["ok"] is True
+        assert res["deleted_path"] == "inbox.md"
+        after = await _call(router, "memory.list", {})
+        assert all(f["path"] != "inbox.md" for f in after["files"])
+    finally:
+        await retriever.aclose()
+
+
+async def test_memory_delete_requires_chunk_id_or_path(tmp_path: Path) -> None:
+    router, retriever = _setup(tmp_path)
+    try:
+        res = await _call(router, "memory.delete", {})
+        assert res["ok"] is False
+        assert "chunk_id" in res["error"] or "path" in res["error"]
+    finally:
+        await retriever.aclose()
+
+
+async def test_memory_export_then_import_round_trip(tmp_path: Path) -> None:
+    """Export returns a JSON envelope; import on a fresh store
+    reinstates the file + chunk rows so memory.list sees them. Vectors
+    are intentionally not in the JSON — caller is expected to run
+    memory.sync afterwards to regenerate."""
+    router_a, retriever_a = _setup(tmp_path / "a")
+    router_b, retriever_b = _setup(tmp_path / "b")
+    try:
+        await _call(router_a, "memory.save", {"text": "alpha bravo charlie"})
+        export = await _call(router_a, "memory.export", {})
+        assert export["ok"] is True
+        assert export["schema_version"] == 1
+        assert export["files"], "export should carry at least one file"
+        assert export["chunks"], "export should carry at least one chunk"
+
+        # Import into a fresh store.
+        imp = await _call(
+            router_b,
+            "memory.import",
+            {
+                "files": export["files"],
+                "chunks": export["chunks"],
+                "overwrite": True,
+            },
+        )
+        assert imp["ok"] is True
+        assert imp["imported_files"] >= 1
+        assert imp["imported_chunks"] >= 1
+
+        listing = await _call(router_b, "memory.list", {})
+        assert any(f["path"] == "inbox.md" for f in listing["files"])
+    finally:
+        await retriever_a.aclose()
+        await retriever_b.aclose()
+
+
+async def test_memory_export_filters_by_source(tmp_path: Path) -> None:
+    router, retriever = _setup(tmp_path)
+    try:
+        await _call(router, "memory.save", {"text": "source-test"})
+        # The inbox source is "memory" by default.
+        res = await _call(router, "memory.export", {"source": "memory"})
+        assert res["ok"] is True
+        assert all(c["source"] == "memory" for c in res["chunks"])
+        # Filtering to a non-existent source returns an empty payload, not an error.
+        res = await _call(router, "memory.export", {"source": "nope"})
+        assert res["ok"] is True
+        assert res["files"] == []
+        assert res["chunks"] == []
+    finally:
+        await retriever.aclose()

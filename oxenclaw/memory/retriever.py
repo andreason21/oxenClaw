@@ -186,14 +186,31 @@ class MemoryRetriever:
 
 
 def format_memories_for_prompt(results: list[MemorySearchResult]) -> str:
-    """Render retrieved chunks as XML suitable for a system prompt."""
+    """Render retrieved chunks as XML suitable for a system prompt.
+
+    Each memory carries an `id` (chunk_id) + a `citation` string of the
+    form `path:start-end`. We instruct the model to cite via
+    `[mem:<id>]` when answering from a memory — short token, hashable,
+    machine-parseable for any downstream UI that wants to highlight
+    which span backs which assertion. Mirrors openclaw's
+    `<memory id=…>` + `[mem:…]` convention.
+    """
     if not results:
         return ""
-    lines = ["<recalled_memories>"]
+    lines = [
+        "<recalled_memories>",
+        "  <usage>You are seeing chunks retrieved from the user's long-term "
+        "memory store. When you answer using one of these, cite it inline "
+        "with the form `[mem:&lt;id&gt;]` (e.g. `[mem:abc123]`). The dashboard "
+        "renders these citations as hover-able links to the source chunk. "
+        "Skip the citation when you're answering from general knowledge "
+        "rather than a specific memory.</usage>",
+    ]
     for r in results:
         citation = _xml_escape(r.citation)
+        chunk_id = _xml_escape(r.chunk.id)
         lines.append(
-            f'  <memory citation="{citation}" relevance="{r.score:.3f}">'
+            f'  <memory id="{chunk_id}" citation="{citation}" relevance="{r.score:.3f}">'
             f"{_xml_escape(r.chunk.text)}</memory>"
         )
     lines.append("</recalled_memories>")

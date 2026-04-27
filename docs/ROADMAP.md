@@ -100,9 +100,14 @@ ConversationHistory lazily on first send. Dashboard E2E test
   in the compose box and a "New chat" row at the top of the sessions
   panel.
 
-### E. Chat HEAD support on `/healthz` ✗
-- Five-line gateway fix: add HEAD handler so external monitors that
-  default to HEAD (k8s, datadog) work without falling back to GET.
+### E. HEAD support on `/healthz` — *won't fix* (library constraint)
+The underlying `websockets` library rejects any non-GET method at the
+HTTP-parsing stage (`websockets/http11.py:150`: `method != b"GET"` →
+ValueError), so HEAD probes get the socket closed before our
+`process_request` callback sees them. Forking the library to
+support HEAD isn't worth it; modern liveness probes default to GET.
+Documented inline in `gateway/server.py:serve_healthz` and the
+session HANDOFF so the next operator doesn't chase this.
 
 ---
 

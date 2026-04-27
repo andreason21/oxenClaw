@@ -108,6 +108,12 @@ def default_static_routes(
         return _typed_response(connection, app_js(), _content_type_for(".js"))
 
     def serve_healthz(connection: ServerConnection, _: Request) -> Response:
+        # GET only. The underlying websockets library hard-rejects any
+        # non-GET method at the parsing stage (websockets/http11.py:150
+        # raises ValueError for `method != b"GET"`), so HEAD probes
+        # close the socket without a response. External monitors that
+        # default to HEAD (older k8s liveness, some load balancers)
+        # should use GET; modern probes already do.
         return _typed_response(connection, "ok\n", _content_type_for(".txt"))
 
     async def serve_readyz(connection: ServerConnection, _: Request) -> Response:

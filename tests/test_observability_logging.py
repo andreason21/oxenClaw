@@ -96,6 +96,44 @@ def test_human_formatter_no_suffix_when_no_context():
     assert "[" not in out.split("nothing here", 1)[1]  # no suffix after msg
 
 
+def test_configure_logging_writes_to_file(tmp_path, monkeypatch):
+    """A persistent JSON log lands at OXENCLAW_LOG_FILE so a missed
+    terminal tab doesn't lose the traceback. Default path is under
+    `<OXENCLAW_HOME>/logs/gateway.log`."""
+    monkeypatch.delenv("OXENCLAW_LOG_FORMAT", raising=False)
+    log_file = tmp_path / "logs" / "gateway.log"
+    stream = io.StringIO()
+    configure_logging(level="INFO", stream=stream, file_path=str(log_file))
+    log = logging.getLogger("oxenclaw.test.file")
+    log.info("hello-from-file")
+    # Wait for the rotating file handler to flush.
+    for h in logging.getLogger().handlers:
+        h.flush()
+    assert log_file.exists()
+    body = log_file.read_text(encoding="utf-8")
+    assert "hello-from-file" in body
+    # File handler always uses JSON, even when the stream is human format.
+    line = body.strip().splitlines()[-1]
+    payload = json.loads(line)
+    assert payload["message"] == "hello-from-file"
+
+
+def test_configure_logging_default_path_under_oxenclaw_home(tmp_path, monkeypatch):
+    """When neither file_path nor OXENCLAW_LOG_FILE is set, the
+    defaults pick up OXENCLAW_HOME → <home>/logs/gateway.log."""
+    monkeypatch.delenv("OXENCLAW_LOG_FILE", raising=False)
+    monkeypatch.delenv("OXENCLAW_LOG_FORMAT", raising=False)
+    monkeypatch.setenv("OXENCLAW_HOME", str(tmp_path))
+    configure_logging(level="INFO", stream=io.StringIO())
+    log = logging.getLogger("oxenclaw.test.default")
+    log.info("default-path-write")
+    for h in logging.getLogger().handlers:
+        h.flush()
+    expected = tmp_path / "logs" / "gateway.log"
+    assert expected.exists()
+    assert "default-path-write" in expected.read_text(encoding="utf-8")
+
+
 def test_env_var_picks_format(monkeypatch):
     stream = io.StringIO()
     monkeypatch.setenv("OXENCLAW_LOG_FORMAT", "json")

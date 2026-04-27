@@ -118,11 +118,20 @@ def configure_logging(
     level: int | str = logging.INFO,
     fmt: str | None = None,
     stream=None,
+    file_path: str | None = None,
 ) -> None:
     """Idempotent logging setup.
 
     `fmt` precedence: explicit arg → `OXENCLAW_LOG_FORMAT` env →
     "human". Valid values: "json" or "human".
+
+    `file_path` precedence: explicit arg → `OXENCLAW_LOG_FILE` env →
+    `~/.oxenclaw/logs/gateway.log` (default — created if missing).
+    Pass an empty string to opt out entirely. The file handler always
+    uses the JSON formatter regardless of stream `fmt` so the on-disk
+    log stays grep-able / structured even when the operator views the
+    terminal in human-friendly mode. Mirrors openclaw's
+    `~/.openclaw/logs/` convention.
     """
     chosen = (fmt or os.environ.get("OXENCLAW_LOG_FORMAT") or "human").lower()
     handler = logging.StreamHandler(stream or sys.stderr)
@@ -141,6 +150,37 @@ def configure_logging(
     if isinstance(level, str):
         level = logging.getLevelName(level.upper())
     root.setLevel(level)
+
+    # Persistent file handler. The terminal is the only sink today, so
+    # an operator who wasn't watching the tab during a failure has no
+    # way to recover the traceback. Default to a rotating file under
+    # ~/.oxenclaw/logs/ unless the operator opts out.
+    resolved_file = file_path
+    if resolved_file is None:
+        resolved_file = os.environ.get("OXENCLAW_LOG_FILE")
+    if resolved_file is None:
+        home = os.environ.get("OXENCLAW_HOME")
+        base = (
+            os.path.expanduser(home) if home
+            else os.path.join(os.path.expanduser("~"), ".oxenclaw")
+        )
+        resolved_file = os.path.join(base, "logs", "gateway.log")
+    if resolved_file:
+        try:
+            from logging.handlers import RotatingFileHandler
+            os.makedirs(os.path.dirname(resolved_file), exist_ok=True)
+            file_handler = RotatingFileHandler(
+                resolved_file, maxBytes=5 * 1024 * 1024, backupCount=3,
+                encoding="utf-8",
+            )
+            file_handler.setFormatter(JsonFormatter())
+            file_handler.addFilter(_ContextFilter())
+            root.addHandler(file_handler)
+        except OSError:
+            # Disk full / permission denied / read-only fs — keep the
+            # stream handler so the gateway still starts. The terminal
+            # log alone is enough for the dev-loop case.
+            pass
 
     # Quiet a known-noisy websockets log: every TCP-only port probe (port
     # scanners, half-broken proxies, our own desktop-app reachability

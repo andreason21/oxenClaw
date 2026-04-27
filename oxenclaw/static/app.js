@@ -395,7 +395,7 @@ const Router = (() => {
 // ─────────────────────────────────────────────────────────────────────────
 const ChatState = {
   agentId: localStorage.getItem("samp.agentId") || "assistant",
-  channel: localStorage.getItem("samp.channel") || "telegram",
+  channel: localStorage.getItem("samp.channel") || "dashboard",
   accountId: localStorage.getItem("samp.accountId") || "main",
   chatId: localStorage.getItem("samp.chatId") || "demo",
   threadId: localStorage.getItem("samp.threadId") || "",

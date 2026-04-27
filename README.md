@@ -135,8 +135,9 @@ Add the binding to `config.yaml`:
 ```yaml
 channels:
   telegram:
-    main:
-      enabled: true
+    accounts:
+      - account_id: main
+        display_name: "Personal Bot"
 ```
 
 ### 3. Start the gateway
@@ -581,8 +582,9 @@ agents:
 ```yaml
 channels:
   telegram:
-    main:
-      enabled: true
+    accounts:
+      - account_id: main
+        display_name: "Personal Bot"
 ```
 
 #### 3. 게이트웨이 실행

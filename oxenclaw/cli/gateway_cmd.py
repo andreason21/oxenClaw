@@ -300,6 +300,14 @@ def build_channel_router() -> ChannelRouter:
         for account_id, channel in accounts.items():
             router.register(plugin_id, account_id, channel)
             logger.info("loaded channel %s:%s", plugin_id, account_id)
+    # Always register the built-in dashboard / desktop-client channel so
+    # the web UI and native desktop apps work as a default chat surface
+    # without any external service (Telegram, Slack, …) being configured.
+    from oxenclaw.extensions.dashboard.channel import CHANNEL_ID, DashboardChannel
+
+    if router.get(CHANNEL_ID, "main") is None:
+        router.register(CHANNEL_ID, "main", DashboardChannel())
+        logger.info("loaded channel %s:main (built-in)", CHANNEL_ID)
     return router
 
 

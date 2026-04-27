@@ -33,7 +33,10 @@ class ChannelConfig(BaseModel):
 class ProviderConfig(BaseModel):
     model_config = ConfigDict(extra="allow")
 
-    id: str
+    # `id` is optional: the dict key in `providers.<id>` is the source of
+    # truth. Kept as a field for backward compatibility with examples
+    # that spell it out explicitly.
+    id: str | None = None
 
 
 class AgentChannelRouting(BaseModel):
@@ -45,7 +48,10 @@ class AgentChannelRouting(BaseModel):
 class AgentConfig(BaseModel):
     model_config = ConfigDict(extra="allow")
 
-    id: str
+    # `id` is optional: the dict key in `agents.<id>` is the source of
+    # truth (every dispatcher/registry consumer uses the dict key, not
+    # this field). Kept declared so explicit `id:` lines still validate.
+    id: str | None = None
     channels: dict[str, AgentChannelRouting] = Field(default_factory=dict)
     provider: str | None = None
 

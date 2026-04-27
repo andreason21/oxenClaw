@@ -58,7 +58,21 @@ def test_coding_agent_registers_curated_tools() -> None:
     assert "write_file" in names
     assert "shell" in names
     assert "list_dir" in names
-    assert "search_files" in names
+    assert "edit" in names
+    assert "grep" in names
+    assert "glob" in names
+
+
+def test_coding_agent_registry_now_includes_edit_grep_glob() -> None:
+    """CodingAgent registry must include edit, grep, glob, read_pdf and exclude search_files."""
+    agent = CodingAgent(agent_id="c")
+    names = set(agent._tools.names())
+    assert "edit" in names
+    assert "grep" in names
+    assert "glob" in names
+    assert "read_pdf" in names
+    # search_files is NOT in the curated registry (kept only as exported function).
+    assert "search_files" not in names
 
 
 def test_coding_agent_does_not_register_general_bundle() -> None:
@@ -248,7 +262,8 @@ def test_coding_agent_without_approval_manager_does_not_gate() -> None:
 
 
 def test_coding_system_prompt_mentions_plan() -> None:
-    assert "<plan>" in CODING_SYSTEM_PROMPT
+    # The system prompt may use update_plan tool or a <plan> block — either counts.
+    assert "plan" in CODING_SYSTEM_PROMPT.lower()
 
 
 def test_coding_system_prompt_mentions_write_file() -> None:

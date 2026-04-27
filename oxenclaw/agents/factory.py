@@ -27,13 +27,22 @@ from dataclasses import replace
 
 from oxenclaw.agents.base import Agent
 from oxenclaw.agents.builtin_tools import default_tools
-from oxenclaw.agents.coding_agent import CodingAgent
 from oxenclaw.agents.echo import EchoAgent
 from oxenclaw.agents.pi_agent import PiAgent
 from oxenclaw.agents.tools import Tool, ToolRegistry
+
+# CodingAgent imports tools_pkg.update_plan_tool which (transitively, via
+# `oxenclaw.agents.tools` evaluation) re-enters this module. Defer the
+# import to use-site to break the cycle. The TYPE_CHECKING shim keeps
+# annotations happy without triggering the actual import at import time.
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from oxenclaw.agents.coding_agent import CodingAgent
 from oxenclaw.pi.catalog import default_registry
 from oxenclaw.pi.models import Model
 from oxenclaw.pi.registry import InMemoryAuthStorage
+from oxenclaw.pi.session import SessionManager
 
 logger = logging.getLogger(__name__)
 
@@ -161,7 +170,13 @@ def _maybe_browser_tools() -> list[Tool]:
         return []
 
 
-def _build_default_tools(agent_id: str, mcp_tools: list[Tool] | None) -> ToolRegistry:
+def _build_default_tools(
+    agent_id: str,
+    mcp_tools: list[Tool] | None,
+    *,
+    session_manager: SessionManager | None = None,
+    approval_manager=None,  # type: ignore[no-untyped-def]
+) -> ToolRegistry:
     reg = ToolRegistry()
     reg.register_all(default_tools())
     canvas = _maybe_canvas_tools(agent_id)
@@ -172,6 +187,10 @@ def _build_default_tools(agent_id: str, mcp_tools: list[Tool] | None) -> ToolReg
         reg.register_all(browser)
     if mcp_tools:
         reg.register_all(list(mcp_tools))
+    if session_manager is not None:
+        from oxenclaw.tools_pkg.session_tools import build_session_tools
+
+        reg.register_all(build_session_tools(session_manager, approval_manager=approval_manager))
     return reg
 
 
@@ -221,6 +240,8 @@ def build_agent(
     memory=None,  # type: ignore[no-untyped-def]
     mcp_tools: list[Tool] | None = None,
     agent_type: str = "pi",
+    session_manager: SessionManager | None = None,
+    approval_manager=None,  # type: ignore[no-untyped-def]
 ) -> Agent:
     """Build an agent. All catalog providers route through `PiAgent`.
 
@@ -267,9 +288,23 @@ def build_agent(
             kwargs["system_prompt"] = system_prompt
         if memory is not None:
             kwargs["memory"] = memory
+        if session_manager is not None:
+            kwargs["session_manager"] = session_manager
+        if approval_manager is not None:
+            kwargs["approval_manager"] = approval_manager
+        from oxenclaw.agents.coding_agent import CodingAgent  # lazy: see top
         return CodingAgent(**kwargs)
 
-    resolved_tools = tools if tools is not None else _build_default_tools(agent_id, mcp_tools)
+    resolved_tools = (
+        tools
+        if tools is not None
+        else _build_default_tools(
+            agent_id,
+            mcp_tools,
+            session_manager=session_manager,
+            approval_manager=approval_manager,
+        )
+    )
     if tools is not None and mcp_tools:
         resolved_tools.register_all(list(mcp_tools))
 
@@ -326,7 +361,6 @@ def load_mcp_tools_sync(
 
 __all__ = [
     "CATALOG_PROVIDERS",
-    "CodingAgent",
     "LEGACY_ALIASES",
     "PROVIDER_DEFAULT_MODELS",
     "SUPPORTED_PROVIDERS",

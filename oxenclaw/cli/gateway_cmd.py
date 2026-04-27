@@ -55,6 +55,7 @@ from oxenclaw.gateway.cron_methods import register_cron_methods
 from oxenclaw.gateway.isolation_methods import register_isolation_methods
 from oxenclaw.gateway.memory_methods import register_memory_methods
 from oxenclaw.gateway.skills_methods import register_skills_methods
+from oxenclaw.gateway.plan_methods import register_plan_methods
 from oxenclaw.gateway.usage_methods import register_usage_methods
 from oxenclaw.memory import MemoryRetriever, OpenAIEmbeddings
 from oxenclaw.plugin_sdk.channel_contract import (
@@ -649,6 +650,7 @@ def _build_router(
     register_channels_methods(router, channel_router)
     register_chat_methods(router, paths=paths_home)
     register_usage_methods(router, paths=paths_home)
+    register_plan_methods(router, paths=paths_home)
     register_config_methods(router)
     register_cron_methods(router, cron_scheduler)
     register_approval_methods(router, approvals)

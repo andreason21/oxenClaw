@@ -34,39 +34,61 @@ from typing import TYPE_CHECKING
 
 from oxenclaw.agents.pi_agent import PiAgent
 from oxenclaw.agents.tools import ToolRegistry
+from oxenclaw.config.paths import OxenclawPaths
 from oxenclaw.tools_pkg.fs_tools import (
+    edit_tool,
+    glob_tool,
+    grep_tool,
     list_dir_tool,
     read_file_tool,
-    search_files_tool,
+    read_pdf_tool,
     shell_run_tool,
     write_file_tool,
 )
+from oxenclaw.tools_pkg.process_tool import process_tool
+from oxenclaw.tools_pkg.update_plan_tool import update_plan_tool
 
 if TYPE_CHECKING:
     from oxenclaw.approvals.manager import ApprovalManager
+    from oxenclaw.pi.session import SessionManager
 
 # ---------------------------------------------------------------------------
 # System prompt
 # ---------------------------------------------------------------------------
 
 CODING_SYSTEM_PROMPT = """\
-You are a coding agent. Before making any changes, always produce a \
-`<plan>` block listing the steps you intend to take:
+You are a coding agent. Before making any changes, call `update_plan` with \
+the full list of steps you intend to take — this replaces the freeform \
+`<plan>` text block and lets the dashboard show live progress.
 
-<plan>
-1. …
-2. …
-</plan>
+Call `update_plan` again after each step to flip its status to \
+`in_progress`, `completed`, or `blocked`.  Pass the **complete** step list \
+every time (the tool overwrites the previous plan atomically).
 
-Then execute each step in order, using the available tools:
-- **read_file** / **list_dir** / **search_files** — safe, no approval needed.
+Available tools:
+- **read_file** / **list_dir** / **grep** / **glob** — safe, no approval needed.
+- **update_plan** — record or update the structured step plan; no approval needed.
+- **edit** — targeted string-replace; requires human approval.
 - **write_file** — creates or overwrites a file; requires human approval.
+- **read_pdf** — extract text from a PDF; no approval needed.
 - **shell** — runs a shell command; requires human approval.
+- **process** — start a persistent background process (dev server, REPL, watcher) \
+and interact with it via send_keys / read_output / stop; requires human approval.
 
 File-edit conventions
-- Prefer targeted writes: read the file first, then write back the full \
-updated content.
-- Always state which file you are editing and why, before calling write_file.
+- **Prefer `edit` over `write_file` for modifications.** `edit` is the most \
+token-efficient file-modifier: supply the exact `old_str` you want replaced, \
+the `new_str` to put in its place, and the expected number of occurrences \
+(`count`). This avoids sending the entire file content over the wire and \
+eliminates the risk of accidentally overwriting unrelated sections.
+- Use `write_file` only when creating a new file from scratch or when a \
+full rewrite is genuinely needed.
+- **`read_file` supports line ranges** via `start_line` / `end_line`, which \
+is useful for inspecting large files without loading the whole content. \
+Lines are prefixed with 4-digit right-aligned numbers and a │ separator \
+(e.g. `   1│ first line`) when `with_line_numbers=True` (the default).
+- Always state which file you are editing and why, before calling edit or \
+write_file.
 - If a shell command modifies state (installs a package, runs tests, \
 deletes files) explain the rationale before calling it.
 
@@ -106,10 +128,14 @@ class CodingAgent(PiAgent):
         system_prompt: str = CODING_SYSTEM_PROMPT,
         tools: ToolRegistry | None = None,
         approval_manager: "ApprovalManager | None" = None,
+        session_manager: "SessionManager | None" = None,
+        paths: OxenclawPaths | None = None,
         **kwargs,
     ) -> None:
         if tools is None:
-            tools = _build_coding_registry(approval_manager)
+            tools = _build_coding_registry(
+                approval_manager, paths=paths, session_manager=session_manager
+            )
 
         super().__init__(
             agent_id=agent_id,
@@ -126,31 +152,54 @@ class CodingAgent(PiAgent):
 
 def _build_coding_registry(
     approval_manager: "ApprovalManager | None" = None,
+    *,
+    paths: OxenclawPaths | None = None,
+    session_manager: "SessionManager | None" = None,
 ) -> ToolRegistry:
     """Build the curated ToolRegistry for CodingAgent.
 
     Read-only tools: never gated.
     Write / shell tools: wrapped with gated_tool() when approval_manager is set.
+    update_plan: always ungated — it writes plan metadata, not user files.
     """
     reg = ToolRegistry()
 
     # Read-only — always ungated.
     reg.register(read_file_tool())
+    reg.register(read_pdf_tool())
     reg.register(list_dir_tool())
-    reg.register(search_files_tool())
+    reg.register(grep_tool())
+    reg.register(glob_tool())
 
-    # Write-side — conditionally gated.
+    # Plan tracking — always ungated.
+    reg.register(update_plan_tool(paths=paths))
+
+    # Write-side + process — conditionally gated.
     raw_write = write_file_tool()
+    raw_edit = edit_tool()
     raw_shell = shell_run_tool()
+    raw_process = process_tool()
 
     if approval_manager is not None:
         from oxenclaw.approvals.tool_wrap import gated_tool
 
         reg.register(gated_tool(raw_write, manager=approval_manager))
+        reg.register(gated_tool(raw_edit, manager=approval_manager))
         reg.register(gated_tool(raw_shell, manager=approval_manager))
+        reg.register(gated_tool(raw_process, manager=approval_manager))
     else:
         reg.register(raw_write)
+        reg.register(raw_edit)
         reg.register(raw_shell)
+        reg.register(raw_process)
+
+    # Session tools — read-only always ungated; mutating gated when
+    # approval_manager is supplied.
+    if session_manager is not None:
+        from oxenclaw.tools_pkg.session_tools import build_session_tools
+
+        for t in build_session_tools(session_manager, approval_manager=approval_manager):
+            reg.register(t)
 
     return reg
 

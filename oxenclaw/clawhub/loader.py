@@ -126,7 +126,11 @@ def format_skills_for_prompt(skills: list[InstalledSkill]) -> str:
         "tool_use block named after a skill — there is no function with "
         "that name registered. To use a skill: read SKILL.md at its "
         "&lt;location&gt;, then run the scripts it documents via the "
-        "shell tool (most skills ship under &lt;location&gt;/scripts/).</usage>",
+        "shell tool (most skills ship under &lt;location&gt;/scripts/). "
+        "If the user's request implies a domain not covered by the skills "
+        "listed below, call skill_resolver(query=&quot;...&quot;) — it is a "
+        "real callable tool that searches ClawHub, installs the best match, "
+        "and returns the SKILL.md path + usage instructions.</usage>",
     ]
     for s in skills:
         lines.append("  <skill>")

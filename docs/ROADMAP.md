@@ -74,7 +74,31 @@ ConversationHistory lazily on first send. Dashboard E2E test
 
 ## P1 — operator-named, medium
 
-### C. Skill discovery → install → invoke pipeline ✗
+### C. Skill discovery → install → invoke pipeline ✓
+**Shipped**.
+
+  - **Tool**: new `skill_resolver(query, auto_install=True)` callable
+    tool in `oxenclaw/tools_pkg/skill_resolver_tool.py`. Returns one
+    of: `found="installed"` (with skill_md path + scripts_dir +
+    instructions excerpt), `found="none"`, `found="error"`, or
+    `found="remote_only"` (search hit but no installer available).
+    Match logic: installed skills first by name/slug/description
+    word match; then `MultiRegistryClient.get_client().search_skills`
+    against ClawHub; auto-install via `SkillInstaller.install` (handles
+    "already installed" gracefully).
+  - **Wiring**: `oxenclaw/cli/gateway_cmd.py` registers the tool with
+    the gateway's tool_registry once the `MultiRegistryClient` and
+    `SkillInstaller` are built; available to every PiAgent turn.
+  - **Prompt**: `format_skills_for_prompt` `<usage>` block now
+    explicitly says "if the user's request implies a domain not
+    covered by the skills listed below, call `skill_resolver(...)`",
+    distinguishing it from the (still-correct) "skills are docs not
+    callable tools" guidance.
+  - **Tests**: 3 in `tests/test_skill_resolver_tool.py` covering
+    installed-match, no-match-no-registries, and install-via-fake-
+    registry paths.
+
+### C-historical plan (kept for context)
 - **Why**: operator wants the agent to recognise an intent, locate a
   matching skill in clawhub, install it, and execute it without the
   user manually running `skills.search` + `skills.install`.

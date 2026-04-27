@@ -408,6 +408,13 @@ async def _run_gateway(
     clawhub_client = MultiRegistryClient(registries_cfg)
     skill_installer = SkillInstaller(clawhub_client, paths=paths)
 
+    # Register the skill_resolver tool so the LLM can locate + install skills
+    # by intent at runtime. Uses the same MultiRegistryClient + SkillInstaller
+    # the gateway already has, so no extra credentials are needed.
+    from oxenclaw.tools_pkg.skill_resolver_tool import skill_resolver_tool as _skill_resolver_tool
+
+    tool_registry.register(_skill_resolver_tool(registries=clawhub_client, installer=skill_installer, paths=paths))
+
     router = _build_router(
         agents=agents,
         dispatcher=dispatcher,

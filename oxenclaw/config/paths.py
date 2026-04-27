@@ -47,6 +47,13 @@ class OxenclawPaths:
     def session_file(self, agent_id: str, session_key: str) -> Path:
         return self.agent_dir(agent_id) / "sessions" / f"{session_key}.json"
 
+    def usage_file(self, agent_id: str, session_key: str) -> Path:
+        """Sibling of `session_file` carrying per-session usage / cost
+        totals (cumulative across turns). Kept separate so the
+        ConversationHistory schema doesn't grow a per-message
+        accounting column."""
+        return self.agent_dir(agent_id) / "sessions" / f"{session_key}.usage.json"
+
     def ensure_home(self) -> None:
         self.home.mkdir(parents=True, exist_ok=True)
         self.credentials_dir.mkdir(parents=True, exist_ok=True)

@@ -285,6 +285,12 @@ class PiAgent:
         session.messages.extend(result.appended_messages)
         observer.record(result.usage_total or {})
 
+        # Persist cumulative usage for `usage.session` / `usage.totals` RPCs.
+        # Cost is computed from the model's `pricing` map (USD per million
+        # tokens, keyed by usage-dict field). Written as a sibling file so
+        # ConversationHistory's schema stays unchanged.
+        self._persist_usage(ctx.session_key)
+
         # Engine ingest_batch + after_turn — give the engine the new
         # messages from this turn as a unit so it can index / persist /
         # decide on background work.
@@ -397,6 +403,57 @@ class PiAgent:
                 dashboard_history.save()
             for chunk in chunk_text(reply, self._chunk_limit):
                 yield SendParams(target=inbound.target, text=chunk)
+
+    def _persist_usage(self, session_key: str) -> None:
+        """Snapshot cumulative cache + cost telemetry for `usage.*` RPCs.
+
+        Writes `<paths.usage_file(agent_id, session_key)>` with the
+        observer's running totals; cost is computed from
+        `model.pricing` (USD per million tokens) when present.
+        """
+        import json as _json
+
+        sid = self._session_ids.get(session_key)
+        if sid is None:
+            return
+        observer = self._observers.get(sid)
+        if observer is None:
+            return
+        summary = observer.summary()
+        cost_usd = 0.0
+        pricing = getattr(self._model, "pricing", None) or {}
+        for key, per_million in pricing.items():
+            tokens = int(summary.get(_summary_key_for(key), 0))
+            if tokens > 0:
+                cost_usd += (tokens / 1_000_000) * float(per_million)
+        path = self._paths.usage_file(self.id, session_key)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "turns": int(summary.get("turns", 0)),
+            "input": int(summary.get("input", 0)),
+            "output": int(summary.get("output", 0)),
+            "cache_read": int(summary.get("cache_read", 0)),
+            "cache_create": int(summary.get("cache_create", 0)),
+            "hit_rate": float(summary.get("hit_rate", 0.0)),
+            "cost_usd": round(cost_usd, 6),
+        }
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        tmp.write_text(_json.dumps(payload), encoding="utf-8")
+        import os as _os
+        _os.replace(tmp, path)
+
+
+def _summary_key_for(pricing_key: str) -> str:
+    """Map a pricing-dict key (e.g. 'input_tokens') to the matching
+    field on `CacheObserver.summary()` (e.g. 'input'). The pricing
+    schema mirrors what providers report in their usage dicts."""
+    aliases = {
+        "input_tokens": "input",
+        "output_tokens": "output",
+        "cache_read_input_tokens": "cache_read",
+        "cache_creation_input_tokens": "cache_create",
+    }
+    return aliases.get(pricing_key, pricing_key)
 
 
 __all__ = ["PiAgent"]

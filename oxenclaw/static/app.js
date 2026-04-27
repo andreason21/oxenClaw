@@ -1278,6 +1278,226 @@ function cronScheduleKind(schedule) {
   return "cron";
 }
 
+// ─── Schedule builder helpers ───────────────────────────────────────────
+// A small DSL on top of 5-field cron that covers the patterns most users
+// actually want: daily at a time, weekly on selected days, monthly on a
+// given day, hourly at a minute, every-N-minutes. The builder produces
+// a cron expression; parseBuilderCron tries to recover the builder state
+// from an expression so we can re-open the builder for existing jobs.
+
+const DOW_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+function pad2(n) { return String(n).padStart(2, "0"); }
+
+function buildCron(b) {
+  const m = Math.max(0, Math.min(59, parseInt(b.minute, 10) || 0));
+  const h = Math.max(0, Math.min(23, parseInt(b.hour, 10) || 0));
+  const dom = Math.max(1, Math.min(31, parseInt(b.dayOfMonth, 10) || 1));
+  const everyN = Math.max(1, Math.min(59, parseInt(b.everyMinutes, 10) || 5));
+
+  if (b.frequency === "daily")   return `${m} ${h} * * *`;
+  if (b.frequency === "weekly")  {
+    const days = (b.daysOfWeek && b.daysOfWeek.length) ? b.daysOfWeek.slice().sort((a,b)=>a-b).join(",") : "1";
+    return `${m} ${h} * * ${days}`;
+  }
+  if (b.frequency === "monthly") return `${m} ${h} ${dom} * *`;
+  if (b.frequency === "hourly")  return `${m} * * * *`;
+  if (b.frequency === "minutes") return `*/${everyN} * * * *`;
+  return `${m} ${h} * * *`;
+}
+
+// Try to recover a builder state from a cron expression. Returns null
+// when the expression doesn't fit one of the supported patterns; callers
+// fall back to raw cron mode in that case.
+function parseBuilderCron(expr) {
+  if (!expr) return null;
+  const parts = expr.trim().split(/\s+/);
+  if (parts.length !== 5) return null;
+  const [mn, hr, dom, mo, dw] = parts;
+
+  // Reject anything outside the supported subset.
+  if (mo !== "*") return null;
+
+  // every-N-minutes: */N * * * *
+  if (/^\*\/\d+$/.test(mn) && hr === "*" && dom === "*" && dw === "*") {
+    return { frequency: "minutes", everyMinutes: Number(mn.slice(2)), hour: 0, minute: 0, daysOfWeek: [], dayOfMonth: 1 };
+  }
+  if (!/^\d+$/.test(mn)) return null;
+  const minute = Number(mn);
+
+  // hourly: M * * * *
+  if (hr === "*" && dom === "*" && dw === "*") {
+    return { frequency: "hourly", everyMinutes: 5, hour: 0, minute, daysOfWeek: [], dayOfMonth: 1 };
+  }
+  if (!/^\d+$/.test(hr)) return null;
+  const hour = Number(hr);
+
+  // monthly: M H D * *
+  if (/^\d+$/.test(dom) && dw === "*") {
+    return { frequency: "monthly", everyMinutes: 5, hour, minute, daysOfWeek: [], dayOfMonth: Number(dom) };
+  }
+  // daily / weekly: M H * * dw
+  if (dom === "*") {
+    if (dw === "*") {
+      return { frequency: "daily", everyMinutes: 5, hour, minute, daysOfWeek: [], dayOfMonth: 1 };
+    }
+    // Accept "1-5" → [1,2,3,4,5] and "1,3,5" → [1,3,5]; reject "*/N"
+    let days = [];
+    if (/^\d+(-\d+)?(,\d+(-\d+)?)*$/.test(dw)) {
+      for (const part of dw.split(",")) {
+        if (part.includes("-")) {
+          const [a, b] = part.split("-").map(Number);
+          for (let i = a; i <= b; i++) days.push(i);
+        } else {
+          days.push(Number(part));
+        }
+      }
+      days = days.filter((d) => d >= 0 && d <= 6);
+      return { frequency: "weekly", everyMinutes: 5, hour, minute, daysOfWeek: days, dayOfMonth: 1 };
+    }
+  }
+  return null;
+}
+
+// Human-readable summary of a builder state.
+function describeBuilder(b) {
+  const t = `${pad2(b.hour)}:${pad2(b.minute)}`;
+  if (b.frequency === "daily")   return `Every day at ${t}`;
+  if (b.frequency === "weekly")  {
+    const days = (b.daysOfWeek||[]).slice().sort((a,b)=>a-b).map(d => DOW_LABELS[d]);
+    return days.length ? `Every ${days.join(", ")} at ${t}` : `Pick at least one day`;
+  }
+  if (b.frequency === "monthly") return `Day ${b.dayOfMonth} of every month at ${t}`;
+  if (b.frequency === "hourly")  return `Every hour at :${pad2(b.minute)}`;
+  if (b.frequency === "minutes") return `Every ${b.everyMinutes} minute${b.everyMinutes === 1 ? "" : "s"}`;
+  return "";
+}
+
+function defaultBuilder() {
+  return { frequency: "daily", hour: 9, minute: 0, daysOfWeek: [1,2,3,4,5], dayOfMonth: 1, everyMinutes: 5 };
+}
+
+// Render the schedule builder into a container. `state` is the mutable
+// builder state object (stored on whatever larger draft owns it). Calls
+// `onChange()` after every interaction so the parent can re-render
+// previews/cron strings.
+function renderScheduleBuilder(container, state, onChange) {
+  container.innerHTML = "";
+  container.classList.add("cron-builder");
+
+  // Frequency segmented control
+  const freqRow = el("div", { class: "cron-builder__freq" });
+  const FREQS = [
+    ["daily",   "Daily"],
+    ["weekly",  "Weekly"],
+    ["monthly", "Monthly"],
+    ["hourly",  "Hourly"],
+    ["minutes", "Every N min"],
+  ];
+  for (const [v, l] of FREQS) {
+    const btn = el("button", {
+      type: "button",
+      class: "cron-builder__freq-btn" + (state.frequency === v ? " active" : ""),
+      onclick: () => { state.frequency = v; renderScheduleBuilder(container, state, onChange); onChange(); },
+    }, l);
+    freqRow.append(btn);
+  }
+  container.append(freqRow);
+
+  const detail = el("div", { class: "cron-builder__detail" });
+  container.append(detail);
+
+  if (state.frequency === "daily" || state.frequency === "weekly" || state.frequency === "monthly") {
+    // Time picker (HH:MM) — single input, native control, easy to use.
+    const timeIn = el("input", {
+      type: "time",
+      class: "cron-builder__time",
+      value: `${pad2(state.hour)}:${pad2(state.minute)}`,
+    });
+    timeIn.addEventListener("change", () => {
+      const [h, m] = timeIn.value.split(":").map(Number);
+      state.hour = isNaN(h) ? 0 : h;
+      state.minute = isNaN(m) ? 0 : m;
+      onChange();
+    });
+    detail.append(el("div", { class: "field cron-builder__field" },
+      el("label", {}, "Time"), timeIn));
+  }
+
+  if (state.frequency === "weekly") {
+    const chips = el("div", { class: "cron-builder__chips" });
+    for (let i = 0; i < 7; i++) {
+      const active = state.daysOfWeek.includes(i);
+      const chip = el("button", {
+        type: "button",
+        class: "cron-builder__chip" + (active ? " active" : ""),
+        onclick: () => {
+          if (state.daysOfWeek.includes(i)) state.daysOfWeek = state.daysOfWeek.filter((d) => d !== i);
+          else state.daysOfWeek = state.daysOfWeek.concat(i);
+          renderScheduleBuilder(container, state, onChange); onChange();
+        },
+      }, DOW_LABELS[i]);
+      chips.append(chip);
+    }
+    const presetRow = el("div", { class: "cron-builder__chip-presets" });
+    presetRow.append(
+      el("button", { type: "button", class: "btn btn-sm btn-ghost",
+        onclick: () => { state.daysOfWeek = [1,2,3,4,5]; renderScheduleBuilder(container, state, onChange); onChange(); }
+      }, "Weekdays"),
+      el("button", { type: "button", class: "btn btn-sm btn-ghost",
+        onclick: () => { state.daysOfWeek = [0,6]; renderScheduleBuilder(container, state, onChange); onChange(); }
+      }, "Weekends"),
+      el("button", { type: "button", class: "btn btn-sm btn-ghost",
+        onclick: () => { state.daysOfWeek = [0,1,2,3,4,5,6]; renderScheduleBuilder(container, state, onChange); onChange(); }
+      }, "Every day"),
+    );
+    detail.append(el("div", { class: "field cron-builder__field" },
+      el("label", {}, "Days of week"), chips, presetRow));
+  }
+
+  if (state.frequency === "monthly") {
+    const domIn = el("input", {
+      type: "number", min: "1", max: "31", value: String(state.dayOfMonth),
+      class: "cron-builder__dom",
+    });
+    domIn.addEventListener("input", () => {
+      const v = parseInt(domIn.value, 10);
+      state.dayOfMonth = isNaN(v) ? 1 : Math.max(1, Math.min(31, v));
+      onChange();
+    });
+    detail.append(el("div", { class: "field cron-builder__field" },
+      el("label", {}, "Day of month (1–31)"), domIn));
+  }
+
+  if (state.frequency === "hourly") {
+    const minIn = el("input", {
+      type: "number", min: "0", max: "59", value: String(state.minute),
+      class: "cron-builder__dom",
+    });
+    minIn.addEventListener("input", () => {
+      const v = parseInt(minIn.value, 10);
+      state.minute = isNaN(v) ? 0 : Math.max(0, Math.min(59, v));
+      onChange();
+    });
+    detail.append(el("div", { class: "field cron-builder__field" },
+      el("label", {}, "Minute offset (0–59)"), minIn));
+  }
+
+  if (state.frequency === "minutes") {
+    const nIn = el("input", {
+      type: "number", min: "1", max: "59", value: String(state.everyMinutes),
+      class: "cron-builder__dom",
+    });
+    nIn.addEventListener("input", () => {
+      const v = parseInt(nIn.value, 10);
+      state.everyMinutes = isNaN(v) ? 5 : Math.max(1, Math.min(59, v));
+      onChange();
+    });
+    detail.append(el("div", { class: "field cron-builder__field" },
+      el("label", {}, "Every N minutes"), nIn));
+  }
+}
+
 const CronView = {
   title: "Cron",
   async render(root, actions) {
@@ -1323,39 +1543,68 @@ const CronView = {
     const quickCard = el("div", { class: "card cron-quick" });
     jobsPane.append(quickCard);
 
-    const SCHEDULE_PRESETS = [
-      { id: "every-morning", icon: "🌅", label: "Every morning",   desc: "Daily at 8:00",          cron: "0 8 * * *"   },
-      { id: "every-evening", icon: "🌙", label: "Every evening",   desc: "Daily at 18:00",         cron: "0 18 * * *"  },
-      { id: "hourly",        icon: "🔄", label: "Hourly",          desc: "Every hour, on the :00", cron: "0 * * * *"   },
-      { id: "weekdays",      icon: "📅", label: "Weekdays",        desc: "Mon–Fri at 9:00",        cron: "0 9 * * 1-5" },
-      { id: "weekly",        icon: "📆", label: "Weekly",          desc: "Mondays at 9:00",        cron: "0 9 * * 1"   },
-      { id: "every5min",     icon: "⚡", label: "Every 5 minutes", desc: "Mostly for testing",     cron: "*/5 * * * *" },
-    ];
-    let activePreset = SCHEDULE_PRESETS[0].id;
     quickCard.append(el("h3", { class: "card-title" }, "+ Quick add"));
     quickCard.append(el("div", { class: "card-meta" },
-      "Pick what the agent should do, choose a schedule preset, click Create. " +
-      "For full control use '+ Advanced new job' above."
+      "Build any schedule below — daily at a chosen time, weekly on selected " +
+      "days, monthly on a date, or every N minutes. Optionally limit it to a " +
+      "date range."
     ));
-    const presetGrid = el("div", { class: "cron-preset-grid" });
-    for (const p of SCHEDULE_PRESETS) {
-      const pcard = el("button", {
-        class: "cron-preset" + (p.id === activePreset ? " active" : ""),
-        type: "button",
-        onclick: () => {
-          activePreset = p.id;
-          for (const c of presetGrid.children) c.classList.remove("active");
-          pcard.classList.add("active");
-        },
-      });
-      pcard.append(
-        el("div", { class: "cron-preset__icon" }, p.icon),
-        el("div", { class: "cron-preset__label" }, p.label),
-        el("div", { class: "cron-preset__desc" }, p.desc),
-      );
-      presetGrid.append(pcard);
+
+    // Templates that pre-fill the builder. One click = sensible default,
+    // user can still tweak time/days afterwards.
+    const TEMPLATES = [
+      { label: "Daily 09:00",          state: { frequency: "daily",   hour: 9,  minute: 0,  daysOfWeek: [], dayOfMonth: 1, everyMinutes: 5 } },
+      { label: "Weekdays 09:00",       state: { frequency: "weekly",  hour: 9,  minute: 0,  daysOfWeek: [1,2,3,4,5], dayOfMonth: 1, everyMinutes: 5 } },
+      { label: "Weekly Mon 09:00",     state: { frequency: "weekly",  hour: 9,  minute: 0,  daysOfWeek: [1], dayOfMonth: 1, everyMinutes: 5 } },
+      { label: "Monthly 1st 08:00",    state: { frequency: "monthly", hour: 8,  minute: 0,  daysOfWeek: [], dayOfMonth: 1, everyMinutes: 5 } },
+      { label: "Hourly",               state: { frequency: "hourly",  hour: 0,  minute: 0,  daysOfWeek: [], dayOfMonth: 1, everyMinutes: 5 } },
+      { label: "Every 5 min",          state: { frequency: "minutes", hour: 0,  minute: 0,  daysOfWeek: [], dayOfMonth: 1, everyMinutes: 5 } },
+    ];
+    const tplRow = el("div", { class: "cron-builder__templates" });
+    for (const t of TEMPLATES) {
+      tplRow.append(el("button", {
+        type: "button", class: "btn btn-sm btn-ghost",
+        onclick: () => { Object.assign(quickBuilder, JSON.parse(JSON.stringify(t.state))); refresh(); },
+      }, t.label));
     }
-    quickCard.append(presetGrid);
+    quickCard.append(tplRow);
+
+    const quickBuilder = defaultBuilder();
+    const builderHost = el("div", {});
+    quickCard.append(builderHost);
+
+    const previewWrap = el("div", { class: "cron-builder__preview" });
+    const previewHuman = el("div", { class: "cron-builder__preview-human" });
+    const previewCron = el("code", { class: "cron-builder__preview-cron" });
+    previewWrap.append(previewHuman, previewCron);
+    quickCard.append(previewWrap);
+
+    // Optional active period (collapsed by default).
+    const dateRow = el("div", { class: "cron-builder__date-range" });
+    const startIn = el("input", { type: "date", placeholder: "" });
+    const endIn = el("input", { type: "date", placeholder: "" });
+    dateRow.append(
+      el("div", { class: "field" }, el("label", {}, "Start (optional)"), startIn),
+      el("div", { class: "field" }, el("label", {}, "End (optional)"), endIn),
+    );
+    const datesToggle = el("button", {
+      type: "button", class: "btn btn-sm btn-ghost cron-builder__dates-toggle",
+      onclick: () => {
+        const open = dateRow.style.display !== "none";
+        dateRow.style.display = open ? "none" : "";
+        datesToggle.textContent = open ? "+ Active period (optional)" : "− Active period";
+      },
+    }, "+ Active period (optional)");
+    dateRow.style.display = "none";
+    quickCard.append(datesToggle, dateRow);
+
+    function refresh() {
+      renderScheduleBuilder(builderHost, quickBuilder, refresh);
+      previewHuman.textContent = describeBuilder(quickBuilder);
+      previewCron.textContent = buildCron(quickBuilder);
+    }
+    refresh();
+
     const quickPrompt = el("textarea", {
       class: "cron-quick__prompt",
       placeholder: "What should the agent do? e.g. 'Summarise overnight Slack DMs'",
@@ -1372,14 +1621,20 @@ const CronView = {
       const agent_id = quickAgent.value.trim() || "assistant";
       const chat_id = quickChatId.value.trim() || "demo";
       if (!prompt) { Toast.warn("Enter what the agent should do."); quickPrompt.focus(); return; }
-      const preset = SCHEDULE_PRESETS.find((p) => p.id === activePreset) || SCHEDULE_PRESETS[0];
+      if (quickBuilder.frequency === "weekly" && !quickBuilder.daysOfWeek.length) {
+        Toast.warn("Pick at least one day of the week."); return;
+      }
+      const cron = buildCron(quickBuilder);
+      const params = {
+        schedule: cron,
+        agent_id, channel: "dashboard", account_id: "main", chat_id,
+        prompt,
+      };
+      if (startIn.value) params.start_date = startIn.value;
+      if (endIn.value)   params.end_date = endIn.value;
       try {
-        const res = await Rpc.call("cron.create", {
-          schedule: preset.cron,
-          agent_id, channel: "dashboard", account_id: "main", chat_id,
-          prompt,
-        });
-        Toast.success(`created ${res.id.slice(0, 8)}`, `${preset.label} · ${preset.cron}`);
+        const res = await Rpc.call("cron.create", params);
+        Toast.success(`created ${res.id.slice(0, 8)}`, `${describeBuilder(quickBuilder)} · ${cron}`);
         quickPrompt.value = "";
         await loadJobs();
       } catch (e) {
@@ -1512,32 +1767,41 @@ const CronView = {
         CronViewState.draft = {
           name: "", description: "", enabled: true,
           agent_id: ChatState.agentId || "assistant",
-          scheduleKind: "cron", cronExpr: "", everyAmount: "", everyUnit: "hours",
-          scheduleAt: "", timezone: "",
+          scheduleKind: "builder", cronExpr: "", everyAmount: "", everyUnit: "hours",
+          scheduleAt: "", timezone: "", builder: defaultBuilder(),
+          start_date: "", end_date: "",
           chat_id: ChatState.chatId || "", channel: "dashboard",
           account_id: "main", thread_id: "", prompt: "",
           model: "",
         };
       } else if (mode === "edit" && job) {
+        const parsedKind = cronScheduleKind(job.schedule);
+        const parsedBuilder = parsedKind === "cron" ? parseBuilderCron(job.schedule) : null;
         CronViewState.draft = {
           name: job.name || "", description: job.description || "",
           enabled: job.enabled !== false,
           agent_id: job.agent_id || "",
-          scheduleKind: cronScheduleKind(job.schedule),
+          scheduleKind: parsedBuilder ? "builder" : parsedKind,
           cronExpr: job.schedule || "", everyAmount: "", everyUnit: "hours",
           scheduleAt: "", timezone: job.timezone || "",
+          builder: parsedBuilder || defaultBuilder(),
+          start_date: job.start_date || "", end_date: job.end_date || "",
           chat_id: job.chat_id || "", channel: job.channel || "dashboard",
           account_id: job.account_id || "main", thread_id: job.thread_id || "",
           prompt: job.prompt || "", model: job.model || "",
         };
       } else if (mode === "clone" && job) {
+        const parsedKind = cronScheduleKind(job.schedule);
+        const parsedBuilder = parsedKind === "cron" ? parseBuilderCron(job.schedule) : null;
         CronViewState.draft = {
           name: (job.name || "") + " (copy)", description: job.description || "",
           enabled: job.enabled !== false,
           agent_id: job.agent_id || "",
-          scheduleKind: cronScheduleKind(job.schedule),
+          scheduleKind: parsedBuilder ? "builder" : parsedKind,
           cronExpr: job.schedule || "", everyAmount: "", everyUnit: "hours",
           scheduleAt: "", timezone: job.timezone || "",
+          builder: parsedBuilder || defaultBuilder(),
+          start_date: job.start_date || "", end_date: job.end_date || "",
           chat_id: job.chat_id || "", channel: job.channel || "dashboard",
           account_id: job.account_id || "main", thread_id: job.thread_id || "",
           prompt: job.prompt || "", model: job.model || "",
@@ -1555,6 +1819,12 @@ const CronView = {
       if (draft.scheduleKind === "cron" && !draft.cronExpr.trim()) errors.cronExpr = "Cron expression is required";
       if (draft.scheduleKind === "every" && !draft.everyAmount.trim()) errors.everyAmount = "Amount is required";
       if (draft.scheduleKind === "at" && !draft.scheduleAt.trim()) errors.scheduleAt = "Run-at time is required";
+      if (draft.scheduleKind === "builder" && draft.builder.frequency === "weekly" && !draft.builder.daysOfWeek.length) {
+        errors.builder = "Pick at least one day of the week";
+      }
+      if (draft.start_date && draft.end_date && draft.start_date > draft.end_date) {
+        errors.end_date = "End must be on or after start";
+      }
       if (!draft.chat_id.trim()) errors.chat_id = "chat_id is required";
       return errors;
     }
@@ -1612,7 +1882,12 @@ const CronView = {
       const secSched = el("div", { class: "cron-modal__section" });
       secSched.append(el("div", { class: "cron-modal__section-title" }, "Schedule"));
       const kindSel = el("select", { id: "cme-kind" });
-      for (const [v, l] of [["cron","cron expression"], ["every","every N units"], ["at","run at datetime"]]) {
+      for (const [v, l] of [
+        ["builder","builder (recommended)"],
+        ["cron","cron expression"],
+        ["every","every N units"],
+        ["at","run at datetime"],
+      ]) {
         const opt = el("option", { value: v }, l);
         if (v === d.scheduleKind) opt.selected = true;
         kindSel.append(opt);
@@ -1621,7 +1896,23 @@ const CronView = {
       function renderSchedFields() {
         schedFields.innerHTML = "";
         const kind = CronViewState.draft.scheduleKind;
-        if (kind === "cron") {
+        if (kind === "builder") {
+          const builderHost = el("div", {});
+          const preview = el("div", { class: "cron-builder__preview" });
+          const previewHuman = el("div", { class: "cron-builder__preview-human" });
+          const previewCron = el("code", { class: "cron-builder__preview-cron" });
+          preview.append(previewHuman, previewCron);
+          const refresh = () => {
+            renderScheduleBuilder(builderHost, CronViewState.draft.builder, refresh);
+            previewHuman.textContent = describeBuilder(CronViewState.draft.builder);
+            previewCron.textContent = buildCron(CronViewState.draft.builder);
+          };
+          refresh();
+          schedFields.append(builderHost, preview);
+          if (CronViewState.draftErrors.builder) {
+            schedFields.append(el("div", { class: "cron-modal__field-error" }, CronViewState.draftErrors.builder));
+          }
+        } else if (kind === "cron") {
           const cronIn = el("input", { type: "text", value: d.cronExpr, placeholder: "*/5 * * * *", id: "cme-cron-expr" });
           cronIn.addEventListener("input", () => { CronViewState.draft.cronExpr = cronIn.value; });
           schedFields.append(mfield("cronExpr", "Cron expression (5-field)", cronIn));
@@ -1649,6 +1940,19 @@ const CronView = {
         const tzIn = el("input", { type: "text", value: d.timezone, placeholder: "UTC", id: "cme-timezone" });
         tzIn.addEventListener("input", () => { CronViewState.draft.timezone = tzIn.value; });
         schedFields.append(mfield("timezone", "Timezone (optional, e.g. America/New_York)", tzIn));
+
+        // Date-range fields — apply to all kinds. APScheduler honours
+        // start_date/end_date on top of the cron trigger.
+        const startIn = el("input", { type: "date", value: d.start_date || "", id: "cme-start-date" });
+        startIn.addEventListener("change", () => { CronViewState.draft.start_date = startIn.value; });
+        const endIn = el("input", { type: "date", value: d.end_date || "", id: "cme-end-date" });
+        endIn.addEventListener("change", () => { CronViewState.draft.end_date = endIn.value; });
+        schedFields.append(
+          el("div", { class: "row" },
+            mfield("start_date", "Start (optional)", startIn),
+            mfield("end_date", "End (optional)", endIn),
+          ),
+        );
       }
       kindSel.addEventListener("change", () => {
         CronViewState.draft.scheduleKind = kindSel.value;
@@ -1731,7 +2035,8 @@ const CronView = {
         if (Object.keys(errors).length) return;
 
         let schedule = draft.cronExpr;
-        if (draft.scheduleKind === "every") schedule = `every ${draft.everyAmount} ${draft.everyUnit}`;
+        if (draft.scheduleKind === "builder") schedule = buildCron(draft.builder);
+        else if (draft.scheduleKind === "every") schedule = `every ${draft.everyAmount} ${draft.everyUnit}`;
         else if (draft.scheduleKind === "at") schedule = draft.scheduleAt;
 
         const params = {
@@ -1747,6 +2052,9 @@ const CronView = {
           timezone: draft.timezone || undefined,
           thread_id: draft.thread_id || undefined,
           model: draft.model || undefined,
+          // Send empty string so cron.update can clear an existing date.
+          start_date: isEdit ? (draft.start_date || "") : (draft.start_date || undefined),
+          end_date:   isEdit ? (draft.end_date   || "") : (draft.end_date   || undefined),
         };
 
         try {

@@ -8,6 +8,7 @@ had sent the `prompt` on the configured channel/target.
 
 from __future__ import annotations
 
+from datetime import date, datetime
 from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -25,6 +26,16 @@ def _validate_cron(schedule: str) -> str:
     return schedule
 
 
+def _validate_date(value: str) -> str:
+    # Accept either YYYY-MM-DD or full ISO datetime; round-trip through
+    # datetime/date so users get a clean error if it's malformed.
+    if "T" in value or " " in value:
+        datetime.fromisoformat(value)
+    else:
+        date.fromisoformat(value)
+    return value
+
+
 class NewCronJob(BaseModel):
     """Inbound shape for `cron.create` — no `id`, user supplies the rest."""
 
@@ -39,11 +50,26 @@ class NewCronJob(BaseModel):
     prompt: str
     description: str | None = None
     enabled: bool = True
+    start_date: str | None = Field(
+        default=None,
+        description="ISO date/datetime; before this the job won't fire.",
+    )
+    end_date: str | None = Field(
+        default=None,
+        description="ISO date/datetime; after this the job won't fire.",
+    )
 
     @field_validator("schedule")
     @classmethod
     def _check_schedule(cls, v: str) -> str:
         return _validate_cron(v)
+
+    @field_validator("start_date", "end_date")
+    @classmethod
+    def _check_date(cls, v: str | None) -> str | None:
+        if v is None or v == "":
+            return None
+        return _validate_date(v)
 
 
 class CronJob(NewCronJob):

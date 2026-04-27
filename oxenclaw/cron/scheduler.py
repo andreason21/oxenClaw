@@ -30,6 +30,30 @@ logger = get_logger("cron.scheduler")
 DEFAULT_MISFIRE_GRACE_SECONDS = 5 * 60
 
 
+def _coerce_dt(value: str, tz):  # type: ignore[no-untyped-def]
+    """Parse an ISO date or datetime, attaching `tz` when given and naive.
+
+    `tz` may be a tzinfo instance or an IANA name (or None).
+    """
+    from datetime import date, datetime, tzinfo as _tzinfo
+
+    if "T" in value or " " in value:
+        dt = datetime.fromisoformat(value)
+    else:
+        dt = datetime.combine(date.fromisoformat(value), datetime.min.time())
+    if tz is not None and dt.tzinfo is None:
+        if isinstance(tz, _tzinfo):
+            dt = dt.replace(tzinfo=tz)
+        else:
+            try:
+                from zoneinfo import ZoneInfo
+
+                dt = dt.replace(tzinfo=ZoneInfo(str(tz)))
+            except Exception:
+                pass
+    return dt
+
+
 class CronScheduler:
     def __init__(
         self,
@@ -121,6 +145,14 @@ class CronScheduler:
         trigger = CronTrigger.from_crontab(
             job.schedule, timezone=self._timezone if self._timezone else None
         )
+        # APScheduler's trigger always ends up with a tzinfo (local if not
+        # provided). Naive datetimes can't be compared against it, so we
+        # match the trigger's own timezone when attaching dates.
+        trigger_tz = getattr(trigger, "timezone", None)
+        if job.start_date:
+            trigger.start_date = _coerce_dt(job.start_date, trigger_tz)
+        if job.end_date:
+            trigger.end_date = _coerce_dt(job.end_date, trigger_tz)
         self._scheduler.add_job(
             self._fire,
             trigger=trigger,

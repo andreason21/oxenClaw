@@ -54,6 +54,8 @@ class _UpdateParams(BaseModel):
     thread_id: str | None = None
     description: str | None = None
     enabled: bool | None = None
+    start_date: str | None = None
+    end_date: str | None = None
 
 
 def _next_run_at(scheduler: CronScheduler, job_id: str) -> float | None:
@@ -166,10 +168,16 @@ def register_cron_methods(
             "thread_id",
             "description",
             "enabled",
+            "start_date",
+            "end_date",
         ):
             val = getattr(p, field_name, None)
             if val is not None:
-                changes[field_name] = val
+                # Allow clearing date fields by sending an empty string.
+                if field_name in ("start_date", "end_date") and val == "":
+                    changes[field_name] = None
+                else:
+                    changes[field_name] = val
 
         if not changes:
             return {"updated": False, "error": "at least one field must be set"}
@@ -182,6 +190,16 @@ def register_cron_methods(
                 _validate_cron(str(changes["schedule"]))
             except Exception as exc:
                 return {"updated": False, "error": f"invalid schedule: {exc}"}
+
+        # Validate date fields if provided.
+        for date_field in ("start_date", "end_date"):
+            if date_field in changes and changes[date_field] is not None:
+                from oxenclaw.cron.models import _validate_date
+
+                try:
+                    _validate_date(str(changes[date_field]))
+                except Exception as exc:
+                    return {"updated": False, "error": f"invalid {date_field}: {exc}"}
 
         updated_job = job.model_copy(update=changes)
         scheduler._store.replace(updated_job)

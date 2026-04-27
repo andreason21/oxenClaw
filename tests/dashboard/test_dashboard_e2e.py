@@ -302,6 +302,28 @@ async def test_cron_view_quick_add_wizard_renders_presets(page) -> None:
     assert await page.locator("#topbar-actions button", has_text="New job").count() == 1
 
 
+async def test_chat_view_compact_target_bar_default_only_shows_agent_and_chip(page) -> None:
+    """Compact bar replaces the old 5-input row. Default state shows
+    just an Agent <select> + chat-id chip + ⚙️ Advanced toggle.
+    Channel/account_id/thread_id inputs live behind the toggle."""
+    await _click_nav(page, "chat")
+    await page.wait_for_selector(".chat-target__compact", timeout=3000)
+    assert await page.locator(".chat-target__agent").count() == 1
+    assert await page.locator(".chat-target__chip").count() == 1
+    assert await page.locator(".chat-target__adv").count() == 1
+    # The advanced row is hidden until toggled.
+    visible = await page.locator(".chat-target__advanced").is_visible()
+    assert visible is False
+    # Click toggle → advanced row appears.
+    await page.locator(".chat-target__adv").click()
+    await page.wait_for_function(
+        '() => document.querySelector(".chat-target__advanced")?.style.display !== "none"',
+        timeout=2000,
+    )
+    advanced_visible = await page.locator(".chat-target__advanced").is_visible()
+    assert advanced_visible is True
+
+
 async def test_chat_view_attach_button_renders_thumb(page) -> None:
     """Drop a 1×1 PNG into the file input → a thumb should appear."""
     await _click_nav(page, "chat")

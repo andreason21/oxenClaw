@@ -439,19 +439,20 @@ const ChatView = {
     const compose = el("div", { class: "chat-compose" });
     right.append(targetCard, stream, compose);
 
+    // ── Compact target bar (default) ──────────────────────────────────
+    // 5-input row was a Telegram-era artefact (multi-channel + multi-
+    // account + thread routing). For dashboard chat 99% of users only
+    // care about agent + chat-id. Channel/account_id/thread_id are
+    // hidden behind an Advanced toggle.
     const fields = ["agentId", "channel", "accountId", "chatId", "threadId"];
-    // `threadId` is the only field allowed to be blank; the others are
-    // required for a valid `chat.send` payload (gateway rejects empty
-    // channel/account_id/chat_id with min_length=1).
     const requiredFields = new Set(["agentId", "channel", "accountId", "chatId"]);
     const defaults = { agentId: "default", channel: "dashboard", accountId: "main", chatId: "demo", threadId: "" };
     const inputs = {};
     for (const f of fields) {
-      inputs[f] = el("input", { type: "text", value: ChatState[f], placeholder: f });
+      inputs[f] = el("input", { type: "text", value: ChatState[f] ?? defaults[f], placeholder: f });
       inputs[f].addEventListener("change", () => {
         const next = inputs[f].value.trim();
         if (!next && requiredFields.has(f)) {
-          // Reject the blank — keep prior value, restore it in the UI.
           inputs[f].value = ChatState[f] || defaults[f];
           ChatState[f] = inputs[f].value;
         } else {
@@ -461,15 +462,96 @@ const ChatView = {
         refresh();
       });
     }
-    targetCard.append(
-      el("div", { class: "row" },
-        labelled("agent_id", inputs.agentId),
-        labelled("channel", inputs.channel),
-        labelled("account_id", inputs.accountId),
-        labelled("chat_id", inputs.chatId),
-        labelled("thread_id (opt)", inputs.threadId),
-      ),
+
+    // Agent dropdown (populated from agents.list at render time).
+    const agentSelect = el("select", { class: "chat-target__agent" });
+    async function reloadAgentChoices() {
+      try {
+        const ids = await Rpc.call("agents.list", {});
+        const list = Array.isArray(ids) && ids.length ? ids : [ChatState.agentId || "assistant"];
+        agentSelect.innerHTML = "";
+        if (!list.includes(ChatState.agentId)) list.push(ChatState.agentId);
+        for (const id of list) {
+          const opt = el("option", { value: id }, id);
+          if (id === ChatState.agentId) opt.selected = true;
+          agentSelect.append(opt);
+        }
+      } catch (e) {
+        agentSelect.innerHTML = "";
+        agentSelect.append(el("option", { value: ChatState.agentId }, ChatState.agentId));
+      }
+    }
+    agentSelect.addEventListener("change", () => {
+      ChatState.agentId = agentSelect.value;
+      ChatState.save();
+      // Keep the hidden advanced input synced so toggling Advanced shows
+      // a consistent value.
+      inputs.agentId.value = ChatState.agentId;
+      refresh();
+    });
+
+    // chat-id chip + popover (rename / new chat / copy session-key).
+    const chatChipLabel = el("span", { class: "chat-target__chat-id" });
+    const updateChip = () => {
+      chatChipLabel.textContent = ChatState.chatId || "(no chat-id)";
+    };
+    updateChip();
+    const chatChipBtn = el("button", {
+      class: "chat-target__chip",
+      type: "button",
+      title: "Click for chat actions",
+      onclick: async () => {
+        const next = prompt(
+          "Chat-id (used as conversation key). Leave blank for a fresh one.",
+          ChatState.chatId || "",
+        );
+        if (next === null) return;
+        if (!next.trim()) {
+          ChatState.newChat();
+        } else {
+          ChatState.chatId = next.trim();
+          ChatState.threadId = "";
+          ChatState.save();
+        }
+        inputs.chatId.value = ChatState.chatId;
+        inputs.threadId.value = ChatState.threadId;
+        updateChip();
+        await refresh();
+      },
+    });
+    chatChipBtn.append(el("span", { class: "chat-target__chip-icon" }, "💬"), chatChipLabel);
+
+    const advBtn = el("button", {
+      class: "chat-target__adv",
+      type: "button",
+      title: "Toggle advanced channel / account / thread fields (debug only)",
+    }, "⚙️ Advanced");
+    let advancedVisible = false;
+    const advRow = el("div", {
+      class: "chat-target__advanced",
+      style: "display:none",
+    });
+    advRow.append(
+      labelled("agent_id", inputs.agentId),
+      labelled("channel", inputs.channel),
+      labelled("account_id", inputs.accountId),
+      labelled("chat_id", inputs.chatId),
+      labelled("thread_id (opt)", inputs.threadId),
     );
+    advBtn.onclick = () => {
+      advancedVisible = !advancedVisible;
+      advRow.style.display = advancedVisible ? "" : "none";
+      advBtn.textContent = advancedVisible ? "⚙️ Advanced (hide)" : "⚙️ Advanced";
+    };
+
+    const compactRow = el("div", { class: "chat-target__compact" },
+      el("label", { class: "chat-target__label" }, "Agent"),
+      agentSelect,
+      chatChipBtn,
+      advBtn,
+    );
+    targetCard.append(compactRow, advRow);
+    reloadAgentChoices();
 
     const textarea = el("textarea", { placeholder: "type a message…\nCtrl+Enter to send" });
     const sendBtn = el("button", { class: "btn btn-primary" }, "Send");
@@ -661,6 +743,7 @@ const ChatView = {
       ChatState.newChat();
       if (inputs && inputs.chatId) inputs.chatId.value = ChatState.chatId;
       if (inputs && inputs.threadId) inputs.threadId.value = ChatState.threadId;
+      updateChip();
       await refresh();
       try { await loadSessions(); } catch { /* sessions panel optional */ }
       const ta = document.querySelector(".chat-compose textarea");
@@ -697,6 +780,7 @@ const ChatView = {
               ChatState.threadId = parts[3] || "";
               ChatState.save();
               for (const f of fields) inputs[f].value = ChatState[f];
+              updateChip();
               refresh();
             }
           },
@@ -732,6 +816,8 @@ const ChatView = {
     // the freshly-rendered handler always sees it.
     const onExternalNewChat = () => {
       for (const f of fields) inputs[f].value = ChatState[f] ?? "";
+      updateChip();
+      reloadAgentChoices();
       refresh();
       const ta = document.querySelector(".chat-compose textarea");
       if (ta) ta.focus();

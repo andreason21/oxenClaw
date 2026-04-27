@@ -199,6 +199,26 @@ as a follow-up without backend churn.
 - openclaw spawns child agents via the Agent Control Plane. Less
   urgent for in-house dashboard use but unlocks complex flows.
 
+### M. Compact chat-target bar (drop Telegram-era 5-input row) ✓
+**Shipped** — operator pointed out that agent_id, channel,
+account_id, chat_id, thread_id displayed in the chat tab were
+mostly noise: only `agent_id` and `chat_id` carry user-visible
+meaning; the other three default to `dashboard:main:""`
+unconditionally and were Telegram-era leftovers.
+
+  - Default chat tab now renders a compact target bar: Agent
+    `<select>` (populated from agents.list at render) + chat-id
+    chip (`💬 chat-...`, click to rename / new / pick) + ⚙️
+    Advanced toggle.
+  - Click the chip → `prompt()` to set a new chat-id; blank input
+    triggers ChatState.newChat() so the chip doubles as the
+    "+ New chat" affordance for keyboard users.
+  - The full five-input row still lives behind the Advanced
+    toggle for debugging multi-channel routing or non-default
+    accounts. `samp:new-chat` listener and the sessions-panel
+    click handler keep the chip and advanced inputs synchronised.
+  - Dashboard E2E: `test_chat_view_compact_target_bar_default_only_shows_agent_and_chip`.
+
 ### L. web_search → web_fetch chaining + multi-backend fallback ✓
 **Shipped** — operator reported that openclaw answers
 "AI 반도체 시장 전망 2026" by chaining web_search → web_fetch

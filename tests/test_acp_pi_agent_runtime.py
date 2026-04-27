@@ -239,3 +239,190 @@ async def test_idempotent_ensure_session_returns_same_handle(
         AcpRuntimeEnsureInput(session_key="s", agent="a", mode="persistent")
     )
     assert h1 is h2 or h1 == h2
+
+
+# --- tool-call telemetry projection ---------------------------------------
+
+
+async def test_tool_call_hooks_emit_pending_then_completed_events(
+    tmp_path: Path,
+) -> None:
+    """Drive PiAgent's HookRunner manually — simulate the run loop
+    invoking before_tool_use → after_tool_use during a turn — and
+    confirm the runtime projects them to AcpEventToolCall events."""
+    from oxenclaw.acp.pi_agent_runtime import _ToolTelemetry
+    from oxenclaw.pi.hooks import HookContext
+
+    agent = _make_pi_agent(tmp_path, provider="acp_pi_text")
+    runtime = PiAgentAcpRuntime(agent=agent)
+    handle = await runtime.ensure_session(
+        AcpRuntimeEnsureInput(
+            session_key="tc:1", agent="a", mode="oneshot"
+        )
+    )
+    telemetry = _ToolTelemetry(session_key=handle.session_key)
+    uninstall = runtime._install_tool_hooks(telemetry)
+    try:
+        ctx = HookContext(session_key=handle.session_key)
+        await agent._hooks.run_before_tool_use(
+            "read_file", {"path": "x.py"}, ctx
+        )
+        await agent._hooks.run_after_tool_use(
+            "read_file", {"path": "x.py"}, "file contents", False, ctx
+        )
+        events = telemetry.drain()
+    finally:
+        uninstall()
+
+    assert len(events) == 2
+    pending, completed = events
+    assert pending.tag == "tool_call"
+    assert pending.status == "pending"
+    assert pending.title == "read_file"
+    assert completed.tag == "tool_call_update"
+    assert completed.status == "completed"
+    assert completed.tool_call_id == pending.tool_call_id
+
+
+async def test_tool_call_hooks_filter_by_session_key(
+    tmp_path: Path,
+) -> None:
+    """A telemetry tap installed for session A must NOT capture tool
+    events from session B firing on the same agent."""
+    from oxenclaw.acp.pi_agent_runtime import _ToolTelemetry
+    from oxenclaw.pi.hooks import HookContext
+
+    agent = _make_pi_agent(tmp_path, provider="acp_pi_text")
+    runtime = PiAgentAcpRuntime(agent=agent)
+    telemetry_a = _ToolTelemetry(session_key="A")
+    telemetry_b = _ToolTelemetry(session_key="B")
+    uninstall_a = runtime._install_tool_hooks(telemetry_a)
+    uninstall_b = runtime._install_tool_hooks(telemetry_b)
+    try:
+        # Tool fired against session A only.
+        ctx_a = HookContext(session_key="A")
+        await agent._hooks.run_before_tool_use("grep", {"q": "x"}, ctx_a)
+        await agent._hooks.run_after_tool_use(
+            "grep", {"q": "x"}, "ok", False, ctx_a
+        )
+    finally:
+        uninstall_a()
+        uninstall_b()
+
+    assert len(telemetry_a.drain()) == 2
+    assert telemetry_b.drain() == []
+
+
+async def test_tool_call_hooks_uninstalled_after_run_turn(
+    tmp_path: Path,
+) -> None:
+    """After the turn completes (or errors), the hooks must be removed
+    from the HookRunner so subsequent turns don't double-tap."""
+
+    async def fake_stream(_ctx, _opts):  # type: ignore[no-untyped-def]
+        yield TextDeltaEvent(delta="ok")
+        yield StopEvent(reason="end_turn")
+
+    register_provider_stream("acp_pi_uninstall", fake_stream)
+    agent = _make_pi_agent(tmp_path, provider="acp_pi_uninstall")
+    runtime = PiAgentAcpRuntime(agent=agent)
+    handle = await runtime.ensure_session(
+        AcpRuntimeEnsureInput(
+            session_key="ui", agent="a", mode="oneshot"
+        )
+    )
+    before_count = len(agent._hooks.before_tool_use)
+    after_count = len(agent._hooks.after_tool_use)
+    await _drain(
+        runtime.run_turn(
+            AcpRuntimeTurnInput(
+                handle=handle, text="hi", mode="prompt", request_id="r"
+            )
+        )
+    )
+    assert len(agent._hooks.before_tool_use) == before_count
+    assert len(agent._hooks.after_tool_use) == after_count
+
+
+async def test_tool_call_failed_status_when_is_error_true(
+    tmp_path: Path,
+) -> None:
+    from oxenclaw.acp.pi_agent_runtime import _ToolTelemetry
+    from oxenclaw.pi.hooks import HookContext
+
+    agent = _make_pi_agent(tmp_path, provider="acp_pi_text")
+    runtime = PiAgentAcpRuntime(agent=agent)
+    telemetry = _ToolTelemetry(session_key="s")
+    uninstall = runtime._install_tool_hooks(telemetry)
+    try:
+        ctx = HookContext(session_key="s")
+        await agent._hooks.run_before_tool_use("shell", {"cmd": "exit 1"}, ctx)
+        await agent._hooks.run_after_tool_use(
+            "shell", {"cmd": "exit 1"}, "non-zero exit", True, ctx
+        )
+        events = telemetry.drain()
+    finally:
+        uninstall()
+    assert events[-1].status == "failed"
+
+
+async def test_run_turn_yields_tool_event_inline_with_text(
+    tmp_path: Path,
+) -> None:
+    """End-to-end: a turn that fires a tool mid-stream should produce
+    AcpEventToolCall events alongside AcpEventTextDelta events in the
+    runtime's output stream. Uses a hand-rolled fake agent so the
+    test pins the runtime's drain-between-yields behaviour, not
+    PiAgent's internal tool dispatch."""
+    from oxenclaw.pi.hooks import HookContext, HookRunner
+    from oxenclaw.plugin_sdk.channel_contract import SendParams
+
+    class _FakeAgentWithHooks:
+        id = "fake-with-hooks"
+
+        def __init__(self) -> None:
+            self._hooks = HookRunner()
+
+        async def handle(self, inbound, ctx):  # type: ignore[no-untyped-def]
+            hook_ctx = HookContext(session_key=ctx.session_key)
+            # First yield: a text chunk.
+            yield SendParams(target=inbound.target, text="thinking… ")
+            # Mid-turn: tool fires.
+            await self._hooks.run_before_tool_use(
+                "read_file", {"path": "a.py"}, hook_ctx
+            )
+            await self._hooks.run_after_tool_use(
+                "read_file", {"path": "a.py"}, "ok", False, hook_ctx
+            )
+            # Second yield: more text.
+            yield SendParams(target=inbound.target, text="done.")
+
+    agent = _FakeAgentWithHooks()
+    runtime = PiAgentAcpRuntime(agent=agent)
+    handle = await runtime.ensure_session(
+        AcpRuntimeEnsureInput(
+            session_key="inline", agent="a", mode="oneshot"
+        )
+    )
+    events = await _drain(
+        runtime.run_turn(
+            AcpRuntimeTurnInput(
+                handle=handle, text="x", mode="prompt", request_id="r"
+            )
+        )
+    )
+    kinds = [type(ev).__name__ for ev in events]
+    assert "AcpEventToolCall" in kinds
+    assert "AcpEventTextDelta" in kinds
+    assert isinstance(events[-1], AcpEventDone)
+    assert events[-1].stop_reason == "stop"
+    # Tool events should arrive between the two text yields, not at
+    # the very end. Find the tool_call index, confirm at least one
+    # text delta before AND after it.
+    tool_idx = next(
+        i for i, k in enumerate(kinds) if k == "AcpEventToolCall"
+    )
+    text_kinds_before = kinds[:tool_idx]
+    text_kinds_after = kinds[tool_idx + 1 :]
+    assert "AcpEventTextDelta" in text_kinds_before
+    assert "AcpEventTextDelta" in text_kinds_after

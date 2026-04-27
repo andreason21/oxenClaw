@@ -14,12 +14,17 @@ client (Zed, another oxenclaw, etc.) gets:
   - `stopReason=cancel` propagation when the client sends
     `session/cancel`
 
+Tool-call telemetry is now projected mid-flight: a per-turn
+before_tool_use / after_tool_use hook pair is registered on the
+agent's HookRunner and pushes `tool_call` (pending) and
+`tool_call_update` (completed/failed) events into a queue that the
+run-turn loop drains between text yields. Hooks are filtered by
+`session_key` so concurrent ACP sessions on the same agent don't
+cross-pollute each other's telemetry. The hooks are uninstalled in
+a finally block — even on cancellation, error, or generator close.
+
 What this commit deliberately doesn't ship:
 
-  - tool_call telemetry projection. PiAgent records tool_calls into
-    ConversationHistory *after* each turn. Streaming them as
-    session/update notifications mid-flight needs a hook tap on the
-    runtime — bigger surface, separate commit.
   - image / resource content blocks. We ignore non-text blocks for
     now; PiAgent's multimodal pipeline already handles them when
     InboundEnvelope.media is populated, so the wiring is mechanical.
@@ -44,12 +49,19 @@ from oxenclaw.agents.acp_runtime import (
     AcpEventDone,
     AcpEventError,
     AcpEventTextDelta,
+    AcpEventToolCall,
     AcpRuntimeEnsureInput,
     AcpRuntimeEvent,
     AcpRuntimeHandle,
     AcpRuntimeTurnInput,
 )
 from oxenclaw.agents.base import AgentContext
+from oxenclaw.pi.hooks import (
+    AfterToolUseHook,
+    BeforeToolUseHook,
+    HookContext,
+    HookRunner,
+)
 from oxenclaw.plugin_sdk.channel_contract import (
     ChannelTarget,
     InboundEnvelope,
@@ -70,6 +82,76 @@ class _PiSession:
     handle: AcpRuntimeHandle
     cancelled: asyncio.Event = field(default_factory=asyncio.Event)
     closed: bool = False
+
+
+@dataclass
+class _ToolTelemetry:
+    """Per-turn capture buffer for before/after_tool_use hook taps."""
+
+    session_key: str
+    queue: asyncio.Queue[AcpEventToolCall] = field(default_factory=asyncio.Queue)
+    counter: int = 0
+    # FIFO of tool_call_ids minted in before_tool_use, popped in
+    # after_tool_use. Tools execute sequentially per session so a
+    # plain list is enough.
+    pending_ids: list[str] = field(default_factory=list)
+
+    def make_before_hook(self) -> BeforeToolUseHook:
+        async def _before(
+            tool_name: str,
+            args: dict[str, Any],
+            ctx: HookContext,
+        ) -> None:
+            if ctx.session_key != self.session_key:
+                return None
+            self.counter += 1
+            tid = f"acp-tc-{self.counter}"
+            self.pending_ids.append(tid)
+            self.queue.put_nowait(
+                AcpEventToolCall(
+                    text=tool_name,
+                    tag="tool_call",
+                    tool_call_id=tid,
+                    status="pending",
+                    title=tool_name,
+                )
+            )
+            return None
+
+        return _before
+
+    def make_after_hook(self) -> AfterToolUseHook:
+        async def _after(
+            tool_name: str,
+            args: dict[str, Any],
+            output: str,
+            is_error: bool,
+            ctx: HookContext,
+        ) -> None:
+            if ctx.session_key != self.session_key:
+                return
+            tid = self.pending_ids.pop(0) if self.pending_ids else (
+                f"acp-tc-orphan-{self.counter}"
+            )
+            self.queue.put_nowait(
+                AcpEventToolCall(
+                    text=tool_name,
+                    tag="tool_call_update",
+                    tool_call_id=tid,
+                    status="failed" if is_error else "completed",
+                    title=tool_name,
+                )
+            )
+
+        return _after
+
+    def drain(self) -> list[AcpEventToolCall]:
+        out: list[AcpEventToolCall] = []
+        while True:
+            try:
+                out.append(self.queue.get_nowait())
+            except asyncio.QueueEmpty:
+                return out
 
 
 class PiAgentAcpRuntime:
@@ -151,36 +233,85 @@ class PiAgentAcpRuntime:
             agent_id=getattr(self._agent, "id", "pi"),
             session_key=input.handle.session_key,
         )
+        telemetry = _ToolTelemetry(session_key=input.handle.session_key)
+        uninstall = self._install_tool_hooks(telemetry)
         try:
-            async for send_params in self._agent.handle(envelope, ctx):
-                if state.cancelled.is_set():
-                    state.cancelled.clear()
-                    yield AcpEventDone(stop_reason="cancel")
-                    return
-                text = (send_params.text or "").strip("\n")
-                if not text:
-                    continue
-                yield AcpEventTextDelta(
-                    text=send_params.text or "",
-                    stream="output",
-                    tag="agent_message_chunk",
+            try:
+                async for send_params in self._agent.handle(envelope, ctx):
+                    # Drain any tool events that fired since the last
+                    # yield. This puts tool_call cards before the text
+                    # delta they preceded, which is the natural order
+                    # an operator expects ("we called X, here's the
+                    # answer").
+                    for tool_ev in telemetry.drain():
+                        yield tool_ev
+                    if state.cancelled.is_set():
+                        state.cancelled.clear()
+                        yield AcpEventDone(stop_reason="cancel")
+                        return
+                    text = (send_params.text or "").strip("\n")
+                    if not text:
+                        continue
+                    yield AcpEventTextDelta(
+                        text=send_params.text or "",
+                        stream="output",
+                        tag="agent_message_chunk",
+                    )
+            except asyncio.CancelledError:
+                state.cancelled.clear()
+                yield AcpEventDone(stop_reason="cancel")
+                return
+            except Exception as exc:
+                logger.exception("PiAgentAcpRuntime: handle() failed")
+                yield AcpEventError(
+                    message=f"agent handle failed: {exc}",
+                    code="agent_handle_failed",
                 )
-        except asyncio.CancelledError:
-            state.cancelled.clear()
-            yield AcpEventDone(stop_reason="cancel")
-            return
-        except Exception as exc:
-            logger.exception("PiAgentAcpRuntime: handle() failed")
-            yield AcpEventError(
-                message=f"agent handle failed: {exc}",
-                code="agent_handle_failed",
-            )
-            return
-        if state.cancelled.is_set():
-            state.cancelled.clear()
-            yield AcpEventDone(stop_reason="cancel")
-            return
-        yield AcpEventDone(stop_reason="stop")
+                return
+            # Final drain — catch tool events that fired between the
+            # last text yield and the end of the turn.
+            for tool_ev in telemetry.drain():
+                yield tool_ev
+            if state.cancelled.is_set():
+                state.cancelled.clear()
+                yield AcpEventDone(stop_reason="cancel")
+                return
+            yield AcpEventDone(stop_reason="stop")
+        finally:
+            uninstall()
+
+    def _install_tool_hooks(self, telemetry: _ToolTelemetry):
+        """Register before/after_tool_use taps on the agent's HookRunner.
+
+        Returns an `uninstall()` callable that removes the same hooks
+        — must be invoked in a `finally` block so a torn turn doesn't
+        leak hooks across sessions.
+        """
+        runner: HookRunner | None = getattr(self._agent, "_hooks", None)
+        if not isinstance(runner, HookRunner):
+            # Agent doesn't expose a HookRunner (or has none). Telemetry
+            # silently degrades — text deltas still flow, just no
+            # tool_call notifications.
+            def _noop_uninstall() -> None:
+                return None
+
+            return _noop_uninstall
+        before = telemetry.make_before_hook()
+        after = telemetry.make_after_hook()
+        runner.before_tool_use.append(before)
+        runner.after_tool_use.append(after)
+
+        def uninstall() -> None:
+            try:
+                runner.before_tool_use.remove(before)
+            except ValueError:  # pragma: no cover — already removed
+                pass
+            try:
+                runner.after_tool_use.remove(after)
+            except ValueError:  # pragma: no cover — already removed
+                pass
+
+        return uninstall
 
     async def cancel(
         self, *, handle: AcpRuntimeHandle, reason: str | None = None

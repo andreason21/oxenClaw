@@ -17,11 +17,20 @@ def test_build_echo_agent() -> None:
 
 
 def test_build_anthropic_agent_with_default_tools() -> None:
-    """`--provider anthropic` is a pi alias now; default tools still wire."""
+    """`--provider anthropic` is a pi alias now; default tools still wire.
+    Default registry now includes the openclaw-style fs/shell/process/
+    plan bundle alongside echo/get_time."""
     agent = build_agent(agent_id="assistant", provider="anthropic")
     assert isinstance(agent, PiAgent)
     assert agent.id == "assistant"
-    assert sorted(agent._tools.names()) == ["echo", "get_time"]
+    names = set(agent._tools.names())
+    for required in (
+        "echo", "get_time",
+        "read_file", "list_dir", "grep", "glob", "read_pdf",
+        "write_file", "edit", "shell", "process",
+        "update_plan",
+    ):
+        assert required in names, f"missing {required!r}: {sorted(names)}"
 
 
 def test_unknown_provider_raises_bad_parameter() -> None:

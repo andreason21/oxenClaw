@@ -47,4 +47,29 @@ def echo_tool() -> Tool:
 
 
 def default_tools() -> list[Tool]:
-    return [get_time_tool(), echo_tool()]
+    """Built-in read-only tools every agent gets without opt-in.
+
+    Mirrors openclaw's pi-coding-agent default bundle — `read`, `glob`,
+    `grep`, `list_dir`, `read_pdf` are always safe to expose because
+    they don't mutate state. Mutating tools (`write_file`, `edit`,
+    `shell`, `process`) are added by `_build_default_tools` only when
+    an `ApprovalManager` is injected, so the human-approval gate
+    catches destructive calls on the default agent.
+    """
+    from oxenclaw.tools_pkg.fs_tools import (
+        glob_tool,
+        grep_tool,
+        list_dir_tool,
+        read_file_tool,
+        read_pdf_tool,
+    )
+
+    return [
+        get_time_tool(),
+        echo_tool(),
+        read_file_tool(),
+        list_dir_tool(),
+        grep_tool(),
+        glob_tool(),
+        read_pdf_tool(),
+    ]

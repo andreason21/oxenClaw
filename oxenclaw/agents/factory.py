@@ -179,6 +179,37 @@ def _build_default_tools(
 ) -> ToolRegistry:
     reg = ToolRegistry()
     reg.register_all(default_tools())
+
+    # Mutating fs/shell/process/plan tools — every agent (not just
+    # CodingAgent) gets these, with approval-gating when an
+    # ApprovalManager is wired so the destructive ones land on the
+    # exec-approvals queue instead of running unattended.
+    from oxenclaw.tools_pkg.fs_tools import edit_tool, shell_run_tool, write_file_tool
+    from oxenclaw.tools_pkg.process_tool import process_tool
+    from oxenclaw.tools_pkg.update_plan_tool import update_plan_tool
+
+    raw_mut = [
+        write_file_tool(),
+        edit_tool(),
+        shell_run_tool(),
+        process_tool(),
+    ]
+    if approval_manager is not None:
+        from oxenclaw.approvals.tool_wrap import gated_tool
+
+        for t in raw_mut:
+            reg.register(gated_tool(t, approval_manager=approval_manager))
+    else:
+        # No approver wired — register raw. Operators who don't want
+        # a default agent to write files / run shell on this box
+        # should set OXENCLAW_APPROVER_TOKEN and accept the prompts.
+        reg.register_all(raw_mut)
+
+    # update_plan is ungated (writes a plan json next to session, no
+    # external side-effects). Always available to give the model a
+    # structured way to track multi-step work.
+    reg.register(update_plan_tool())
+
     canvas = _maybe_canvas_tools(agent_id)
     if canvas:
         reg.register_all(canvas)

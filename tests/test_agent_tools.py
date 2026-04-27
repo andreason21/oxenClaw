@@ -71,7 +71,12 @@ def test_registry_rejects_duplicate() -> None:
 def test_registry_register_all() -> None:
     r = ToolRegistry()
     r.register_all(default_tools())
-    assert r.names() == ["echo", "get_time"]
+    # default_tools() now ships read-only fs primitives alongside the
+    # legacy echo/get_time pair. Mutating tools (write/edit/shell/
+    # process) are added later by the factory under approval gating;
+    # they're not in default_tools() itself.
+    expected = {"echo", "get_time", "read_file", "list_dir", "grep", "glob", "read_pdf"}
+    assert set(r.names()) == expected
 
 
 def test_registry_as_anthropic_tools_shape() -> None:

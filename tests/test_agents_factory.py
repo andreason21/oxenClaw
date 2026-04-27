@@ -139,5 +139,18 @@ def test_legacy_aliases_cover_pre_rc15_names() -> None:
 
 
 def test_default_tools_are_registered_when_none_passed() -> None:
+    """Default agents now ship with the openclaw-style fs/shell/process/
+    plan bundle — read/write/edit/grep/glob/list_dir/read_pdf/shell/
+    process/update_plan in addition to echo/get_time. Mutating tools
+    are raw without an ApprovalManager (operator opts in to gating
+    via OXENCLAW_APPROVER_TOKEN); read-only tools are always present."""
     agent = build_agent(agent_id="a", provider="anthropic")
-    assert sorted(agent._tools.names()) == ["echo", "get_time"]
+    names = set(agent._tools.names())
+    # Read-only bundle (always there, never gated).
+    for t in ("echo", "get_time", "read_file", "list_dir", "grep", "glob", "read_pdf"):
+        assert t in names, f"missing read-only tool {t!r}: {sorted(names)}"
+    # Mutating bundle.
+    for t in ("write_file", "edit", "shell", "process"):
+        assert t in names, f"missing mutating tool {t!r}: {sorted(names)}"
+    # Plan tracker (ungated).
+    assert "update_plan" in names

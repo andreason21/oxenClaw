@@ -784,6 +784,183 @@ pre.code-block {
 .skill-detail pre { white-space: pre-wrap; font-size: 12px; }
 
 /* ─────────────────────────────────────────────────────────────────────────
+   Memory view — .memory-view namespace
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* Tab bar — same visual language as .skills-tabs / .cron-tab-bar */
+.memory-tabs {
+  display: flex; gap: 4px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: var(--sp-4);
+}
+.memory-tab {
+  padding: 8px 16px;
+  border: 1px solid transparent; border-bottom: none;
+  border-radius: var(--r-2) var(--r-2) 0 0;
+  cursor: pointer; background: transparent;
+  color: var(--fg-2); font: 13px var(--sans);
+  transition: color 80ms ease;
+}
+.memory-tab.active {
+  background: var(--bg-1); border-color: var(--line);
+  color: var(--fg); font-weight: 600;
+}
+
+.memory-body { min-height: 0; }
+
+/* ── Search tab ── */
+.memory-search__bar {
+  display: flex; align-items: center; gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: var(--sp-3);
+}
+.memory-search__input { flex: 1 1 240px; }
+
+/* Small toggle switches */
+.memory-toggle {
+  display: inline-flex; align-items: center; gap: 5px;
+  cursor: pointer; font-size: 12px; color: var(--fg-2);
+  user-select: none; flex-shrink: 0;
+}
+.memory-toggle input[type=checkbox] { display: none; }
+.memory-toggle__track {
+  display: inline-block;
+  width: 28px; height: 14px;
+  background: var(--bg-3); border: 1px solid var(--line-strong);
+  border-radius: 999px; position: relative;
+  transition: background 120ms ease;
+}
+.memory-toggle__track::after {
+  content: ""; position: absolute;
+  left: 2px; top: 50%; transform: translateY(-50%);
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--fg-3);
+  transition: left 120ms ease, background 120ms ease;
+}
+.memory-toggle input:checked + .memory-toggle__track {
+  background: rgba(255,184,74,0.25); border-color: var(--accent);
+}
+.memory-toggle input:checked + .memory-toggle__track::after {
+  left: 15px; background: var(--accent);
+}
+
+.memory-search__controls {
+  display: flex; align-items: center; gap: var(--sp-3);
+  margin-bottom: var(--sp-4);
+  flex-wrap: wrap;
+}
+.memory-search__source { flex: 0 0 auto; width: auto; }
+.memory-search__k-label { font-size: 12px; color: var(--fg-3); display: inline; margin: 0; }
+.memory-search__k-range { width: 120px; flex: 0 0 auto; }
+.memory-search__k-val { font: 12px var(--mono); color: var(--accent); min-width: 20px; }
+
+/* Hit rows */
+.memory-hits { margin: 0; padding: 0; list-style: none; }
+.memory-hit {
+  cursor: pointer;
+}
+.memory-hit__row {
+  display: flex; align-items: center; gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+.memory-hit__score {
+  display: inline-block;
+  padding: 1px 7px; border-radius: 999px;
+  font: 11px/1.6 var(--mono); font-weight: 600;
+  background: rgba(255,184,74,0.12); color: var(--accent);
+  border: 1px solid rgba(255,184,74,0.3);
+  flex-shrink: 0;
+}
+.memory-hit__citation {
+  font: 12px var(--mono); color: var(--fg-2);
+  flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.memory-hit__open { margin-left: auto; flex-shrink: 0; }
+.memory-hit__preview {
+  font-size: 12px; color: var(--fg-2);
+  white-space: pre-wrap; word-break: break-word;
+  max-height: 60px; overflow: hidden;
+  transition: max-height 160ms ease;
+}
+.memory-hit--expanded .memory-hit__preview { max-height: none; }
+
+/* ── Browse tab ── */
+.memory-browse {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: var(--sp-4);
+  min-height: 400px;
+}
+.memory-browse__tree {
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--r-2);
+  background: var(--bg-1);
+  padding: var(--sp-2);
+}
+.memory-tree__group {
+  margin-bottom: 4px;
+}
+.memory-tree__group-label {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.5px; color: var(--fg-3);
+  cursor: pointer; padding: 4px 6px;
+}
+.memory-tree__leaf {
+  padding: 4px 8px 4px 18px;
+  font: 12px var(--mono); color: var(--fg-2);
+  cursor: pointer; border-radius: var(--r-1);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.memory-tree__leaf:hover { background: var(--bg-2); color: var(--fg); }
+
+.memory-browse__viewer {
+  display: flex; flex-direction: column; gap: var(--sp-2);
+  min-height: 0;
+}
+.memory-browse__viewer-header {
+  font-size: 12px; color: var(--fg-3);
+  padding: 2px 0;
+}
+.memory-browse__viewer-path { font-family: var(--mono); color: var(--fg-2); }
+.memory-browse__content {
+  flex: 1; overflow: auto;
+  min-height: 200px; max-height: 60vh;
+  font-size: 12px; white-space: pre-wrap; word-break: break-all;
+}
+.memory-browse__viewer-actions {
+  display: flex; gap: var(--sp-2);
+}
+
+/* ── Stats tab ── */
+.memory-stats__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-4);
+}
+.memory-stats__card {
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-2);
+  padding: var(--sp-3) var(--sp-4);
+  text-align: center;
+}
+.memory-stats__card-val {
+  font: 700 22px var(--mono); color: var(--accent);
+  margin-bottom: 4px;
+  word-break: break-all;
+}
+.memory-stats__card-label {
+  font-size: 11px; color: var(--fg-3); text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.memory-stats__actions {
+  display: flex; gap: var(--sp-2); flex-wrap: wrap;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
    Toasts
    ───────────────────────────────────────────────────────────────────────── */
 .toasts {

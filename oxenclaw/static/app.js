@@ -2315,77 +2315,401 @@ const SkillsView = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────
-// Memory view — search the long-term knowledge index
+// Memory view — tabbed: Search / Browse / Stats
 // ─────────────────────────────────────────────────────────────────────────
 const MemoryView = {
   title: "Memory",
   async render(root, actions) {
-    const card = el("div", { class: "card" });
-    const bar = el("div", { class: "search-bar" });
-    const input = el("input", {
-      type: "search",
-      placeholder: "Search memory… (sqlite-vec + FTS5 + MMR rerank)",
-    });
-    const kInput = el("input", { type: "number", value: "10", style: "max-width:80px" });
-    const goBtn = el("button", { class: "btn btn-primary" }, "Search");
-    bar.append(input, kInput, goBtn);
-    const results = el("div");
-    card.append(bar, results);
-    root.append(card);
+    let activeTab = sessionStorage.getItem("samp.memory.tab") || "search";
+    // Shared state for Browse tab navigation from Search.
+    let browseTarget = null; // { path, start_line } set by "Open" button
 
-    async function search() {
-      const q = input.value.trim();
-      const k = Math.max(1, Math.min(50, parseInt(kInput.value, 10) || 10));
-      results.innerHTML = "";
-      if (!q) {
-        results.append(emptyState({
-          icon: "🧠",
-          title: "Search the long-term memory",
-          body: "Sessions, ingested docs, and explicit notes the agent saved " +
-                "are indexed here. Memory is enriched as you chat — empty for now " +
-                "is normal.",
-          example: 'try: "what did we decide about the Gerrit MCP plan?"',
-        }));
-        return;
+    root.className = (root.className || "") + " memory-view";
+
+    const tabBar = el("div", { class: "memory-tabs" });
+    const searchTabEl  = el("div", { class: "memory-tab", onclick: () => switchTab("search") },  "Search");
+    const browseTabEl  = el("div", { class: "memory-tab", onclick: () => switchTab("browse") },  "Browse");
+    const statsTabEl   = el("div", { class: "memory-tab", onclick: () => switchTab("stats") },   "Stats");
+    tabBar.append(searchTabEl, browseTabEl, statsTabEl);
+
+    const body = el("div", { class: "memory-body" });
+    root.append(tabBar, body);
+
+    function switchTab(next, opts) {
+      activeTab = next;
+      sessionStorage.setItem("samp.memory.tab", next);
+      searchTabEl.classList.toggle("active", next === "search");
+      browseTabEl.classList.toggle("active", next === "browse");
+      statsTabEl.classList.toggle("active",  next === "stats");
+      body.innerHTML = "";
+      if (next === "search")  renderSearch();
+      else if (next === "browse") renderBrowse(opts);
+      else renderStats();
+    }
+
+    // ── Search tab ──────────────────────────────────────────────────────
+    function renderSearch() {
+      const wrap = el("div", { class: "memory-search" });
+
+      // Row 1: search input + toggles
+      const bar = el("div", { class: "memory-search__bar search-bar" });
+      const qInput = el("input", {
+        type: "search",
+        class: "memory-search__input",
+        placeholder: "Search memory… (sqlite-vec + FTS5)",
+      });
+
+      // Toggle switches: Hybrid / MMR / Decay
+      function mkToggle(label, id) {
+        const tog = el("label", { class: "memory-toggle", title: label });
+        const chk = el("input", { type: "checkbox", id, checked: true });
+        const span = el("span", { class: "memory-toggle__track" });
+        const lbl  = el("span", { class: "memory-toggle__label" }, label);
+        tog.append(chk, span, lbl);
+        return { toggle: tog, chk };
       }
+      const { toggle: hybridToggle, chk: hybridChk } = mkToggle("Hybrid", "mem-hybrid");
+      const { toggle: mmrToggle,    chk: mmrChk }    = mkToggle("MMR",    "mem-mmr");
+      const { toggle: decayToggle,  chk: decayChk }  = mkToggle("Decay",  "mem-decay");
+
+      const goBtn = el("button", { class: "btn btn-primary" }, "Search");
+      bar.append(qInput, hybridToggle, mmrToggle, decayToggle, goBtn);
+
+      // Row 2: source filter + k slider
+      const controls = el("div", { class: "memory-search__controls" });
+      const srcSel = el("select", { class: "memory-search__source" },
+        el("option", { value: "" }, "All sources"),
+        el("option", { value: "memory" }, "memory"),
+        el("option", { value: "sessions" }, "sessions"),
+        el("option", { value: "wiki" }, "wiki"),
+      );
+      const kLabel = el("label", { class: "memory-search__k-label" }, "k=");
+      const kVal   = el("span",  { class: "memory-search__k-val" }, "5");
+      const kRange = el("input", {
+        type: "range", min: "1", max: "20", value: "5",
+        class: "memory-search__k-range",
+        oninput: () => { kVal.textContent = kRange.value; },
+      });
+      controls.append(srcSel, kLabel, kRange, kVal);
+
+      const results = el("div", { class: "memory-search__results" });
+      wrap.append(bar, controls, results);
+      body.append(wrap);
+
+      async function doSearch() {
+        const q   = qInput.value.trim();
+        const k   = Math.max(1, Math.min(20, parseInt(kRange.value, 10) || 5));
+        const src = srcSel.value;
+        results.innerHTML = "";
+        if (!q) {
+          results.append(emptyState({
+            icon: "🧠",
+            title: "Search the long-term memory",
+            body: "Sessions, ingested docs, and explicit notes the agent saved " +
+                  "are indexed here. Memory is enriched as you chat — empty for now " +
+                  "is normal.",
+            example: 'try: "what did we decide about the Gerrit MCP plan?"',
+          }));
+          return;
+        }
+        const params = {
+          query: q, k,
+          hybrid: hybridChk.checked,
+          mmr:    mmrChk.checked,
+          decay:  decayChk.checked,
+        };
+        if (src) params.source = src;
+        let res;
+        try {
+          res = await Rpc.call("memory.search", params);
+        } catch (e) {
+          results.append(el("div", { class: "empty" }, e.message));
+          return;
+        }
+        const hits = (res && res.hits) || [];
+        if (!hits.length) {
+          results.append(emptyState({
+            icon: "🔍",
+            title: "No matches",
+            body: `Nothing in memory matches <code>${q.replace(/[<>&]/g, "")}</code> right now.`,
+          }));
+          return;
+        }
+        const list = el("ul", { class: "list memory-hits" });
+        for (const h of hits) {
+          const preview = (h.text || h.content || "").slice(0, 200);
+          const full    = (h.text || h.content || "");
+          const startLine = h.start_line != null ? h.start_line : 1;
+          const endLine   = h.end_line   != null ? h.end_line   : "";
+          const citation  = h.path
+            ? (endLine ? `${h.path}:${startLine}-${endLine}` : `${h.path}:${startLine}`)
+            : (h.id || "(untitled)");
+          let expanded = false;
+
+          const scorePill = el("span", { class: "memory-hit__score" },
+            h.score != null ? Number(h.score).toFixed(2) : "—",
+          );
+          const citEl   = el("div",  { class: "memory-hit__citation" }, citation);
+          const prevEl  = el("div",  { class: "memory-hit__preview" }, preview);
+          const openBtn = el("button", { class: "btn btn-sm btn-ghost memory-hit__open" }, "Open");
+
+          openBtn.onclick = (ev) => {
+            ev.stopPropagation();
+            browseTarget = { path: h.path || h.id, start_line: startLine };
+            switchTab("browse", browseTarget);
+          };
+
+          const item = el("li", { class: "list-item memory-hit" });
+          item.append(
+            el("div", { class: "memory-hit__row" }, scorePill, citEl, openBtn),
+            prevEl,
+          );
+          item.onclick = () => {
+            expanded = !expanded;
+            prevEl.textContent = expanded ? full : preview;
+            item.classList.toggle("memory-hit--expanded", expanded);
+          };
+          list.append(item);
+        }
+        results.append(list);
+      }
+
+      goBtn.onclick = doSearch;
+      qInput.addEventListener("keydown", (e) => { if (e.key === "Enter") doSearch(); });
+      doSearch();
+    }
+
+    // ── Browse tab ──────────────────────────────────────────────────────
+    function renderBrowse(opts) {
+      const wrap = el("div", { class: "memory-browse" });
+      const left  = el("div", { class: "memory-browse__tree" });
+      const right = el("div", { class: "memory-browse__viewer" });
+      wrap.append(left, right);
+      body.append(wrap);
+
+      // Right pane: show file content
+      let viewerPath = null;
+      let viewerOffset = 1;
+      const viewerContent = el("pre", { class: "memory-browse__content code-block" });
+      const loadMoreBtn = el("button", { class: "btn btn-sm memory-browse__load-more" }, "Load more");
+      const deleteBtn   = el("button", { class: "btn btn-sm btn-danger memory-browse__delete" }, "Delete this file");
+
+      async function loadFile(path, fromLine, reset) {
+        if (reset) {
+          viewerPath = path;
+          viewerOffset = fromLine || 1;
+          viewerContent.textContent = "loading…";
+        }
+        let res;
+        try {
+          res = await Rpc.call("memory.get", { path: viewerPath, from_line: viewerOffset, lines: 200 });
+        } catch (e) {
+          viewerContent.textContent = `error: ${e.message}`;
+          return;
+        }
+        const text = (res && (res.text || res.content)) || "";
+        if (reset) {
+          viewerContent.textContent = text;
+        } else {
+          viewerContent.textContent += text;
+        }
+        viewerOffset += (text.match(/\n/g) || []).length + 1;
+        loadMoreBtn.style.display = text.length >= 200 * 1 ? "" : "none";
+      }
+
+      loadMoreBtn.onclick = () => loadFile(viewerPath, viewerOffset, false);
+      deleteBtn.onclick   = async () => {
+        if (!viewerPath) return;
+        if (!confirm(`Delete ${viewerPath} from memory?`)) return;
+        try {
+          await Rpc.call("memory.delete", { path: viewerPath });
+          Toast.success("Deleted", viewerPath);
+          viewerContent.textContent = "";
+          loadMoreBtn.style.display = "none";
+          deleteBtn.style.display   = "none";
+          await loadTree(); // refresh tree
+        } catch (e) {
+          Toast.error("Delete failed", e.message);
+        }
+      };
+
+      right.append(
+        el("div", { class: "memory-browse__viewer-header" },
+          el("span", { class: "memory-browse__viewer-path" }, ""),
+        ),
+        viewerContent,
+        el("div", { class: "memory-browse__viewer-actions" }, loadMoreBtn, deleteBtn),
+      );
+      loadMoreBtn.style.display = "none";
+      deleteBtn.style.display   = "none";
+
+      function showFile(path, fromLine) {
+        right.querySelector(".memory-browse__viewer-path").textContent = path;
+        deleteBtn.style.display = "";
+        loadMoreBtn.style.display = "none";
+        viewerOffset = fromLine || 1;
+        loadFile(path, viewerOffset, true);
+      }
+
+      // Left pane: tree
+      async function loadTree() {
+        left.innerHTML = "";
+        left.append(el("div", { class: "empty" }, "loading…"));
+        let res;
+        try {
+          res = await Rpc.call("memory.list", {});
+        } catch (e) {
+          left.innerHTML = "";
+          left.append(emptyState({
+            icon: "📂",
+            title: "No files indexed",
+            body: "The memory index is empty. Chat with an agent to populate it.",
+          }));
+          return;
+        }
+        const files = (res && res.files) || [];
+        left.innerHTML = "";
+        if (!files.length) {
+          left.append(emptyState({
+            icon: "📂",
+            title: "No files indexed",
+            body: "The memory index is empty. Chat with an agent to populate it.",
+          }));
+          return;
+        }
+        // Group by source
+        const groups = {};
+        for (const f of files) {
+          const src = f.source || "memory";
+          if (!groups[src]) groups[src] = [];
+          groups[src].push(f);
+        }
+        for (const [src, items] of Object.entries(groups)) {
+          const grpEl = el("details", { class: "memory-tree__group", open: true });
+          grpEl.append(el("summary", { class: "memory-tree__group-label" }, src));
+          for (const f of items) {
+            const path = f.path || f.id || "?";
+            const chunks = f.chunk_count != null ? ` (${f.chunk_count})` : "";
+            const leaf = el("div", { class: "memory-tree__leaf", onclick: () => showFile(path, 1) }, path + chunks);
+            grpEl.append(leaf);
+          }
+          left.append(grpEl);
+        }
+      }
+      loadTree().then(() => {
+        // If navigated from Search "Open", show that file
+        if (opts && opts.path) showFile(opts.path, opts.start_line || 1);
+      });
+    }
+
+    // ── Stats tab ───────────────────────────────────────────────────────
+    async function renderStats() {
+      const wrap = el("div", { class: "memory-stats" });
+      body.append(wrap);
+      wrap.append(el("div", { class: "empty" }, "loading…"));
+
       let res;
       try {
-        res = await Rpc.call("memory.search", { query: q, k });
+        res = await Rpc.call("memory.stats", {});
       } catch (e) {
-        results.append(el("div", { class: "empty" }, e.message));
-        return;
-      }
-      const hits = (res && res.hits) || [];
-      if (!hits.length) {
-        results.append(emptyState({
-          icon: "🔍",
-          title: "No matches",
-          body: `Nothing in memory matches <code>${q.replace(/[<>&]/g, "")}</code> right now.`,
+        wrap.innerHTML = "";
+        wrap.append(emptyState({
+          icon: "📊",
+          title: "Stats unavailable",
+          body: e.message,
         }));
         return;
       }
-      const list = el("ul", { class: "list" });
-      for (const h of hits) {
-        const item = el("li", { class: "list-item" });
-        item.append(
-          el("div", { class: "title" }, h.path || h.id || "(untitled)"),
-          el("div", { class: "meta" },
-            (h.score != null ? `score=${Number(h.score).toFixed(3)} · ` : "") +
-            (h.source || "") +
-            (h.session_key ? ` · ${h.session_key}` : ""),
+
+      wrap.innerHTML = "";
+      const stats = res || {};
+
+      const cards = [
+        ["Total chunks",     stats.total_chunks    ?? "—"],
+        ["Total files",      stats.total_files     ?? "—"],
+        ["Embedding dims",   stats.embedding_dims  ?? "—"],
+        ["Provider",         stats.provider        ?? "—"],
+        ["Model",            stats.model           ?? "—"],
+        ["Last sync",        stats.last_sync ? fmtTime(stats.last_sync) : "—"],
+        ["Cache hit rate",   stats.cache_hit_rate != null
+          ? (Number(stats.cache_hit_rate) * 100).toFixed(1) + "%" : "—"],
+      ];
+
+      const grid = el("div", { class: "memory-stats__grid" });
+      for (const [label, value] of cards) {
+        grid.append(
+          el("div", { class: "memory-stats__card" },
+            el("div", { class: "memory-stats__card-val" }, String(value)),
+            el("div", { class: "memory-stats__card-label" }, label),
           ),
-          el("div", {
-            style: "margin-top:6px;font-size:12px;color:var(--fg-2);" +
-                   "white-space:pre-wrap;word-break:break-word;",
-          }, h.text || h.content || ""),
         );
-        list.append(item);
       }
-      results.append(list);
+      wrap.append(grid);
+
+      // Action row: Sync / Export / Import
+      const actRow = el("div", { class: "memory-stats__actions" });
+
+      const syncBtn = el("button", { class: "btn btn-primary", onclick: async () => {
+        syncBtn.disabled = true;
+        Toast.info("Syncing memory…", "");
+        try {
+          await Rpc.call("memory.sync", {});
+          Toast.success("Sync complete", "");
+          await renderStats();
+        } catch (e) {
+          Toast.error("Sync failed", e.message);
+        } finally {
+          syncBtn.disabled = false;
+        }
+      } }, "Sync now");
+
+      const exportBtn = el("button", { class: "btn", onclick: async () => {
+        exportBtn.disabled = true;
+        try {
+          const r = await Rpc.call("memory.export", {});
+          const blob = new Blob([JSON.stringify(r, null, 2)], { type: "application/json" });
+          const url  = URL.createObjectURL(blob);
+          const a    = document.createElement("a");
+          a.href     = url;
+          a.download = "memory-export.json";
+          a.click();
+          URL.revokeObjectURL(url);
+          Toast.success("Export ready", "Download started");
+        } catch (e) {
+          Toast.error("Export failed", e.message);
+        } finally {
+          exportBtn.disabled = false;
+        }
+      } }, "Export");
+
+      const importInput = el("input", {
+        type: "file", accept: ".json",
+        style: "display:none",
+      });
+      const importBtn = el("button", { class: "btn", onclick: () => importInput.click() }, "Import");
+      importInput.onchange = async () => {
+        const file = importInput.files && importInput.files[0];
+        if (!file) return;
+        importBtn.disabled = true;
+        try {
+          const text = await file.text();
+          const data = JSON.parse(text);
+          const r = await Rpc.call("memory.import", data);
+          Toast.success("Import done", r && r.message ? r.message : "Loaded");
+        } catch (e) {
+          Toast.error("Import failed", e.message);
+        } finally {
+          importBtn.disabled = false;
+          importInput.value = "";
+        }
+      };
+
+      actRow.append(syncBtn, exportBtn, importBtn, importInput);
+      wrap.append(actRow);
     }
-    goBtn.onclick = search;
-    input.addEventListener("keydown", (e) => { if (e.key === "Enter") search(); });
-    search();
+
+    // Boot the active tab
+    switchTab(activeTab);
   },
 };
 

@@ -650,3 +650,129 @@ async def test_cron_view_run_log_panel_shows_status_pills(page) -> None:
     assert "100" in chips_text and "200" in chips_text, (
         f"token usage chips not rendered correctly: {chips_text!r}"
     )
+
+
+# ─── memory view ──────────────────────────────────────────────────────
+
+
+async def test_memory_view_tabs_render(page) -> None:
+    """Three tabs are visible; clicking each moves the active class."""
+    await _click_nav(page, "memory")
+    await page.wait_for_selector(".memory-tabs", timeout=3000)
+
+    tabs = await page.locator(".memory-tab").all_text_contents()
+    assert "Search" in tabs, f"Search tab missing, got: {tabs}"
+    assert "Browse" in tabs, f"Browse tab missing, got: {tabs}"
+    assert "Stats"  in tabs, f"Stats tab missing, got: {tabs}"
+
+    # Default tab is Search — it should be active.
+    active_text = await page.locator(".memory-tab.active").first.text_content()
+    assert active_text.strip() == "Search", f"expected Search active, got {active_text!r}"
+
+    # Click Browse — active class must move there.
+    await page.locator(".memory-tab", has_text="Browse").click()
+    await page.wait_for_function(
+        "Array.from(document.querySelectorAll('.memory-tab'))"
+        ".find(t => t.classList.contains('active'))?.textContent?.trim() === 'Browse'",
+        timeout=3000,
+    )
+
+    # Click Stats — active class must move there.
+    await page.locator(".memory-tab", has_text="Stats").click()
+    await page.wait_for_function(
+        "Array.from(document.querySelectorAll('.memory-tab'))"
+        ".find(t => t.classList.contains('active'))?.textContent?.trim() === 'Stats'",
+        timeout=3000,
+    )
+
+
+async def test_memory_view_search_renders_hits_with_relevance_pill(page) -> None:
+    """Inject a fake memory.search response, verify hit row with score pill + citation."""
+    await _click_nav(page, "memory")
+    await page.wait_for_selector(".memory-tabs", timeout=3000)
+
+    # Inject a fake hit by typing a query and overriding Rpc.call.
+    await page.evaluate(
+        """() => {
+          // Patch Rpc.call to return a synthetic memory.search result.
+          const origCall = Rpc.call.bind(Rpc);
+          window._origRpcCall = origCall;
+          Rpc.call = async (method, params) => {
+            if (method === 'memory.search') {
+              return {
+                hits: [
+                  {
+                    score: 0.84,
+                    path: 'sessions/chat-001.md',
+                    start_line: 10,
+                    end_line: 25,
+                    text: 'This is a synthetic memory chunk for testing purposes.',
+                    source: 'sessions',
+                  },
+                ],
+              };
+            }
+            return origCall(method, params);
+          };
+        }"""
+    )
+
+    # Type a query and submit.
+    await page.locator(".memory-search__input").fill("test query")
+    await page.locator(".memory-search__input").press("Enter")
+
+    # Hit row with score pill must appear.
+    await page.wait_for_selector(".memory-hit", timeout=3000)
+    score_text = await page.locator(".memory-hit__score").first.text_content()
+    assert "0.84" in score_text, f"score pill text unexpected: {score_text!r}"
+
+    citation_text = await page.locator(".memory-hit__citation").first.text_content()
+    assert "sessions/chat-001.md" in citation_text, (
+        f"citation text unexpected: {citation_text!r}"
+    )
+
+    # Restore original Rpc.call.
+    await page.evaluate("() => { if (window._origRpcCall) Rpc.call = window._origRpcCall; }")
+
+
+async def test_memory_view_stats_card_shows_provider_and_dimensions(page) -> None:
+    """Inject a fake memory.stats response, verify stat cards render."""
+    await _click_nav(page, "memory")
+    await page.wait_for_selector(".memory-tabs", timeout=3000)
+
+    # Patch Rpc.call before switching to Stats tab.
+    await page.evaluate(
+        """() => {
+          const origCall = Rpc.call.bind(Rpc);
+          window._origRpcCall2 = origCall;
+          Rpc.call = async (method, params) => {
+            if (method === 'memory.stats') {
+              return {
+                total_chunks: 1234,
+                total_files: 42,
+                embedding_dims: 1536,
+                provider: 'openai',
+                model: 'text-embedding-ada-002',
+                last_sync: Math.floor(Date.now() / 1000) - 300,
+                cache_hit_rate: 0.75,
+              };
+            }
+            return origCall(method, params);
+          };
+        }"""
+    )
+
+    await page.locator(".memory-tab", has_text="Stats").click()
+    await page.wait_for_selector(".memory-stats__grid", timeout=3000)
+
+    # All 7 cards should be rendered.
+    card_count = await page.locator(".memory-stats__card").count()
+    assert card_count == 7, f"expected 7 stat cards, got {card_count}"
+
+    # Provider and embedding dims must appear somewhere in the grid.
+    grid_text = await page.locator(".memory-stats__grid").text_content()
+    assert "openai" in grid_text, f"provider 'openai' not found in stats grid: {grid_text!r}"
+    assert "1536"   in grid_text, f"embedding dims '1536' not found in stats grid: {grid_text!r}"
+
+    # Restore original Rpc.call.
+    await page.evaluate("() => { if (window._origRpcCall2) Rpc.call = window._origRpcCall2; }")

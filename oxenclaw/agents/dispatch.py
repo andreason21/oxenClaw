@@ -118,7 +118,13 @@ class Dispatcher:
                     f"{outbound.target.account_id} — {exc}"
                 )
                 delivery_warnings.append(msg)
-                logger.warning("drop outbound: %s", msg)
+                # INFO, not WARNING: the agent's reply is already in
+                # conversation history (dashboards see it via chat.history),
+                # and the structured `delivery_warnings` field carries the
+                # detail back to the RPC caller. The dashboard's "fake
+                # channel id" routing makes this the expected path, not an
+                # operator-actionable warning.
+                logger.info("drop outbound: %s", msg)
         return DispatchOutcome(
             results=results,
             agent_id=agent_id,

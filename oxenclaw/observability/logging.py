@@ -142,6 +142,16 @@ def configure_logging(
         level = logging.getLevelName(level.upper())
     root.setLevel(level)
 
+    # Quiet a known-noisy websockets log: every TCP-only port probe (port
+    # scanners, half-broken proxies, our own desktop-app reachability
+    # probe before it switched to HEAD /healthz) emits a full ERROR
+    # traceback for `did not receive a valid HTTP request`. The
+    # underlying connection is fine — it was just closed before sending
+    # an HTTP request. Treating it at WARNING keeps real errors visible
+    # without flooding the gateway log.
+    logging.getLogger("websockets.server").setLevel(logging.WARNING)
+    logging.getLogger("websockets.asyncio.server").setLevel(logging.WARNING)
+
 
 __all__ = [
     "JsonFormatter",

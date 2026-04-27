@@ -10,7 +10,11 @@ loop. It speaks the same `Agent` Protocol the dispatcher expects
 3. Loads the persistent transcript from `SessionManager` (creates if missing).
 4. Calls `run.run_agent_turn` with the transcript + tools + RuntimeConfig.
 5. Persists the appended messages back via `SessionManager.save`.
-6. Streams the final assistant text out as `SendParams` chunks.
+6. Mirrors the user/assistant turn into `ConversationHistory` so the
+   dashboard's `chat.history` poll can render it (the pi SessionManager
+   stores a richer transcript the runner needs; the dashboard wants a
+   flat role/content list — keep both).
+7. Streams the final assistant text out as `SendParams` chunks.
 
 Existing `LocalAgent` keeps working untouched — operators opt into the
 pi pipeline by registering a `PiAgent` instead.
@@ -23,6 +27,7 @@ from typing import Any
 
 import oxenclaw.pi.providers  # noqa: F401  registers stream wrappers
 from oxenclaw.agents.base import AgentContext
+from oxenclaw.agents.history import ConversationHistory
 from oxenclaw.agents.tools import ToolRegistry
 from oxenclaw.clawhub.loader import format_skills_for_prompt, load_installed_skills
 from oxenclaw.config.paths import OxenclawPaths, default_paths
@@ -205,6 +210,24 @@ class PiAgent:
         session = await self._ensure_session(ctx.session_key)
         session.messages.append(UserMessage(content=user_content))
 
+        # Parallel ConversationHistory write so the dashboard's `chat.history`
+        # poll surfaces this turn. PiAgent's pi-format SessionManager and the
+        # dashboard-format ConversationHistory are intentionally separate
+        # stores — pi owns the rich transcript the runner needs, while the
+        # dashboard wants a flat role/content list. We write the user turn
+        # eagerly here and the assistant turn after the inference loop.
+        dashboard_history = ConversationHistory(
+            self._paths.session_file(self.id, ctx.session_key)
+        )
+        if isinstance(user_content, str):
+            dashboard_history.append({"role": "user", "content": user_content})
+        else:
+            text_only = "\n".join(
+                b.text for b in user_content if isinstance(b, TextContent)
+            )
+            dashboard_history.append({"role": "user", "content": text_only or "(image)"})
+        dashboard_history.save()
+
         # Engine ingest — single-message hook for the user turn just
         # appended. LegacyContextEngine no-ops; custom engines can index
         # the message into their own store before the model call.
@@ -303,6 +326,8 @@ class PiAgent:
             reply = "\n".join(p for p in text_parts if p).strip()
             if not reply:
                 return
+            dashboard_history.append({"role": "assistant", "content": reply})
+            dashboard_history.save()
             for chunk in chunk_text(reply, self._chunk_limit):
                 yield SendParams(target=inbound.target, text=chunk)
 

@@ -348,14 +348,26 @@ class GatewayServer:
 
     async def serve(self, host: str = "127.0.0.1", port: int = 7331) -> None:
         self._shutdown_event = asyncio.Event()
+        # Dual-stack loopback: if the operator picked the default IPv4
+        # loopback, also listen on the IPv6 loopback. Browsers / WebView2
+        # follow Happy Eyeballs and may try `[::1]` first when the user
+        # types `localhost`; an IPv4-only bind makes that path
+        # ERR_CONNECTION_REFUSED while curl/PowerShell (which fall back
+        # to IPv4) succeed — confusing failure mode worth pre-empting.
+        bind_host: str | list[str]
+        if host == "127.0.0.1":
+            bind_host = ["127.0.0.1", "::1"]
+        else:
+            bind_host = host
         async with serve(
             self._on_connect,
-            host,
+            bind_host,
             port,
             process_request=self._process_request,
             max_size=self._max_message_size,
         ) as ws_server:
-            logger.info("gateway listening on http://%s:%d", host, port)
+            display_host = host if isinstance(bind_host, str) else f"{host} (+ ::1)"
+            logger.info("gateway listening on http://%s:%d", display_host, port)
             await self._shutdown_event.wait()
             logger.info(
                 "gateway shutdown signaled — draining %d in-flight RPC(s) "

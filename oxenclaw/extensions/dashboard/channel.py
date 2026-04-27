@@ -29,6 +29,11 @@ class DashboardChannel(ChannelPlugin):
     """
 
     id = CHANNEL_ID
+    # No external wire to poll — `chat.send` is the only inbound path.
+    # Read by `cli/gateway_cmd.py:_supervise_monitors` so a runner isn't
+    # spawned (otherwise `monitor()` returns instantly and the supervisor
+    # busy-loops restarting it).
+    outbound_only = True
 
     def __init__(self, account_id: str = "main") -> None:
         self._account_id = account_id

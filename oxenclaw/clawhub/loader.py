@@ -108,10 +108,26 @@ def format_skills_for_prompt(skills: list[InstalledSkill]) -> str:
     """Render the openclaw-shaped XML block agents append to system prompts.
 
     Empty-list returns "" so callers can blindly concatenate.
+
+    The leading `<usage>` note is critical: skills are reference
+    material, not function-calling tools. Without this hint LLMs
+    cargo-cult the skill `<name>` into a `tool_use` block and the
+    pi-runtime returns `tool {name!r} is not registered` (e.g. the
+    clawhub `stock-analysis` skill ships a `commands:` list in its
+    frontmatter that looks tool-shaped to the model). Steer the model
+    toward reading SKILL.md and invoking the documented scripts via
+    the shell tool instead.
     """
     if not skills:
         return ""
-    lines = ["<available_skills>"]
+    lines = [
+        "<available_skills>",
+        "  <usage>Skills are documentation, NOT callable tools. Do not emit a "
+        "tool_use block named after a skill — there is no function with "
+        "that name registered. To use a skill: read SKILL.md at its "
+        "&lt;location&gt;, then run the scripts it documents via the "
+        "shell tool (most skills ship under &lt;location&gt;/scripts/).</usage>",
+    ]
     for s in skills:
         lines.append("  <skill>")
         lines.append(f"    <name>{_xml_escape(s.name)}</name>")

@@ -103,6 +103,23 @@ def test_format_skills_block_shape(tmp_path) -> None:  # type: ignore[no-untyped
     assert "<location>" in block
 
 
+def test_format_skills_block_includes_usage_hint(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """Regression: the prompt MUST tell the model that skills are
+    documentation, not callable tools. Without this hint, models
+    hallucinate a `tool_use` block named after the skill (e.g. the
+    clawhub `stock-analysis` skill triggers `tool 'stock-analysis' is
+    not registered`)."""
+    paths = _setup_skill(tmp_path)
+    skills = load_installed_skills(paths)
+    block = format_skills_for_prompt(skills)
+    assert "<usage>" in block
+    # The hint must mention that skills aren't callable tools and that
+    # SKILL.md + the shell tool is the right invocation path.
+    assert "NOT callable tools" in block
+    assert "shell tool" in block
+    assert "SKILL.md" in block
+
+
 def test_format_skills_empty_returns_empty_string() -> None:
     assert format_skills_for_prompt([]) == ""
 

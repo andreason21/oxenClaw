@@ -166,6 +166,43 @@ async def test_web_search_tool_with_injected_provider_returns_summary() -> None:
     assert "https://x.com/2" in out
 
 
+async def test_web_search_zero_hits_returns_recovery_hint() -> None:
+    """When every provider in the chain returns zero hits the tool
+    must surface recovery suggestions (web_fetch, rephrase, env vars)
+    instead of a bare 'no results' string. Mirrors openclaw's
+    chaining guide: 0 hits is data, not a stopping signal."""
+    empty = _FakeProvider("ddg", [])
+    t = web_search_tool(providers=[empty])
+    out = await t.execute({"query": "AI semiconductor outlook 2026", "k": 5})
+    assert "no results" in out
+    assert "web_fetch" in out
+    assert "rephras" in out.lower() or "phrasing" in out.lower()
+    assert "BRAVE_API_KEY" in out or "TAVILY_API_KEY" in out
+
+
+def test_build_default_search_chain_picks_up_env_keys(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """Setting BRAVE/TAVILY/EXA env vars adds the corresponding
+    providers to the chain, with DuckDuckGo always last as the
+    no-credential fallback."""
+    from oxenclaw.tools_pkg.web import build_default_search_chain
+
+    monkeypatch.delenv("BRAVE_API_KEY", raising=False)
+    monkeypatch.delenv("TAVILY_API_KEY", raising=False)
+    monkeypatch.delenv("EXA_API_KEY", raising=False)
+    monkeypatch.delenv("SEARXNG_URL", raising=False)
+    chain_just_ddg = build_default_search_chain()
+    assert [p.name for p in chain_just_ddg] == ["duckduckgo"]
+
+    monkeypatch.setenv("BRAVE_API_KEY", "k1")
+    monkeypatch.setenv("TAVILY_API_KEY", "k2")
+    chain = build_default_search_chain()
+    names = [p.name for p in chain]
+    # Brave first (preference order), DDG always last.
+    assert names[0] == "brave"
+    assert "tavily" in names
+    assert names[-1] == "duckduckgo"
+
+
 async def test_web_fetch_tool_blocks_ssrf_target() -> None:
     t = web_fetch_tool()
     out = await t.execute({"url": "http://10.0.0.1/", "max_bytes": 1000, "readability": False})

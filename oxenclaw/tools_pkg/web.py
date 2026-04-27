@@ -339,6 +339,33 @@ class SearXNGSearch(WebSearchProvider):
 # ─── Search dispatcher with provider fallback ────────────────────────
 
 
+def build_default_search_chain(
+    *, searxng_url: str | None = None
+) -> list[WebSearchProvider]:
+    """Build a search-provider chain from environment variables alone.
+
+    Tries `BRAVE_API_KEY`, `TAVILY_API_KEY`, `EXA_API_KEY`, optional
+    `searxng_url`, then DuckDuckGo as the no-credential fallback.
+    Used by `web_search_tool()` when the caller hasn't injected
+    providers (the gateway-built chain via `build_default_providers`
+    is preferred when AuthStorage is available; this is the
+    last-resort when constructing the tool standalone).
+    """
+    import os
+    providers: list[WebSearchProvider] = []
+    if (k := os.environ.get("BRAVE_API_KEY")):
+        providers.append(BraveSearch(api_key=k))
+    if (k := os.environ.get("TAVILY_API_KEY")):
+        providers.append(TavilySearch(api_key=k))
+    if (k := os.environ.get("EXA_API_KEY")):
+        providers.append(ExaSearch(api_key=k))
+    url = searxng_url or os.environ.get("SEARXNG_URL")
+    if url:
+        providers.append(SearXNGSearch(base_url=url))
+    providers.append(DuckDuckGoSearch())
+    return providers
+
+
 async def build_default_providers(
     auth: AuthStorage, *, searxng_url: str | None = None
 ) -> list[WebSearchProvider]:
@@ -430,10 +457,23 @@ def web_search_tool(*, providers: list[WebSearchProvider] | None = None) -> Tool
     the tool falls back to DuckDuckGo (no-key) at call time."""
 
     async def _h(args: _SearchArgs) -> str:
-        chain = providers or [DuckDuckGoSearch()]
+        chain = providers or build_default_search_chain()
         used, hits = await search_with_fallback(args.query, chain, k=args.k)
         if not hits:
-            return f"no results (tried providers: {[p.name for p in chain]})"
+            # Help the LLM recover instead of giving up. Mirrors the openclaw
+            # chaining guide: "0 hits is data, try web_fetch on a known URL
+            # or rephrase the query."
+            return (
+                f"no results (tried providers: {[p.name for p in chain]}).\n"
+                "Recovery suggestions for the model:\n"
+                "  - try a different phrasing (translate Korean ↔ English, "
+                "drop adjectives, add `site:` for a known authority).\n"
+                "  - call `web_fetch` directly on a likely URL "
+                "(e.g. an industry blog, official report) and read the body.\n"
+                "  - if multiple search backends are available "
+                "(BRAVE_API_KEY / TAVILY_API_KEY / EXA_API_KEY env vars), "
+                "set them in the gateway environment and reload."
+            )
         lines = [f"[via {used}]"]
         for i, h in enumerate(hits, start=1):
             lines.append(f"{i}. {h.title}")
@@ -454,6 +494,7 @@ def web_search_tool(*, providers: list[WebSearchProvider] | None = None) -> Tool
 
 
 __all__ = [
+    "build_default_search_chain",
     "BraveSearch",
     "DuckDuckGoSearch",
     "ExaSearch",

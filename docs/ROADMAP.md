@@ -199,6 +199,28 @@ as a follow-up without backend churn.
 - openclaw spawns child agents via the Agent Control Plane. Less
   urgent for in-house dashboard use but unlocks complex flows.
 
+### L. web_search → web_fetch chaining + multi-backend fallback ✓
+**Shipped** — operator reported that openclaw answers
+"AI 반도체 시장 전망 2026" by chaining web_search → web_fetch
+through several URLs (even surfacing 404s) while oxenClaw stopped
+at "no results (tried providers: duckduckgo)".
+
+  - `PiAgent.DEFAULT_SYSTEM_PROMPT` now contains an explicit
+    "Web research playbook" mirroring openclaw's chaining guide:
+    web_search first, then web_fetch on a likely URL when search
+    is empty/insufficient, retry with rephrased queries, treat
+    404 as data not a stop signal.
+  - `web_search_tool` no-results path returns recovery suggestions
+    (call web_fetch, try alternate phrasings, list of env vars
+    that would add backends) instead of a bare "no results".
+  - New `build_default_search_chain()` in `tools_pkg/web.py` reads
+    `BRAVE_API_KEY` / `TAVILY_API_KEY` / `EXA_API_KEY` /
+    `SEARXNG_URL` from env and prepends those providers ahead of
+    DuckDuckGo, so dropping a key into the gateway env immediately
+    upgrades search quality.
+  - Tests: `test_web_search_zero_hits_returns_recovery_hint` +
+    `test_build_default_search_chain_picks_up_env_keys`.
+
 ### K. Cron tab quick-add wizard ✓
 **Shipped**.
 

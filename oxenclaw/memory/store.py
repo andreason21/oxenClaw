@@ -131,6 +131,23 @@ class MemoryStore:
               path UNINDEXED,
               source UNINDEXED
             );
+            -- M-6: curated tier. Inbox is raw; `short_term` is the
+            -- promoted store with confidence + tags + spaced-repetition
+            -- review schedule. Promote = "this fact is durable enough
+            -- to surface in retrieval-time recall ahead of raw inbox".
+            CREATE TABLE IF NOT EXISTS short_term (
+              id TEXT PRIMARY KEY,
+              source_chunk_id TEXT,           -- chunk we promoted from (null for direct adds)
+              text TEXT NOT NULL,
+              tags TEXT NOT NULL DEFAULT '',  -- comma-joined tags
+              confidence REAL NOT NULL DEFAULT 0.5,
+              promoted_at REAL NOT NULL,
+              last_reviewed_at REAL,
+              review_count INTEGER NOT NULL DEFAULT 0,
+              archived_at REAL                -- soft-delete marker
+            );
+            CREATE INDEX IF NOT EXISTS short_term_active_idx
+              ON short_term(archived_at) WHERE archived_at IS NULL;
             """
         )
         # Detect dim if vec table already exists.
@@ -488,6 +505,96 @@ class MemoryStore:
     def cache_size(self) -> int:
         row = self._conn.execute("SELECT COUNT(*) AS n FROM embedding_cache").fetchone()
         return int(row["n"])
+
+    # ── short_term (curated tier) ──
+
+    def short_term_add(
+        self,
+        *,
+        text: str,
+        tags: list[str] | None = None,
+        confidence: float = 0.5,
+        source_chunk_id: str | None = None,
+    ) -> str:
+        """Promote / insert a fact into the curated tier. Returns the
+        new short_term entry id (8 hex). Caller assigns no id."""
+        import secrets
+        import time as _time
+        new_id = secrets.token_hex(4)
+        joined_tags = ",".join(t.strip() for t in (tags or []) if t.strip())
+        self._conn.execute(
+            """
+            INSERT INTO short_term
+              (id, source_chunk_id, text, tags, confidence, promoted_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (new_id, source_chunk_id, text, joined_tags, float(confidence), _time.time()),
+        )
+        self._conn.commit()
+        return new_id
+
+    def short_term_list(
+        self,
+        *,
+        tag: str | None = None,
+        include_archived: bool = False,
+        limit: int = 100,
+    ) -> list[dict]:
+        sql = "SELECT id, source_chunk_id, text, tags, confidence, promoted_at, last_reviewed_at, review_count, archived_at FROM short_term"
+        clauses: list[str] = []
+        args: list = []
+        if not include_archived:
+            clauses.append("archived_at IS NULL")
+        if tag:
+            clauses.append("(',' || tags || ',') LIKE ?")
+            args.append(f"%,{tag},%")
+        if clauses:
+            sql += " WHERE " + " AND ".join(clauses)
+        sql += " ORDER BY promoted_at DESC LIMIT ?"
+        args.append(int(limit))
+        rows = self._conn.execute(sql, args).fetchall()
+        return [
+            {
+                "id": r["id"],
+                "source_chunk_id": r["source_chunk_id"],
+                "text": r["text"],
+                "tags": [t for t in (r["tags"] or "").split(",") if t],
+                "confidence": float(r["confidence"]),
+                "promoted_at": float(r["promoted_at"]),
+                "last_reviewed_at": float(r["last_reviewed_at"]) if r["last_reviewed_at"] else None,
+                "review_count": int(r["review_count"]),
+                "archived": r["archived_at"] is not None,
+            }
+            for r in rows
+        ]
+
+    def short_term_review(self, entry_id: str) -> bool:
+        """Mark a curated entry as reviewed (bumps review_count +
+        last_reviewed_at). Returns False if no such id."""
+        import time as _time
+        cur = self._conn.execute(
+            "UPDATE short_term SET last_reviewed_at = ?, review_count = review_count + 1 WHERE id = ?",
+            (_time.time(), entry_id),
+        )
+        self._conn.commit()
+        return cur.rowcount > 0
+
+    def short_term_archive(self, entry_id: str) -> bool:
+        """Soft-delete: hides the entry from default `list()` calls but
+        keeps the row for audit. Returns False if no such id."""
+        import time as _time
+        cur = self._conn.execute(
+            "UPDATE short_term SET archived_at = ? WHERE id = ? AND archived_at IS NULL",
+            (_time.time(), entry_id),
+        )
+        self._conn.commit()
+        return cur.rowcount > 0
+
+    def short_term_count(self, *, include_archived: bool = False) -> int:
+        sql = "SELECT COUNT(*) AS n FROM short_term"
+        if not include_archived:
+            sql += " WHERE archived_at IS NULL"
+        return int(self._conn.execute(sql).fetchone()["n"])
 
 
 def _row_to_chunk(row: sqlite3.Row) -> MemoryChunk:

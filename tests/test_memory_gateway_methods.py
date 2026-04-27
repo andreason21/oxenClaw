@@ -164,6 +164,82 @@ async def test_memory_export_then_import_round_trip(tmp_path: Path) -> None:
         await retriever_b.aclose()
 
 
+async def test_memory_promote_text_creates_curated_entry(tmp_path: Path) -> None:
+    """memory.promote with raw text creates a short_term entry the
+    list endpoint can find."""
+    router, retriever = _setup(tmp_path)
+    try:
+        res = await _call(
+            router, "memory.promote",
+            {"text": "Project deadline is May 1.", "tags": ["deadline", "project"], "confidence": 0.9},
+        )
+        assert res["ok"] is True
+        assert res["id"]
+        assert res["promoted_from"] is None
+        listing = await _call(router, "memory.short_term_list", {})
+        assert listing["count"] == 1
+        entry = listing["entries"][0]
+        assert entry["text"] == "Project deadline is May 1."
+        assert set(entry["tags"]) == {"deadline", "project"}
+        assert entry["confidence"] == 0.9
+    finally:
+        await retriever.aclose()
+
+
+async def test_memory_promote_chunk_id_round_trip(tmp_path: Path) -> None:
+    """Promoting an existing chunk records source_chunk_id linkage."""
+    router, retriever = _setup(tmp_path)
+    try:
+        await _call(router, "memory.save", {"text": "alpha beta gamma"})
+        search = await _call(router, "memory.search", {"query": "alpha", "k": 1})
+        chunk_id = search["hits"][0]["chunk"]["id"]
+        promoted = await _call(
+            router, "memory.promote",
+            {"chunk_id": chunk_id, "tags": ["fact"]},
+        )
+        assert promoted["ok"] is True
+        assert promoted["promoted_from"] == chunk_id
+        rows = retriever.store.short_term_list()
+        assert rows[0]["source_chunk_id"] == chunk_id
+    finally:
+        await retriever.aclose()
+
+
+async def test_memory_short_term_review_and_archive(tmp_path: Path) -> None:
+    router, retriever = _setup(tmp_path)
+    try:
+        promoted = await _call(router, "memory.promote", {"text": "fact"})
+        eid = promoted["id"]
+        # Review bumps review_count.
+        rev = await _call(router, "memory.short_term_review", {"id": eid})
+        assert rev["ok"] is True
+        rows = retriever.store.short_term_list()
+        assert rows[0]["review_count"] == 1
+        assert rows[0]["last_reviewed_at"] is not None
+        # Archive hides it from default list.
+        arc = await _call(router, "memory.short_term_archive", {"id": eid})
+        assert arc["ok"] is True
+        active = await _call(router, "memory.short_term_list", {})
+        assert active["count"] == 0
+        all_rows = await _call(
+            router, "memory.short_term_list", {"include_archived": True}
+        )
+        assert all_rows["count"] == 1
+        assert all_rows["entries"][0]["archived"] is True
+    finally:
+        await retriever.aclose()
+
+
+async def test_memory_promote_rejects_missing_arg(tmp_path: Path) -> None:
+    router, retriever = _setup(tmp_path)
+    try:
+        res = await _call(router, "memory.promote", {})
+        assert res["ok"] is False
+        assert "chunk_id" in res["error"] or "text" in res["error"]
+    finally:
+        await retriever.aclose()
+
+
 async def test_memory_export_filters_by_source(tmp_path: Path) -> None:
     router, retriever = _setup(tmp_path)
     try:

@@ -108,6 +108,28 @@ class _ExportParams(BaseModel):
     source: str | None = None  # filter to one corpus, or None for all
 
 
+class _PromoteParams(BaseModel):
+    """Promote a chunk (or raw text) to the curated `short_term` tier."""
+
+    model_config = ConfigDict(extra="forbid")
+    chunk_id: str | None = None
+    text: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    confidence: float = Field(0.5, ge=0.0, le=1.0)
+
+
+class _ShortTermListParams(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    tag: str | None = None
+    include_archived: bool = False
+    limit: int = Field(100, ge=1, le=1000)
+
+
+class _ShortTermIdParams(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: str
+
+
 class _ImportParams(BaseModel):
     """Bulk import — same JSON shape as `memory.export`. Files re-
     inserted via raw inbox path (so they get re-embedded on next
@@ -293,6 +315,52 @@ def register_memory_methods(router: Router, retriever: MemoryRetriever) -> None:
             "files": [_serialise_file(f) for f in files],
             "chunks": chunks_out,
         }
+
+    @router.method("memory.promote", _PromoteParams)
+    async def _promote(p: _PromoteParams) -> dict[str, Any]:
+        """Move a fact from raw inbox → curated `short_term` tier."""
+        store = retriever.store
+        if p.chunk_id:
+            chunk = store.get_chunk(p.chunk_id)
+            if chunk is None:
+                return {"ok": False, "error": f"no chunk with id {p.chunk_id!r}"}
+            entry_id = store.short_term_add(
+                text=chunk.text,
+                tags=p.tags,
+                confidence=p.confidence,
+                source_chunk_id=p.chunk_id,
+            )
+            return {"ok": True, "id": entry_id, "promoted_from": p.chunk_id}
+        if p.text:
+            entry_id = store.short_term_add(
+                text=p.text, tags=p.tags, confidence=p.confidence
+            )
+            return {"ok": True, "id": entry_id, "promoted_from": None}
+        return {"ok": False, "error": "either chunk_id or text is required"}
+
+    @router.method("memory.short_term_list", _ShortTermListParams)
+    async def _st_list(p: _ShortTermListParams) -> dict[str, Any]:
+        rows = retriever.store.short_term_list(
+            tag=p.tag, include_archived=p.include_archived, limit=p.limit
+        )
+        return {"ok": True, "entries": rows, "count": len(rows)}
+
+    @router.method("memory.short_term_review", _ShortTermIdParams)
+    async def _st_review(p: _ShortTermIdParams) -> dict[str, Any]:
+        ok = retriever.store.short_term_review(p.id)
+        if not ok:
+            return {"ok": False, "error": f"no curated entry with id {p.id!r}"}
+        return {"ok": True, "id": p.id}
+
+    @router.method("memory.short_term_archive", _ShortTermIdParams)
+    async def _st_archive(p: _ShortTermIdParams) -> dict[str, Any]:
+        ok = retriever.store.short_term_archive(p.id)
+        if not ok:
+            return {
+                "ok": False,
+                "error": f"no active curated entry with id {p.id!r}",
+            }
+        return {"ok": True, "id": p.id}
 
     @router.method("memory.import", _ImportParams)
     async def _import(p: _ImportParams) -> dict[str, Any]:

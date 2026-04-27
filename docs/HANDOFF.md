@@ -2,9 +2,35 @@
 
 Single working session that converted oxenClaw from a Telegram-first
 multi-channel project to a dashboard + native-desktop in-house assistant
-with Slack-only outbound, plus a long debug arc to get the Windows
-desktop client actually connecting from a WSL2 cross-build. This file
-is the next-session starter pack.
+with Slack-only outbound, debugged the Windows cross-build, then
+spent a long second arc closing the openclaw parity gap on the
+agent / tool / dashboard surface. This file is the next-session
+starter pack.
+
+---
+
+## Top-line additions in this session (commit order)
+
+| Commit | What |
+|---|---|
+| `0260f9b` | Telegram extension removed; project pivots to dashboard + Slack outbound |
+| `c6eaa91` | Gateway / agent runtime hardening (validation, dual-stack, log-level) |
+| `38b868d` | Desktop Windows client cross-build fixes (custom-protocol, native HTTP/1.1 probe, file token store, single-instance, dual-tray) |
+| `0418e74` | P0-A "+ New chat" + P0-B tool-call telemetry cards |
+| `61be156` | Document why /healthz only answers GET (won't fix) |
+| `154be38` | P1-C `skill_resolver` (intent → search → install → instructions) |
+| `b2b6a48` | P2-G `sessions.compact` RPC + Compact button |
+| `6c5be70` | P2-H `usage.session` / `usage.totals` + cost roll-up |
+| `47667ff` | P2-F skeleton: `CodingAgent` + `fs_tools` + `docs/CODING_AGENT.md` |
+| `f52f1df` | K. Cron tab quick-add wizard with preset cards |
+| `63a1e86` | F-1+F-6+F-7: `edit` tool + line-numbered `read_file` + `grep`/`glob` split + `read_pdf` |
+| `8cb13bb` | F-2: `process` tool (start / send_keys / read_output / stop / list) |
+| `0ba5a21` | F-3: structured `update_plan` tool + `plan.get` / `plan.list` RPCs |
+| `6c4007a` | F-4 sessions tool family (status/list/history/send/spawn/yield) + F-5 subagents audit |
+| `e0c3120` | L. `web_search` → `web_fetch` chaining (system prompt + recovery hint + multi-backend env-var pickup) |
+| `d1c3932` | M. Drop Telegram-era 5-input chat target row → compact `Agent ▼ + chat-id chip + ⚙️ Advanced` bar |
+
+Test status at session end: **1134 passed / 28 skipped / 0 failed** (Python suite, sandbox-infra and Playwright dashboard E2E auto-skip on this WSL2 box). Rust desktop tests **6 passed**.
 
 ---
 
@@ -194,11 +220,12 @@ The long debug arc. Listing in the order the bugs surfaced.
 
 ---
 
-## Test status
+## Test status (end of session)
 
-- **Python**: 1033 passed, 1 skipped (`tests/test_shell_tool.py` skipped
-  on the dev box because `bwrap` namespacing fails — environmental,
-  not a code regression).
+- **Python**: 1134 passed, 28 skipped, 0 failed.
+  Skips: `tests/test_shell_tool.py` (bwrap unavailable on this WSL2
+  box — environmental), 26 dashboard E2E (Playwright auto-skip; runs
+  in CI), 1 misc env-gated.
 - **Rust desktop**: 6 passed (`force_ipv4_loopback` 2, `probe_gateway`
   2, token round-trip 2).
 - **Live smoke** against a fresh gateway (`provider=echo`, port 17331):
@@ -218,26 +245,29 @@ The long debug arc. Listing in the order the bugs surfaced.
    `set_password` no-op was working around it via file storage; the
    release pipeline should not ship a build that drops DPAPI without
    confirming the tradeoff.
-2. **Gateway HEAD support** — `/healthz` only answers GET; HEAD makes
-   the connection drop. External monitoring systems use GET so it's
-   not blocking, but worth a five-line fix in
-   `oxenclaw/gateway/server.py` (`ROUTES` could share GET handlers
-   for HEAD).
+2. **Gateway HEAD support — won't fix.** `websockets/http11.py:150`
+   hard-rejects non-GET. Documented inline + in ROADMAP P1-E.
 3. **`tests/test_shell_tool.py` skip** — bwrap on this WSL2 host fails
-   with "Creating new namespace failed: Resource temporarily
-   unavailable". Investigate before relying on the sandbox path on
-   this machine.
-4. **Untracked artefacts**: `desktop/src-tauri/Cargo.lock`,
-   `desktop/src-tauri/gen/`, `desktop/src-tauri/target/` — last is
-   build output (gitignored already? double-check); `gen/` is
-   tauri-cli generated; `Cargo.lock` should be committed for the
-   binary crate.
-5. **Skill prompt hint is best-effort** — strong models obey, weaker
-   ones may still hallucinate `tool_use` blocks. If
-   `'stock-analysis' is not registered` reappears with another skill,
+   with "Creating new namespace failed". Investigate before relying
+   on the sandbox path here.
+4. **CodingAgent ~65–70% openclaw parity.** What's still missing:
+   dashboard "Code" tab UI (file tree + diff viewer + plan progress
+   bar), `apply_patch` (unified-diff), plan-event WS stream, real
+   sub-agent spawn matching openclaw's ACP semantics (`subagent.py`
+   today is a synchronous task delegator — see
+   `docs/SUBAGENTS_AUDIT.md` for the 5-axis comparison).
+5. **`<plan>` parsing path decision pending.** CodingAgent's prompt
+   tells the model to use `update_plan(...)` (structured tool) but
+   doesn't strip / repurpose the freeform `<plan>...</plan>` text
+   block legacy clients may still emit. See `docs/CODING_AGENT.md`
+   "Biggest open question".
+6. **Skill prompt hint is best-effort.** Strong models obey the
+   "skills are docs not callable tools" guidance + the
+   `skill_resolver` fallback; weaker models may still hallucinate.
+   If a recurring "tool 'X' is not registered" pattern shows up,
    consider auto-registering shell-tool wrappers from skill
-   `commands:` frontmatter, or filtering out user skills with
-   `commands:` blocks at load time.
+   `commands:` frontmatter, or filtering user skills that ship a
+   `commands:` block at load time.
 
 ---
 

@@ -1,14 +1,32 @@
 # ACP — Agent Client Protocol
 
 oxenClaw speaks **ACP** (Agent Client Protocol — JSON-RPC over
-NDJSON, defined by the Zed-led `@agentclientprotocol/sdk` 0.19.x)
-in **both directions**:
+NDJSON, defined by the Zed-led `@agentclientprotocol/sdk` 0.19.x).
 
-- as an **agent** that an external ACP client (Zed, another
-  oxenclaw, or any conforming peer) can spawn over stdio —
-  `oxenclaw acp [--backend fake|pi]`;
-- as a **client** that spawns and drives a child ACP server —
-  `oxenclaw.acp.subprocess_runtime.SubprocessAcpRuntime`.
+## Why we ship it
+
+The **primary value** is the **client direction**: PiAgent's local
+model (Ollama / gemma4 / qwen) is reliably weak at long-horizon
+planning, multi-file refactors, and careful tool sequencing. ACP
+gives us a clean stdio handoff to a stronger external agent for
+those specific sub-tasks. Concretely:
+
+  - `delegate_to_acp(runtime="claude", prompt="…")` — a callable
+    tool registered on every PiAgent. The model decides, per turn,
+    whether to handle a request itself or hand it to a frontier
+    ACP server. We pay one subprocess hop and avoid having to
+    upgrade the local model.
+  - `oxenclaw.acp.subprocess_runtime.SubprocessAcpRuntime` — the
+    library underneath. One backend instance owns one child ACP
+    server, multiplexes N sessions over the same wire, projects
+    `session/update` notifications back as `AcpRuntimeEvent`
+    instances.
+
+The **secondary capability** is the **server direction**:
+`oxenclaw acp [--backend fake|pi]` lets any ACP-conforming client
+(Zed, another oxenclaw, …) spawn oxenclaw as a child stdio agent.
+Useful when an IDE wants to drive our local PiAgent + memory +
+tools through ACP, but it's not the reason we built the harness.
 
 This page is the canonical reference. README only carries the
 five-line orientation; the install / usage / scenario detail
@@ -81,51 +99,47 @@ for protocol traffic.
 
 ---
 
-## Run oxenclaw as an ACP agent
+## Primary use — delegate hard sub-tasks to a frontier ACP server
 
-The lowest-friction entry point:
+PiAgent's local model isn't always the right tool. The
+`delegate_to_acp` callable tool (registered into every agent
+that gets the default bundle) lets the model decide, per turn,
+to hand a sub-task off to a stronger external agent over ACP:
 
-```bash
-oxenclaw acp --backend pi
+```
+delegate_to_acp(runtime="claude" | "codex" | "gemini" | "custom",
+                prompt="<sub-task as one paragraph>",
+                argv=[...]?,         # required when runtime='custom'
+                cwd="/path"?,
+                timeout_seconds=300)
 ```
 
-Reads NDJSON JSON-RPC from stdin, writes responses + `session/update`
-notifications to stdout. Two backends ship in core:
+The handler spawns the runtime as a child stdio process, runs one
+full ACP lifecycle (`initialize → session/new → session/prompt →
+done`), collects the assistant text + the count and last status of
+any `tool_call` cards the frontier agent ran, and returns:
 
-| `--backend` | what it is | when to use |
-|---|---|---|
-| `fake` (default) | `InMemoryFakeRuntime` — echoes the prompt as one `text_delta` then `done`. No LLM. | Smoke tests, doctor-style probes, IDE wiring sanity check. |
-| `pi` | `PiAgentAcpRuntime` wrapping a real `PiAgent` (Ollama / `gemma4:latest` by default). Memory tools (`memory_save` / `memory_search` / `memory_get`) auto-registered, recall prelude path live, tool-call telemetry projected mid-flight. | Production. What an IDE-side ACP integration actually wants. |
-
-The `pi` backend reads the user's standard `~/.oxenclaw/` paths and
-builds a `MemoryRetriever` against the default Ollama embedder
-(`OLLAMA_HOST` env var honoured). If the embedder cannot be reached
-the agent still boots — without memory tools rather than crashing.
-
-### Connect Zed (or any ACP client)
-
-Zed reads `~/.config/zed/agent_servers.json`. Add an entry:
-
-```json
-{
-  "oxenclaw": {
-    "command": "oxenclaw",
-    "args": ["acp", "--backend", "pi"]
-  }
-}
+```
+[delegate_to_acp runtime=claude stopReason=stop tool_calls=3 last_status=completed]
+<assistant text body>
 ```
 
-Open the Agent panel, pick `oxenclaw`, type a prompt. You'll see:
+Failure modes (CLI not installed, timeout, wire error, missing
+argv on `runtime='custom'`) all surface as friendly strings — the
+parent turn never crashes because of a delegation hop.
 
-- assistant text streaming as `agent_message_chunk` notifications;
-- live tool-call cards (PiAgent's `read_file` / `edit` / `grep` /
-  `memory_search` / etc.) as `tool_call` → `tool_call_update`
-  pairs with consistent `toolCallId`;
-- stop reason (`stop` / `cancel` / `error`) on prompt completion.
+The system prompt's existing tool-use guide already covers the
+"call the right tool when local context is the wrong fit" pattern,
+so no special prompt addition is needed for the model to discover
+and use this tool.
 
----
+### Drive a child ACP server programmatically
 
-## Drive a child ACP server from oxenclaw
+`SubprocessAcpRuntime` is the library surface underneath
+`delegate_to_acp`. Use it directly when you need fine-grained
+control over the lifecycle (multi-turn delegation against a
+single child, custom session_keys, observing
+`session/update` notifications event-by-event):
 
 The inverse direction. `SubprocessAcpRuntime` spawns a child that
 speaks ACP and routes its `session/update` notifications back as
@@ -194,6 +208,57 @@ decision in turn 2 is **conditioned on what it actually reads in
 the user message** — if the recall prelude is missing, the tool
 gets called with the literal deictic phrase, NOT "Suwon", and the
 test fails with a clear diagnostic.
+
+---
+
+## Secondary use — run oxenclaw as an ACP agent
+
+The inverse direction. Useful when an IDE (Zed and similar) wants
+to drive our local PiAgent + memory + tools over ACP. Less common
+than the delegation path but the harness supports it cleanly.
+
+```bash
+oxenclaw acp --backend pi
+```
+
+Reads NDJSON JSON-RPC from stdin, writes responses + `session/update`
+notifications to stdout. Two backends ship in core:
+
+| `--backend` | what it is | when to use |
+|---|---|---|
+| `fake` (default) | `InMemoryFakeRuntime` — echoes the prompt as one `text_delta` then `done`. No LLM. | Smoke tests, doctor-style probes, IDE wiring sanity check. |
+| `pi` | `PiAgentAcpRuntime` wrapping a real `PiAgent` (Ollama / `gemma4:latest` by default). Memory tools + `delegate_to_acp` auto-registered, recall prelude path live, tool-call telemetry projected mid-flight. | What an IDE-side ACP integration actually wants when oxenclaw IS the agent. |
+
+The `pi` backend reads the user's standard `~/.oxenclaw/` paths and
+builds a `MemoryRetriever` against the default Ollama embedder
+(`OLLAMA_HOST` env var honoured). If the embedder cannot be reached
+the agent still boots — without memory tools rather than crashing.
+
+### Connect Zed (or any ACP client)
+
+Zed reads `~/.config/zed/agent_servers.json`. Add an entry:
+
+```json
+{
+  "oxenclaw": {
+    "command": "oxenclaw",
+    "args": ["acp", "--backend", "pi"]
+  }
+}
+```
+
+Open the Agent panel, pick `oxenclaw`, type a prompt. You'll see:
+
+- assistant text streaming as `agent_message_chunk` notifications;
+- live tool-call cards (PiAgent's `read_file` / `edit` / `grep` /
+  `memory_search` / `delegate_to_acp` / etc.) as `tool_call` →
+  `tool_call_update` pairs with consistent `toolCallId`;
+- stop reason (`stop` / `cancel` / `error`) on prompt completion.
+
+Note that this path is composable with the primary direction:
+PiAgent fronting an external ACP client can itself call
+`delegate_to_acp(runtime="claude", …)` mid-turn, producing a
+nested ACP delegation chain.
 
 ---
 

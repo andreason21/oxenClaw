@@ -241,29 +241,36 @@ through `apt` instead.
 
 Full guide: [`docs/DESKTOP_APP.md`](docs/DESKTOP_APP.md).
 
-### IDE / agent integration via ACP
+### Frontier delegation via ACP
 
-oxenClaw also speaks the **Agent Client Protocol** (Zed's
-`@agentclientprotocol/sdk` 0.19.x) over stdio in **both**
-directions — as an agent any ACP client can spawn, and as a client
-that can drive a child ACP server.
+The local PiAgent model (Ollama / gemma4 / qwen) is reliably weak
+at long-horizon planning, multi-file refactors, and careful tool
+sequencing. oxenClaw speaks the **Agent Client Protocol** (Zed's
+`@agentclientprotocol/sdk` 0.19.x) over stdio so the model can
+**delegate** those specific sub-tasks to a stronger external agent
+mid-turn:
 
-Run oxenclaw as an ACP agent:
+```python
+delegate_to_acp(runtime="claude", prompt="…")    # registered by default
+```
+
+The handler spawns the runtime as a child stdio process, runs one
+full ACP lifecycle (`initialize → session/new → session/prompt →
+done`), collects the assistant text + a tool-call summary, and
+returns. Failure modes (CLI not installed, timeout, wire error) all
+surface as friendly tool-result strings — the parent turn never
+crashes because of a delegation hop. Three runtimes are pre-mapped
+(`claude` / `codex` / `gemini` → argv `[<name>, "acp"]`); pass
+`runtime="custom"` with explicit `argv` for any other ACP server.
+
+The reverse direction is also supported as a secondary capability —
+external clients can drive our local PiAgent over stdio:
 
 ```bash
 oxenclaw acp --backend pi
 ```
 
-Reads NDJSON JSON-RPC from stdin, streams `agent_message_chunk` /
-`tool_call` / `tool_call_update` notifications to stdout, returns
-a `stopReason` per prompt. Two backends ship in core:
-
-| `--backend` | what it is |
-|---|---|
-| `fake` (default) | echoes the prompt — for IDE-side wiring sanity checks |
-| `pi` | a real PiAgent (Ollama / `gemma4:latest` by default) with memory tools (`memory_save`/`search`/`get`) auto-registered and tool-call telemetry projected mid-flight |
-
-Connect Zed by adding to `~/.config/zed/agent_servers.json`:
+Connect Zed via `~/.config/zed/agent_servers.json`:
 
 ```json
 {
@@ -274,9 +281,8 @@ Connect Zed by adding to `~/.config/zed/agent_servers.json`:
 }
 ```
 
-Full reference + scenario walkthrough (memory-driven tool-call
-disambiguation across two turns):
-[`docs/ACP.md`](docs/ACP.md).
+Full reference + Suwon-weather scenario walkthrough + the four-verb
+lifecycle diagram: [`docs/ACP.md`](docs/ACP.md).
 
 ### Outbound channels (Slack)
 
@@ -718,29 +724,34 @@ OS에 맞는 파일을 받는다:
 
 전체 가이드: [`docs/DESKTOP_APP.md`](docs/DESKTOP_APP.md).
 
-#### IDE / 에이전트 통합 (ACP)
+#### Frontier 위임 (ACP)
 
-oxenClaw는 **Agent Client Protocol** (Zed의 `@agentclientprotocol/sdk`
-0.19.x) 도 stdio로 **양방향** 지원한다 — ACP 클라이언트가 우리를
-자식으로 띄울 수도 있고, 우리가 자식 ACP 서버를 부려서 사용할 수도
-있다.
+로컬 PiAgent 모델(Ollama / gemma4 / qwen)은 장기 계획, 다중 파일
+리팩토링, 정교한 툴 시퀀싱에 약하다. oxenClaw가 **Agent Client
+Protocol** (Zed의 `@agentclientprotocol/sdk` 0.19.x) 을 stdio로
+지원하는 *주된 이유*는 모델이 그런 어려운 sub-task를 한 턴 단위로
+**더 강한 외부 에이전트에 위임**할 수 있게 하기 위함:
 
-ACP 에이전트로 실행:
+```python
+delegate_to_acp(runtime="claude", prompt="…")    # 기본 번들에 등록
+```
+
+핸들러가 해당 런타임을 자식 stdio 프로세스로 띄우고 ACP 한 사이클
+(`initialize → session/new → session/prompt → done`)을 통과시켜
+어시스턴트 텍스트 + tool-call 요약을 수집해서 반환. 실패 모드(CLI
+없음, timeout, wire error)는 모두 친화적 문자열로 surface — 위임
+홉 때문에 부모 턴이 깨지지 않는다. 세 런타임이 사전 매핑됨
+(`claude` / `codex` / `gemini` → argv `[<name>, "acp"]`); 다른
+ACP 서버는 `runtime="custom"` + 명시적 `argv`.
+
+역방향도 부수적 기능으로 지원 — 외부 클라이언트가 우리 로컬
+PiAgent를 stdio로 구동할 수 있다:
 
 ```bash
 oxenclaw acp --backend pi
 ```
 
-stdin에서 NDJSON JSON-RPC를 읽어 `agent_message_chunk` /
-`tool_call` / `tool_call_update` 알림을 stdout으로 스트리밍하고
-프롬프트마다 `stopReason`을 반환한다. 코어에 두 백엔드:
-
-| `--backend` | 내용 |
-|---|---|
-| `fake` (기본) | 프롬프트를 그대로 echo — IDE 연결 sanity-check용 |
-| `pi` | 실제 PiAgent (Ollama / `gemma4:latest` 기본). memory 툴 (`memory_save`/`search`/`get`) 자동 등록, tool-call telemetry mid-flight 사영 |
-
-Zed에 연결 — `~/.config/zed/agent_servers.json`에:
+`~/.config/zed/agent_servers.json`로 Zed 연결:
 
 ```json
 {
@@ -751,8 +762,8 @@ Zed에 연결 — `~/.config/zed/agent_servers.json`에:
 }
 ```
 
-전체 레퍼런스 + 시나리오 (두 턴짜리 메모리 기반 도구 호출
-디스앰비귀에이션): [`docs/ACP.md`](docs/ACP.md).
+전체 레퍼런스 + 수원 날씨 시나리오 + 4-verb 라이프사이클:
+[`docs/ACP.md`](docs/ACP.md).
 
 #### 아웃바운드 채널 (Slack)
 

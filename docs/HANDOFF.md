@@ -404,3 +404,36 @@ instead of being tautological.
 `InitializeResult`, `setMode`/`setConfigOption` round-trips,
 image/resource content blocks, `session/load` resume, plan/usage
 projection.
+
+### 2026-04-28 (late) — tone fix + `delegate_to_acp`
+
+The 9-commit ACP arc above shipped a *bidirectional* harness, but
+the docs leaned on "양방향 지원" as if both directions were equal
+priorities. The operator's actual ask was specifically the **client
+direction** — the local Ollama model is weak at tool-calling, so
+the value of ACP is letting PiAgent **delegate** hard sub-tasks to
+a frontier ACP server (claude / codex / gemini) mid-turn. The
+server direction is a real but secondary capability (IDEs driving
+us as a child). Two changes corrected the framing:
+
+  - **`commit c930db4`** added the `delegate_to_acp` callable tool
+    on top of `SubprocessAcpRuntime`. Registered into the default
+    bundle and into `_build_runtime("pi")`, so PiAgent now actually
+    has a tool the model can invoke when it judges itself the wrong
+    fit. Three runtimes pre-mapped (`claude`/`codex`/`gemini` →
+    argv `[<name>, "acp"]`); `runtime="custom"` for sandboxed builds
+    or any other ACP-speaking child. Failure modes (CLI not
+    installed, timeout, wire errors, missing argv) all return a
+    friendly tool-result string — never raise out of the tool
+    boundary, so the parent turn stays alive even when the
+    delegation hop misbehaves. 5 new tests, suite at 1834 passed.
+
+  - **doc tone fix**: README + `docs/ACP.md` lead with the
+    delegation path. The server direction stays documented but is
+    explicitly framed as secondary. `docs/HANDOFF.md` (this entry)
+    reflects the corrected priority.
+
+The full picture now: ACP's wire / framing / manager / fake /
+subprocess / server / PiAgent adapter / tool-call telemetry from
+the earlier 9 commits, with `delegate_to_acp` as the
+operator-visible feature on top.

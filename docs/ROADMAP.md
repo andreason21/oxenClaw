@@ -244,23 +244,37 @@ as a follow-up without backend churn.
   UI render the model's plan before execution. Useful for the
   coding-agent flow but applies to all agents.
 
-### J. Multi-agent / sub-agent spawn (ACP-style) ◐ (foundation shipped)
-**Shipped (2026-04-28)** — full Agent Client Protocol harness
-ported in 9 commits. oxenclaw is now bidirectional ACP:
+### J. Multi-agent / sub-agent spawn (ACP-style) ◐ (foundation + delegation shipped)
+**Shipped (2026-04-28)** — Agent Client Protocol harness across 10
+commits. The operator-visible value is the **client direction**:
+PiAgent's local model can hand a hard sub-task to a frontier ACP
+server (claude / codex / gemini) mid-turn via the `delegate_to_acp`
+tool. The server direction (`oxenclaw acp`) is a real but secondary
+capability for IDE-side integrations.
 
+  - **Primary value — `delegate_to_acp` callable tool**: registered
+    into the default bundle and into `_build_runtime("pi")` so
+    every PiAgent has it. Args: `runtime` (claude/codex/gemini/
+    custom), `prompt`, optional `argv`, optional `cwd`,
+    `timeout_seconds`. Handler runs SubprocessAcpRuntime through
+    a full ACP lifecycle, returns `[delegate_to_acp runtime=X
+    stopReason=Y tool_calls=N last_status=Z]\n<text>`. Failure
+    modes (missing CLI, timeout, wire error, ValueError on missing
+    argv) all surface as friendly strings — parent turn never
+    crashes.
   - **Wire layer**: `oxenclaw/acp/framing.py` (NDJSON) +
     `protocol.py` (pydantic schemas for the four foundational
     verbs, PROTOCOL_VERSION 0.19.0).
   - **Control plane**: `AcpSessionManager` singleton + backend
     registry + `InMemoryFakeRuntime` reference impl.
-  - **Client direction**: `SubprocessAcpRuntime` — spawn a child
+  - **Client transport**: `SubprocessAcpRuntime` — spawn a child
     ACP server, drive `initialize → session/new → session/prompt
     → session/cancel`. `aclose()` idempotent; pending requests
     fail with `AcpWireError(-32001)` on shutdown.
-  - **Server direction**: `oxenclaw acp [--backend fake|pi]` CLI
-    that reads NDJSON from stdin and dispatches to a runtime.
-    `pi` backend wraps PiAgent + MemoryRetriever + memory tools
-    (matches gateway wiring exactly).
+  - **Server direction (secondary)**: `oxenclaw acp [--backend
+    fake|pi]` CLI that reads NDJSON from stdin and dispatches to
+    a runtime. `pi` backend wraps PiAgent + MemoryRetriever +
+    memory tools + `delegate_to_acp` (matches gateway wiring).
   - **Telemetry**: tool_call / tool_call_update notifications
     projected mid-flight from the agent's HookRunner so an ACP
     client sees live tool-execution cards. JSONL audit log + 60s
@@ -272,8 +286,8 @@ ported in 9 commits. oxenclaw is now bidirectional ACP:
     fake stream that conditionally resolves the deictic phrase
     based on what the prelude actually contains.
 
-Test count: 84 ACP-specific tests across
-`tests/test_acp_*.py`. Suite total 1827 passed.
+Test count: 89 ACP-specific tests across
+`tests/test_acp_*.py`. Suite total 1834 passed.
 Reference: [`docs/ACP.md`](ACP.md).
 
 **Still missing** (separate roadmap items):

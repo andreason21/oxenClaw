@@ -199,6 +199,47 @@ as a follow-up without backend churn.
 - openclaw spawns child agents via the Agent Control Plane. Less
   urgent for in-house dashboard use but unlocks complex flows.
 
+### N. Cron tab full openclaw parity ✓
+**Shipped** — operator asked to bring the Cron tab UX to openclaw
+parity. Both backend and frontend in this batch.
+
+  Backend
+  - `oxenclaw/cron/run_log.py` (new): `CronRunStore` JSON-backed
+    store (`<paths.home>/cron/runs.json`) with append / update /
+    list / total / prune (default 100 runs/job). Atomic write,
+    cursor-based filtering by job_id / status / delivery / query
+    substring / sort_dir.
+  - `CronScheduler._fire` now writes a "running" `CronRunEntry`
+    before dispatch and updates it with status / delivery_status /
+    error / ended_at on completion or exception.
+  - Three new RPCs in `oxenclaw/gateway/cron_methods.py`:
+      `cron.runs` → `{ runs, total, has_more }` with full filter set
+      `cron.run_status({ run_id })` → single entry or null
+      `cron.update({ id, schedule?, prompt?, agent_id?, channel?,
+                    account_id?, chat_id?, thread_id?, name?,
+                    description?, enabled? })` → `{ ok, job }`
+  - Tests: 13 new in `tests/test_cron_run_log.py` (store contract)
+    + 8 in `tests/test_gateway_cron_runs.py` (RPC end-to-end).
+
+  Frontend (oxenclaw/static/app.js + app.css)
+  - 820-line CronView rewrite. Job list filter row: search,
+    enabled/disabled, schedule kind, last-status, sort-by, sort
+    direction toggle, reset.
+  - Status pills per row: enabled/disabled + last-run pill (✓/✗/⏭/·)
+    + next-run countdown. Per-row actions: Edit / Clone / Toggle /
+    Run / History / Remove.
+  - Full edit modal (Basics / Schedule / Execution / Advanced
+    sections) with `aria-invalid` + clickable blocking-field list.
+  - Run-log sub-panel (new "Run log" tab next to "Jobs"): scope +
+    status multi-checkbox + delivery filter + search + Load more
+    pagination, expandable output / error blocks per run.
+  - Quick-add wizard (K) preserved as the casual-user entry path;
+    a new "Advanced new job" button opens the full modal.
+  - Tests: 3 new in `tests/dashboard/test_dashboard_e2e.py`
+    (search filter, modal validation, run-log pills).
+
+Suite: 1157 passed / 31 skipped / 0 failed.
+
 ### M. Compact chat-target bar (drop Telegram-era 5-input row) ✓
 **Shipped** — operator pointed out that agent_id, channel,
 account_id, chat_id, thread_id displayed in the chat tab were

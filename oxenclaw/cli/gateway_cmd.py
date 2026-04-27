@@ -34,7 +34,7 @@ from oxenclaw.channels import ChannelRouter, ChannelRunner
 from oxenclaw.clawhub import ClawHubClient, MultiRegistryClient, SkillInstaller
 from oxenclaw.clawhub.registries import ClawHubRegistries
 from oxenclaw.config import default_paths, load_config
-from oxenclaw.cron import CronJobStore, CronScheduler
+from oxenclaw.cron import CronJobStore, CronRunStore, CronScheduler
 from oxenclaw.gateway import (
     ChatSendParams,
     ChatSendResult,
@@ -354,6 +354,7 @@ async def _run_gateway(
     # reference; we patch the scheduler's dispatcher pointer after the
     # dispatcher is built.
     cron_store = CronJobStore(paths=paths)
+    cron_run_store = CronRunStore(paths.home / "cron" / "runs.json")
 
     # Build the agent with bundled tools pre-registered, so the model
     # has weather / web fetch / web search / github / skill_creator
@@ -386,7 +387,9 @@ async def _run_gateway(
 
     dispatcher = Dispatcher(agents=agents, config=config, send=channel_router.send)
 
-    cron_scheduler = CronScheduler(store=cron_store, dispatcher=dispatcher)
+    cron_scheduler = CronScheduler(
+        store=cron_store, dispatcher=dispatcher, run_store=cron_run_store
+    )
 
     # Now that scheduler + channel_router exist, register the
     # dependency-bound tools (cron, message, healthcheck, session_logs).
@@ -422,6 +425,7 @@ async def _run_gateway(
         dispatcher=dispatcher,
         channel_router=channel_router,
         cron_scheduler=cron_scheduler,
+        cron_run_store=cron_run_store,
         approvals=approvals,
         paths_home=paths,
         clawhub_client=clawhub_client,
@@ -587,6 +591,7 @@ def _build_router(
     dispatcher: Dispatcher,
     channel_router: ChannelRouter,
     cron_scheduler: CronScheduler,
+    cron_run_store: CronRunStore | None = None,
     approvals: ApprovalManager,
     paths_home,  # type: ignore[no-untyped-def]
     clawhub_client: ClawHubClient | MultiRegistryClient | None = None,
@@ -652,7 +657,7 @@ def _build_router(
     register_usage_methods(router, paths=paths_home)
     register_plan_methods(router, paths=paths_home)
     register_config_methods(router)
-    register_cron_methods(router, cron_scheduler)
+    register_cron_methods(router, cron_scheduler, run_store=cron_run_store)
     register_approval_methods(router, approvals)
     register_isolation_methods(router)
     register_canvas_methods(

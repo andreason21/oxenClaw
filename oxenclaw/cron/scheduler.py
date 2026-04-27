@@ -8,9 +8,11 @@ registers every enabled job. Each fire builds an InboundEnvelope via
 from __future__ import annotations
 
 import contextlib
+import time
 from typing import TYPE_CHECKING
 
 from oxenclaw.cron.models import CronJob, NewCronJob
+from oxenclaw.cron.run_log import CronRunEntry, CronRunStore
 from oxenclaw.cron.store import CronJobStore
 from oxenclaw.cron.trigger import build_trigger_envelope
 from oxenclaw.plugin_sdk.runtime_env import get_logger
@@ -34,6 +36,7 @@ class CronScheduler:
         *,
         store: CronJobStore,
         dispatcher: Dispatcher,
+        run_store: CronRunStore | None = None,
         timezone: str | None = None,
         misfire_grace_seconds: int = DEFAULT_MISFIRE_GRACE_SECONDS,
     ) -> None:
@@ -41,6 +44,7 @@ class CronScheduler:
 
         self._store = store
         self._dispatcher = dispatcher
+        self._run_store = run_store
         # Explicit timezone — APScheduler defaults to system local, which
         # silently skews schedules across containers (UTC) vs operators (KST).
         # Pass `timezone="UTC"` (or any IANA name) to make this explicit.
@@ -144,7 +148,41 @@ class CronScheduler:
             return
         envelope = build_trigger_envelope(job)
         logger.info("cron fire id=%s agent=%s channel=%s", job.id, job.agent_id, job.channel)
+
+        # Create a "running" entry before dispatch so we always have a
+        # record even if the dispatcher raises.
+        run_entry: CronRunEntry | None = None
+        if self._run_store is not None:
+            run_entry = CronRunEntry(job_id=job_id, started_at=time.time())
+            self._run_store.append(run_entry)
+
         try:
-            await self._dispatcher.dispatch(envelope)
+            outcome = await self._dispatcher.dispatch_with_outcome(envelope)
+            if run_entry is not None and self._run_store is not None:
+                # Determine delivery_status from outcome.
+                if outcome.results:
+                    delivery_status = "delivered"
+                elif outcome.agent_yielded > 0:
+                    delivery_status = "skipped"
+                else:
+                    delivery_status = "failed"
+                # Extract output preview from the first send result's text if
+                # available, otherwise leave empty (the dispatcher doesn't
+                # expose full reply text through the current outcome shape).
+                self._run_store.update(
+                    run_entry.run_id,
+                    ended_at=time.time(),
+                    status="ok",
+                    delivery_status=delivery_status,
+                )
+                self._run_store.prune()
         except Exception:
             logger.exception("cron job %s dispatch failed", job.id)
+            if run_entry is not None and self._run_store is not None:
+                self._run_store.update(
+                    run_entry.run_id,
+                    ended_at=time.time(),
+                    status="error",
+                    error="dispatch raised an exception",
+                    delivery_status="failed",
+                )

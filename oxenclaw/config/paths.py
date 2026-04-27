@@ -54,6 +54,12 @@ class OxenclawPaths:
         accounting column."""
         return self.agent_dir(agent_id) / "sessions" / f"{session_key}.usage.json"
 
+    def plan_file(self, agent_id: str, session_key: str) -> Path:
+        """Sibling of `session_file` carrying the structured plan for a
+        session. Written atomically by the `update_plan` tool; read by
+        the `plan.*` RPC methods."""
+        return self.agent_dir(agent_id) / "sessions" / f"{session_key}.plan.json"
+
     def ensure_home(self) -> None:
         self.home.mkdir(parents=True, exist_ok=True)
         self.credentials_dir.mkdir(parents=True, exist_ok=True)

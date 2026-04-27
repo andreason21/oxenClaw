@@ -121,7 +121,15 @@ def memory_save_tool(retriever: MemoryRetriever) -> Tool:
         name="memory_save",
         description=(
             "Persist a fact about the user or task to long-term memory. "
-            "Appends to the inbox markdown file. Tags help organise."
+            "`text` MUST be a complete natural-language sentence, not a "
+            "`key:value` line — \"User lives in Suwon, South Korea.\" "
+            "beats \"user_location:Suwon\" because the embedding store "
+            "scores conversational queries against it. When the user "
+            "wrote in a non-English language, include BOTH their "
+            "phrasing and an English paraphrase in `text` so cross-"
+            "language recall (e.g. Korean question → fact saved in "
+            "English) hits the chunk. `tags` is an optional list of "
+            "short labels."
         ),
         input_model=_SaveArgs,
         handler=_handler,

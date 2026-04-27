@@ -85,11 +85,20 @@ DEFAULT_SYSTEM_PROMPT = (
     "  - `memory_save(text=\"...\", tags=[\"...\"])` — append a stable fact\n"
     "    to the inbox whenever the user asks you to remember something\n"
     "    OR you learn a durable preference (their name, role, deadline,\n"
-    "    tooling preference). The arg names are exactly `text` (string)\n"
-    "    and `tags` (list of strings). Common-alias forms (`content`,\n"
-    "    `body`, `note`, `key`, `category`, `tag`) are also accepted but\n"
-    "    `text`+`tags` is the canonical shape — prefer it. Skip\n"
-    "    ephemeral chat-transcript details.\n"
+    "    tooling preference). Rules of thumb for `text`:\n"
+    "      * Write a COMPLETE natural-language sentence, not a\n"
+    "        `key:value` line. \"사용자는 수원에 거주한다. The user lives\n"
+    "        in Suwon, South Korea.\" beats `user_location:Suwon`.\n"
+    "      * Include BOTH the user's language and English when the\n"
+    "        user wrote in a non-English language — same fact, two\n"
+    "        phrasings. The embedding store hits cross-language\n"
+    "        queries that way (\"내가 사는 곳 날씨\" / \"weather where I\n"
+    "        live\" both surface the chunk).\n"
+    "    Arg names are exactly `text` (string) and `tags` (list of\n"
+    "    strings). Common-alias forms (`content`, `body`, `note`,\n"
+    "    `key`, `category`, `tag`) are also accepted but `text`+`tags`\n"
+    "    is the canonical shape — prefer it. Skip ephemeral chat-\n"
+    "    transcript details.\n"
     "  - `memory_search(query, k?)` — explicit recall when the auto-\n"
     "    injected memory block at prompt-time didn't surface what you\n"
     "    need (e.g. \"what did I tell you about X last week?\",\n"
@@ -195,7 +204,21 @@ class PiAgent:
                 contributions.append(skills_contribution(skills_block=block))
         if self._memory is not None and query.strip():
             try:
-                hits = await self._memory.search(query=query, k=self._memory_top_k)
+                # Hybrid search by default: vector similarity alone misses
+                # short key:value chunks ("user_location:Suwon") against
+                # conversational queries ("내가 사는 곳 날씨"). FTS5 keyword
+                # match is a backstop that surfaces those by token overlap
+                # ("Suwon"/"수원" both appear in inbox + query). Cross-
+                # language recall (KO ↔ EN) also benefits from the keyword
+                # arm. Same defaults openclaw ships.
+                from oxenclaw.memory.hybrid import HybridConfig
+                from oxenclaw.memory.temporal_decay import TemporalDecayConfig
+                hits = await self._memory.search(
+                    query=query,
+                    k=self._memory_top_k,
+                    hybrid=HybridConfig(enabled=True),
+                    temporal_decay=TemporalDecayConfig(enabled=True),
+                )
                 mblock = format_memories_for_prompt(hits)
                 if mblock:
                     contributions.append(memory_contribution(memory_block=mblock))

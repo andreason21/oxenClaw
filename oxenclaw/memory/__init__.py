@@ -9,9 +9,14 @@ from oxenclaw.memory.embedding_cache import EmbeddingCache
 from oxenclaw.memory.embeddings import (
     DEFAULT_EMBED_BASE_URL,
     DEFAULT_EMBED_MODEL,
+    AnthropicEmbeddings,
+    CohereEmbeddings,
+    Embedder,
     EmbeddingError,
     EmbeddingProvider,
     OpenAIEmbeddings,
+    UnknownEmbedderProvider,
+    build_embedder,
 )
 from oxenclaw.memory.indexer import MemoryIndexer
 from oxenclaw.memory.models import (
@@ -33,6 +38,9 @@ from oxenclaw.memory.tools import (
 __all__ = [
     "DEFAULT_EMBED_BASE_URL",
     "DEFAULT_EMBED_MODEL",
+    "AnthropicEmbeddings",
+    "CohereEmbeddings",
+    "Embedder",
     "EmbeddingCache",
     "EmbeddingError",
     "EmbeddingProvider",
@@ -46,6 +54,8 @@ __all__ = [
     "MemoryStore",
     "OpenAIEmbeddings",
     "SyncReport",
+    "UnknownEmbedderProvider",
+    "build_embedder",
     "format_memories_for_prompt",
     "memory_get_tool",
     "memory_save_tool",

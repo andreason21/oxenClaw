@@ -57,7 +57,7 @@ from oxenclaw.gateway.memory_methods import register_memory_methods
 from oxenclaw.gateway.skills_methods import register_skills_methods
 from oxenclaw.gateway.plan_methods import register_plan_methods
 from oxenclaw.gateway.usage_methods import register_usage_methods
-from oxenclaw.memory import MemoryRetriever, OpenAIEmbeddings
+from oxenclaw.memory import MemoryRetriever, build_embedder
 from oxenclaw.plugin_sdk.channel_contract import (
     ChannelTarget,
     InboundEnvelope,
@@ -340,6 +340,7 @@ async def _run_gateway(
     # Embedding endpoint is configured separately from the chat agent
     # base_url because operators sometimes run chat against a remote
     # vLLM but keep embeddings local on Ollama (or vice versa).
+    embed_provider = os.environ.get("OXENCLAW_EMBEDDER", "ollama")
     embed_kwargs: dict[str, str] = {}
     if env_base := os.environ.get("OXENCLAW_EMBED_BASE_URL"):
         embed_kwargs["base_url"] = env_base
@@ -347,7 +348,9 @@ async def _run_gateway(
         embed_kwargs["model"] = env_model
     if env_key := os.environ.get("OXENCLAW_EMBED_API_KEY"):
         embed_kwargs["api_key"] = env_key
-    memory_retriever = MemoryRetriever.for_root(paths, OpenAIEmbeddings(**embed_kwargs))
+    memory_retriever = MemoryRetriever.for_root(
+        paths, build_embedder(embed_provider, **embed_kwargs)  # type: ignore[arg-type]
+    )
 
     # Cron scheduler is created early so the cron tool can be wired
     # into the agent's tool registry. Dispatcher gets a forward

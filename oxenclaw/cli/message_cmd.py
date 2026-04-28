@@ -18,6 +18,9 @@ def send(
     account_id: str = typer.Option("main", help="Account id."),
     chat_id: str = typer.Option(..., help="Destination chat id."),
     thread_id: str | None = typer.Option(None, help="Thread/topic id (optional)."),
+    agent_id: str | None = typer.Option(
+        None, help="Pin the dispatch to a specific agent id (optional)."
+    ),
     gateway: str = typer.Option("ws://127.0.0.1:7331", help="Gateway WebSocket URL."),
 ) -> None:
     """Send a `chat.send` JSON-RPC call to a running gateway."""
@@ -35,6 +38,7 @@ def send(
                             "account_id": account_id,
                             "chat_id": chat_id,
                             "thread_id": thread_id,
+                            "agent_id": agent_id,
                             "text": text,
                         },
                     }

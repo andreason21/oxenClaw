@@ -15,6 +15,7 @@ import contextlib
 import logging
 import os
 import signal
+from typing import Any
 
 import typer
 
@@ -276,6 +277,7 @@ def build_agent(
     system_prompt: str | None = None,
     memory: MemoryRetriever | None = None,
     tools: ToolRegistry | None = None,  # noqa: F821 — forward ref
+    active_memory: Any | None = None,
 ) -> Agent:
     """Typer-friendly wrapper around the shared agent factory."""
     try:
@@ -288,6 +290,7 @@ def build_agent(
             system_prompt=system_prompt,
             memory=memory,
             tools=tools,
+            active_memory=active_memory,
         )
     except UnknownProvider as exc:
         raise typer.BadParameter(str(exc)) from exc
@@ -384,7 +387,59 @@ async def _run_gateway(
     tool_registry = ToolRegistry()
     tool_registry.register_all(_builtin_tools())
     tool_registry.register_all(default_bundled_tools())
+
+    # Auto-register skill commands → callable LLM tools. Each installed
+    # skill whose SKILL.md has a `commands:` frontmatter contributes
+    # one tool per declared command, namespaced as `<skill>.<cmd>`.
+    # Mirrors openclaw skill-commands behaviour. Failures during a
+    # single skill's parse/build don't kill the gateway — log + skip.
+    try:
+        from oxenclaw.clawhub.loader import load_installed_skills
+        from oxenclaw.clawhub.skill_commands import build_skill_command_tools
+
+        for installed in load_installed_skills(paths):
+            commands = list(installed.manifest.commands or [])
+            if not commands:
+                continue
+            try:
+                cmd_tools = build_skill_command_tools(installed.manifest.name, commands)
+                tool_registry.register_all(cmd_tools)
+                logger.info(
+                    "skill-commands: registered %d tool(s) for skill %s",
+                    len(cmd_tools),
+                    installed.manifest.name,
+                )
+            except Exception:
+                logger.exception(
+                    "skill-commands: failed to register for skill %s",
+                    installed.manifest.name,
+                )
+    except Exception:
+        logger.exception("skill-commands auto-registration failed (non-fatal)")
     # The dep-bound tools are added below once cron_scheduler exists.
+
+    # Active-memory blocking sub-agent — runs a small LLM call BEFORE
+    # each turn to summarise relevant memory into one natural-language
+    # line. Decisive for small local models that ignore raw recall
+    # chunks. Default ON when memory is wired; operators can disable
+    # via env var when running on a tiny model that can't afford the
+    # extra ~1-2 second pre-pass.
+    from oxenclaw.memory.active import ActiveMemoryConfig
+
+    active_memory_cfg: ActiveMemoryConfig | None = None
+    if memory_retriever is not None and os.environ.get("OXENCLAW_ACTIVE_MEMORY", "1") != "0":
+        active_memory_cfg = ActiveMemoryConfig(
+            enabled=True,
+            timeout_seconds=float(os.environ.get("OXENCLAW_ACTIVE_MEMORY_TIMEOUT", "8")),
+            prompt_style=os.environ.get("OXENCLAW_ACTIVE_MEMORY_STYLE", "balanced"),  # type: ignore[arg-type]
+            model_id=os.environ.get("OXENCLAW_ACTIVE_MEMORY_MODEL") or None,
+        )
+        logger.info(
+            "active-memory enabled: timeout=%.1fs style=%s model=%s",
+            active_memory_cfg.timeout_seconds,
+            active_memory_cfg.prompt_style,
+            active_memory_cfg.model_id or "(main)",
+        )
 
     agents = AgentRegistry()
     agents.register(
@@ -397,6 +452,7 @@ async def _run_gateway(
             system_prompt=system_prompt,
             memory=memory_retriever,
             tools=tool_registry,
+            active_memory=active_memory_cfg,
         )
     )
 
@@ -664,6 +720,7 @@ def _build_router(
             text=p.text,
             media=list(p.media),
             received_at=0.0,
+            agent_id=p.agent_id,
         )
         outcome = await dispatcher.dispatch_with_outcome(envelope)
         if outcome.results:
@@ -702,7 +759,7 @@ def _build_router(
 
     register_agents_methods(router, agents)
     register_channels_methods(router, channel_router)
-    register_chat_methods(router, paths=paths_home)
+    register_chat_methods(router, paths=paths_home, agents=agents)
     register_usage_methods(router, paths=paths_home)
     register_plan_methods(router, paths=paths_home)
     register_config_methods(router)

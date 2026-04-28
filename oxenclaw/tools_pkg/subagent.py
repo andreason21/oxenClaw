@@ -19,8 +19,9 @@ unless explicitly opted in. Recursion is capped via `max_depth`.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from oxenclaw.agents.tools import FunctionTool, Tool, ToolRegistry
 from oxenclaw.pi import (
@@ -35,6 +36,7 @@ from oxenclaw.pi import (
 from oxenclaw.pi.auth import resolve_api
 from oxenclaw.pi.run import RuntimeConfig, run_agent_turn
 from oxenclaw.plugin_sdk.runtime_env import get_logger
+from oxenclaw.tools_pkg._arg_aliases import fold_aliases
 
 logger = get_logger("tools.subagent")
 
@@ -59,6 +61,17 @@ class SubagentConfig:
 
 
 class _SubagentArgs(BaseModel):
+    @model_validator(mode="before")
+    @classmethod
+    def _absorb(cls, data: Any) -> Any:
+        return fold_aliases(
+            data,
+            {
+                "task": ("prompt", "text", "query", "message", "instruction", "goal"),
+                "context": ("background", "info", "details", "notes"),
+            },
+        )
+
     task: str = Field(..., description="The sub-task to run, in plain language.")
     context: str | None = Field(
         None, description="Optional extra context to seed the sub-agent's prompt."

@@ -15,15 +15,16 @@ import asyncio
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from oxenclaw.agents.tools import FunctionTool, Tool
 from oxenclaw.clawhub.loader import InstalledSkill
 from oxenclaw.clawhub.runtime import prepare_skill_runtime
 from oxenclaw.config.paths import OxenclawPaths, default_paths
 from oxenclaw.plugin_sdk.runtime_env import get_logger
+from oxenclaw.tools_pkg._arg_aliases import fold_aliases
 
 logger = get_logger("tools.coding")
 
@@ -143,6 +144,17 @@ async def _run_in_workspace(
 
 
 class _CodingArgs(BaseModel):
+    @model_validator(mode="before")
+    @classmethod
+    def _absorb(cls, data: Any) -> Any:
+        return fold_aliases(
+            data,
+            {
+                "task": ("prompt", "text", "query", "message", "instruction", "goal", "code"),
+                "cli": ("backend", "tool", "engine", "agent"),
+            },
+        )
+
     task: str = Field(..., description="The coding task in plain language.")
     cli: CliName = Field("auto", description="Which CLI to use; 'auto' picks the first available.")
     timeout_seconds: float = Field(300.0, description="Hard cap on the CLI run.", gt=0)

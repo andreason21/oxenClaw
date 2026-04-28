@@ -14,16 +14,29 @@ will arrive in a later port.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from oxenclaw.agents.acp_subprocess import spawn_acp
 from oxenclaw.agents.tools import FunctionTool, Tool
+from oxenclaw.tools_pkg._arg_aliases import fold_aliases
 
 
 class _AcpSpawnArgs(BaseModel):
     model_config = {"extra": "forbid"}
+
+    @model_validator(mode="before")
+    @classmethod
+    def _absorb(cls, data: Any) -> Any:
+        return fold_aliases(
+            data,
+            {
+                "runtime": ("backend", "engine", "agent", "provider", "cli"),
+                "prompt": ("text", "task", "query", "message", "instruction", "goal"),
+            },
+        )
+
     runtime: Literal["claude", "codex", "gemini"] = Field(
         ...,
         description=(

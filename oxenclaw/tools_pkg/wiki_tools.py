@@ -10,26 +10,56 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from oxenclaw.agents.tools import FunctionTool, Tool
+from oxenclaw.tools_pkg._arg_aliases import fold_aliases
 from oxenclaw.wiki.models import WikiPageKind, parse_wiki_page_kind
 from oxenclaw.wiki.store import SlugConflict, WikiVaultStore
 
 
 class _SearchArgs(BaseModel):
     model_config = {"extra": "forbid"}
+
+    @model_validator(mode="before")
+    @classmethod
+    def _absorb(cls, data: Any) -> Any:
+        return fold_aliases(
+            data,
+            {"query": ("q", "search", "text", "prompt", "topic", "phrase")},
+        )
+
     query: str = Field(..., description="Search phrase to look up in the wiki vault.")
     k: int = Field(10, description="Maximum number of pages to return.", ge=1, le=50)
 
 
 class _GetArgs(BaseModel):
     model_config = {"extra": "forbid"}
+
+    @model_validator(mode="before")
+    @classmethod
+    def _absorb(cls, data: Any) -> Any:
+        return fold_aliases(data, {"slug": ("id", "page", "page_id", "name")})
+
     slug: str = Field(..., description="Slug of the wiki page to retrieve.")
 
 
 class _SaveArgs(BaseModel):
     model_config = {"extra": "forbid"}
+
+    @model_validator(mode="before")
+    @classmethod
+    def _absorb(cls, data: Any) -> Any:
+        return fold_aliases(
+            data,
+            {
+                "slug": ("id", "page", "page_id"),
+                "title": ("name", "subject", "heading"),
+                "body": ("content", "text", "markdown", "md"),
+                "kind": ("type", "category"),
+            },
+        )
+
     slug: str | None = Field(
         None,
         description=(

@@ -38,7 +38,9 @@ import secrets
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
+from oxenclaw.tools_pkg._arg_aliases import fold_aliases
 
 if TYPE_CHECKING:
     from oxenclaw.agents.tools import Tool
@@ -135,6 +137,20 @@ _REGISTRY: dict[str, _Process] = {}
 
 class _Args(BaseModel):
     model_config = {"extra": "forbid"}
+
+    @model_validator(mode="before")
+    @classmethod
+    def _absorb(cls, data: Any) -> Any:
+        return fold_aliases(
+            data,
+            {
+                "action": ("op", "operation", "verb"),
+                "command": ("cmd", "shell", "shell_command", "script", "exec", "run"),
+                "pid": ("process_id", "id"),
+                "keys": ("input", "stdin", "text"),
+                "cwd": ("dir", "directory", "working_dir", "workingDir", "path"),
+            },
+        )
 
     action: Literal["start", "send_keys", "read_output", "stop", "list"]
     pid: str | None = Field(

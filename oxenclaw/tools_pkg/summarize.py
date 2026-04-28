@@ -9,9 +9,9 @@ once at agent construction time.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from oxenclaw.agents.tools import FunctionTool, Tool
 from oxenclaw.pi import (
@@ -23,6 +23,7 @@ from oxenclaw.pi import (
 )
 from oxenclaw.pi.auth import resolve_api
 from oxenclaw.pi.run import RuntimeConfig, run_agent_turn
+from oxenclaw.tools_pkg._arg_aliases import fold_aliases
 
 _LENGTH_INSTR = {
     "short": "Reply in 1-2 sentences.",
@@ -33,6 +34,17 @@ _LENGTH_INSTR = {
 
 
 class _SummariseArgs(BaseModel):
+    @model_validator(mode="before")
+    @classmethod
+    def _absorb(cls, data: Any) -> Any:
+        return fold_aliases(
+            data,
+            {
+                "input_text": ("text", "content", "body", "data", "input", "source"),
+                "focus": ("aspect", "topic", "theme"),
+            },
+        )
+
     input_text: str = Field(..., description="The text to summarise.")
     length: Literal["short", "medium", "long", "bullets"] = Field(
         "medium", description="Target summary length / format."

@@ -35,9 +35,9 @@ The tool is *not* registered by default — the operator opts in via
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from oxenclaw.acp.subprocess_runtime import AcpWireError, SubprocessAcpRuntime
 from oxenclaw.agents.acp_runtime import (
@@ -50,6 +50,7 @@ from oxenclaw.agents.acp_runtime import (
 )
 from oxenclaw.agents.tools import FunctionTool, Tool
 from oxenclaw.plugin_sdk.runtime_env import get_logger
+from oxenclaw.tools_pkg._arg_aliases import fold_aliases
 
 logger = get_logger("tools.delegate_to_acp")
 
@@ -63,6 +64,17 @@ _DEFAULT_RUNTIMES: dict[str, list[str]] = {
 
 class _DelegateArgs(BaseModel):
     model_config = {"extra": "forbid"}
+
+    @model_validator(mode="before")
+    @classmethod
+    def _absorb(cls, data: Any) -> Any:
+        return fold_aliases(
+            data,
+            {
+                "runtime": ("backend", "engine", "agent", "provider"),
+                "prompt": ("text", "task", "query", "message", "instruction", "goal"),
+            },
+        )
 
     runtime: Literal["claude", "codex", "gemini", "custom"] = Field(
         ...,

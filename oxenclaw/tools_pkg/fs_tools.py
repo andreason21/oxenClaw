@@ -14,12 +14,21 @@ import os
 import re
 import tempfile
 from pathlib import Path
+from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from oxenclaw.agents.tools import FunctionTool, Tool
+from oxenclaw.tools_pkg._arg_aliases import fold_aliases
 from oxenclaw.tools_pkg.file_state import get_registry as _file_state_registry
 from oxenclaw.tools_pkg.fuzzy_match import FuzzyMatchError, fuzzy_find_and_replace
+
+# Drift aliases small models emit instead of canonical filesystem args.
+# Centralised so the eight fs_tools models stay in sync.
+_PATH_ALIASES = ("file", "filepath", "file_path", "filename", "fileName", "filePath")
+_DIR_PATH_ALIASES = ("dir", "directory", "folder", "dirpath", "dir_path")
+_PATTERN_ALIASES = ("regex", "search", "query", "expr")
+_COMMAND_ALIASES = ("cmd", "shell", "shell_command", "script", "exec", "run")
 
 
 def _current_task_id() -> str:
@@ -49,6 +58,11 @@ def _looks_binary(text: str) -> bool:
 
 class _ReadFileArgs(BaseModel):
     model_config = {"extra": "forbid"}
+
+    @model_validator(mode="before")
+    @classmethod
+    def _absorb(cls, data: Any) -> Any:
+        return fold_aliases(data, {"path": _PATH_ALIASES})
 
     path: str = Field(..., description="Absolute or relative path to the file to read.")
     max_chars: int = Field(
@@ -154,6 +168,11 @@ def read_file_tool() -> Tool:
 class _ReadPdfArgs(BaseModel):
     model_config = {"extra": "forbid"}
 
+    @model_validator(mode="before")
+    @classmethod
+    def _absorb(cls, data: Any) -> Any:
+        return fold_aliases(data, {"path": _PATH_ALIASES})
+
     path: str = Field(..., description="Absolute or relative path to the PDF file.")
     max_pages: int = Field(
         30,
@@ -216,6 +235,17 @@ def read_pdf_tool() -> Tool:
 class _WriteFileArgs(BaseModel):
     model_config = {"extra": "forbid"}
 
+    @model_validator(mode="before")
+    @classmethod
+    def _absorb(cls, data: Any) -> Any:
+        return fold_aliases(
+            data,
+            {
+                "path": _PATH_ALIASES,
+                "content": ("text", "body", "data", "value", "source"),
+            },
+        )
+
     path: str = Field(..., description="Absolute or relative path to write.")
     content: str = Field(..., description="Full text content to write to the file.")
     create_parents: bool = Field(
@@ -276,6 +306,18 @@ def write_file_tool() -> Tool:
 
 class _EditArgs(BaseModel):
     model_config = {"extra": "forbid"}
+
+    @model_validator(mode="before")
+    @classmethod
+    def _absorb(cls, data: Any) -> Any:
+        return fold_aliases(
+            data,
+            {
+                "path": _PATH_ALIASES,
+                "old_str": ("old", "old_text", "find", "search", "from", "before"),
+                "new_str": ("new", "new_text", "replace", "to", "after", "replacement"),
+            },
+        )
 
     path: str = Field(..., description="Absolute or relative path to the file to edit.")
     old_str: str = Field(..., description="Exact string to find and replace.")
@@ -396,6 +438,11 @@ def edit_tool() -> Tool:
 class _ListDirArgs(BaseModel):
     model_config = {"extra": "forbid"}
 
+    @model_validator(mode="before")
+    @classmethod
+    def _absorb(cls, data: Any) -> Any:
+        return fold_aliases(data, {"path": _PATH_ALIASES + _DIR_PATH_ALIASES})
+
     path: str = Field(".", description="Directory to list.")
     max_entries: int = Field(
         200,
@@ -446,6 +493,17 @@ def list_dir_tool() -> Tool:
 
 class _GrepArgs(BaseModel):
     model_config = {"extra": "forbid"}
+
+    @model_validator(mode="before")
+    @classmethod
+    def _absorb(cls, data: Any) -> Any:
+        return fold_aliases(
+            data,
+            {
+                "pattern": _PATTERN_ALIASES,
+                "path": _PATH_ALIASES + _DIR_PATH_ALIASES,
+            },
+        )
 
     pattern: str = Field(..., description="Python regex pattern to search for.")
     path: str = Field(".", description="Directory (or file) to search under.")
@@ -525,6 +583,17 @@ def grep_tool() -> Tool:
 class _GlobArgs(BaseModel):
     model_config = {"extra": "forbid"}
 
+    @model_validator(mode="before")
+    @classmethod
+    def _absorb(cls, data: Any) -> Any:
+        return fold_aliases(
+            data,
+            {
+                "pattern": ("glob", "search", "query"),
+                "path": _PATH_ALIASES + _DIR_PATH_ALIASES,
+            },
+        )
+
     pattern: str = Field(..., description="Glob pattern for filenames (e.g. '**/*.py').")
     path: str = Field(".", description="Base directory for the glob.")
 
@@ -577,6 +646,18 @@ def glob_tool() -> Tool:
 
 class _SearchFilesArgs(BaseModel):
     model_config = {"extra": "forbid"}
+
+    @model_validator(mode="before")
+    @classmethod
+    def _absorb(cls, data: Any) -> Any:
+        return fold_aliases(
+            data,
+            {
+                "root": ("path", *_DIR_PATH_ALIASES),
+                "pattern": ("glob", "search", "query"),
+                "contains": ("substring", "text", "needle"),
+            },
+        )
 
     root: str = Field(".", description="Directory to search recursively.")
     pattern: str = Field(..., description="Glob pattern for filenames (e.g. '*.py').")
@@ -652,6 +733,17 @@ def search_files_tool() -> Tool:
 
 class _ShellRunArgs(BaseModel):
     model_config = {"extra": "forbid"}
+
+    @model_validator(mode="before")
+    @classmethod
+    def _absorb(cls, data: Any) -> Any:
+        return fold_aliases(
+            data,
+            {
+                "command": _COMMAND_ALIASES,
+                "cwd": ("dir", "directory", "working_dir", "workingDir", "path"),
+            },
+        )
 
     command: str = Field(
         ...,

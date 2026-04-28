@@ -6,12 +6,13 @@ so it works with any backend (in-memory, sqlite, etc).
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from oxenclaw.agents.tools import FunctionTool, Tool
 from oxenclaw.pi.session import SessionManager
+from oxenclaw.tools_pkg._arg_aliases import fold_aliases
 
 
 def _block_text(block) -> str:  # type: ignore[no-untyped-def]
@@ -41,6 +42,19 @@ def _msg_preview(msg, *, max_chars: int = 240) -> str:  # type: ignore[no-untype
 
 
 class _LogsArgs(BaseModel):
+    @model_validator(mode="before")
+    @classmethod
+    def _absorb(cls, data: Any) -> Any:
+        return fold_aliases(
+            data,
+            {
+                "action": ("op", "operation", "verb", "command"),
+                "query": ("q", "search", "text", "pattern", "needle"),
+                "agent_id": ("agent", "agentId"),
+                "session_id": ("session", "sessionId"),
+            },
+        )
+
     action: Literal["list", "view", "grep"] = Field(...)
     agent_id: str | None = Field(None, description="Filter to one agent.")
     session_id: str | None = Field(None, description="Required for action=view.")

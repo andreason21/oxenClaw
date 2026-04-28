@@ -18,16 +18,27 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from oxenclaw.agents.tools import FunctionTool, Tool
 from oxenclaw.clawhub.loader import InstalledSkill, load_installed_skills
 from oxenclaw.clawhub.parallel_search import parallel_search_sources
 from oxenclaw.clawhub.sources.base import SkillSource
 from oxenclaw.config.paths import OxenclawPaths, default_paths
+from oxenclaw.tools_pkg._arg_aliases import fold_aliases
 
 
 class _Args(BaseModel):
+    @model_validator(mode="before")
+    @classmethod
+    def _absorb(cls, data: Any) -> Any:
+        return fold_aliases(
+            data,
+            {
+                "query": ("q", "search", "text", "prompt", "topic", "intent", "task"),
+            },
+        )
+
     query: str = Field(
         ...,
         description=(

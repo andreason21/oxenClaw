@@ -10,15 +10,32 @@ sensitive operation; the operator should approve each call.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from typing import Any
+
+from pydantic import BaseModel, Field, model_validator
 
 from oxenclaw.agents.tools import FunctionTool, Tool
 from oxenclaw.channels.router import ChannelRouter
 from oxenclaw.plugin_sdk.channel_contract import ChannelTarget, SendParams
 from oxenclaw.plugin_sdk.error_runtime import UserVisibleError
+from oxenclaw.tools_pkg._arg_aliases import fold_aliases
 
 
 class _MessageArgs(BaseModel):
+    @model_validator(mode="before")
+    @classmethod
+    def _absorb(cls, data: Any) -> Any:
+        return fold_aliases(
+            data,
+            {
+                "text": ("content", "body", "message", "message_text", "msg"),
+                "channel": ("channel_id", "channelId", "platform"),
+                "account_id": ("account", "accountId"),
+                "chat_id": ("chat", "chatId", "conversation_id", "room", "room_id"),
+                "thread_id": ("thread", "threadId", "topic_id"),
+            },
+        )
+
     channel: str = Field(..., description="Channel id (e.g. 'slack', 'dashboard').")
     account_id: str = Field(..., description="Account id within the channel.")
     chat_id: str = Field(..., description="Chat / room / user id.")

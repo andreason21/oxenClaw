@@ -22,6 +22,7 @@ pi pipeline by registering a `PiAgent` instead.
 
 from __future__ import annotations
 
+import asyncio
 import time
 from collections.abc import AsyncIterator
 from pathlib import Path
@@ -769,6 +770,37 @@ class PiAgent:
         sanitized_text = sanitize_recall_fence(text)
         user_text_raw = "\n".join(t for t in (sanitized_text, *dropped_notes) if t)
         user_text_for_model = user_text_raw
+
+        # Auto-extract durable personal facts the user just stated and
+        # save them to memory in the background. Small local models
+        # (gemma/qwen/llama-3.2) routinely skip the explicit
+        # `memory_save` call even when the system prompt asks them to,
+        # which breaks the simplest 2-turn round-trip ("미누는 우리 형
+        # 이야" → "우리 형 이름 뭐야"). A regex backstop catches the
+        # common shapes (KO/EN family, self-name, location) so the
+        # next turn's recall has something to surface, regardless of
+        # whether the model cooperated. Fires fire-and-forget so save+
+        # re-embed don't add latency to the current turn. The model
+        # can still call `memory_save` for free-form facts the regex
+        # doesn't catch.
+        if self._memory is not None and sanitized_text:
+            try:
+                from oxenclaw.memory.auto_extract import extract_personal_facts
+
+                facts = extract_personal_facts(sanitized_text)
+            except Exception:
+                facts = []
+            if facts:
+                logger.info("auto-extract: %d fact(s) from user message", len(facts))
+
+                async def _save_facts(retriever, items: list[str]) -> None:
+                    for f in items:
+                        try:
+                            await retriever.save(f, tags=["auto"])
+                        except Exception:
+                            logger.exception("auto-extract save failed: %r", f[:80])
+
+                asyncio.create_task(_save_facts(self._memory, facts))
 
         # Active memory sub-agent — produces a one-line natural-language
         # summary that small models actually attend to (vs raw chunks

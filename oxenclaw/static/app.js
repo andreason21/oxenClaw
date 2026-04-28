@@ -636,7 +636,83 @@ const ChatView = {
     compose.append(attachInput, attachBtn, textarea, sendBtn);
     right.insertBefore(thumbs, compose);
     renderThumbs();
-    actions.append(newChatBtn, clearBtn);
+
+    // 🔍 Debug-prompt — operator-only diagnostic that shows exactly
+    // what the model will be told for a given query (recalled memories,
+    // skill block, base playbook). Helps debug "agent doesn't remember"
+    // by separating "recall didn't fire" from "model ignored recall".
+    const debugBtn = el("button", {
+      class: "btn btn-sm btn-ghost",
+      title: "Show the assembled system prompt for the current agent",
+      onclick: () => openDebugDialog(),
+    }, "🔍 Debug prompt");
+
+    async function openDebugDialog() {
+      const seed = (textarea.value || "").trim();
+      const query = seed || prompt(
+        "Query to recall against (the assembled prompt depends on the user message):",
+        "",
+      );
+      if (!query) return;
+      let payload;
+      try {
+        payload = await Rpc.call("chat.debug_prompt", {
+          agent_id: ChatState.agentId,
+          query,
+        });
+      } catch (e) {
+        Toast.error("debug_prompt failed", e.message);
+        return;
+      }
+      if (payload && payload.ok === false) {
+        Toast.error("debug_prompt error", payload.error || "(no detail)");
+        return;
+      }
+      const dlg = el("dialog", { class: "debug-prompt-dialog" });
+      const header = el("div", { class: "debug-prompt__header" },
+        el("strong", {}, `model: ${payload.model_id} · agent: ${payload.agent_id}`),
+        el("button", { class: "btn btn-sm btn-ghost", onclick: () => dlg.close() }, "✕"),
+      );
+      const stats = el("div", { class: "debug-prompt__stats" },
+        `system=${payload.system_prompt_chars}c · base=${payload.base_prompt_chars}c · ` +
+        `memory=${payload.memory_block_chars}c · skills=${payload.skills_block_chars}c · ` +
+        `weak<${payload.memory_weak_threshold}`,
+      );
+      const hitsTbl = el("table", { class: "debug-prompt__hits" });
+      hitsTbl.append(el("thead", {}, el("tr", {},
+        el("th", {}, "score"), el("th", {}, "citation"), el("th", {}, "preview"),
+      )));
+      const tbody = el("tbody");
+      for (const h of (payload.memory_hits || [])) {
+        const row = el("tr", {});
+        row.append(
+          el("td", {}, h.score.toFixed(3)),
+          el("td", {}, h.citation || `${h.path || "?"}:${h.start_line}-${h.end_line}`),
+          el("td", {}, h.text_preview || ""),
+        );
+        tbody.append(row);
+      }
+      hitsTbl.append(tbody);
+      const promptPre = el("pre", { class: "debug-prompt__pre" }, payload.system_prompt);
+      const copyBtn = el("button", {
+        class: "btn btn-sm",
+        onclick: async () => {
+          try {
+            await navigator.clipboard.writeText(payload.system_prompt);
+            Toast.success("copied", "system prompt → clipboard");
+          } catch (e) { Toast.error("copy failed", e.message); }
+        },
+      }, "Copy prompt");
+      dlg.append(header, stats,
+        el("h4", {}, `Memory hits (${(payload.memory_hits || []).length})`), hitsTbl,
+        el("h4", {}, "Assembled system prompt"), promptPre, copyBtn,
+      );
+      document.body.append(dlg);
+      dlg.addEventListener("close", () => dlg.remove());
+      dlg.showModal();
+    }
+
+    actions.append(newChatBtn, clearBtn, debugBtn);
 
     function labelled(name, input) {
       const wrap = el("div", { class: "field", style: "margin: 0; flex: 1;" });
@@ -674,6 +750,17 @@ const ChatView = {
       // Clear thumbs immediately so the user sees the send happen.
       pendingMedia = [];
       renderThumbs();
+      // Stop the post-previous-turn polling cycle. If polling fires
+      // its 2 s tick mid-flight against the new turn, `refresh()` runs
+      // BEFORE PiAgent has persisted the new user message to
+      // dashboard_history (active-memory + model dispatch can take
+      // 5–20 s). renderStream() does `stream.innerHTML = ""` and
+      // rebuilds from the server's stale view → the optimistic user
+      // bubble gets wiped. The next poll tick (once the server-side
+      // save has landed) re-paints it, which the operator perceives
+      // as "message appears, disappears, reappears." Pausing here
+      // and restarting after our own refresh below closes the race.
+      stopPolling();
       // Optimistic render: the user's bubble + a "thinking…" placeholder
       // appear immediately so the user can see their message landed and
       // the agent is being asked. Both get replaced by `refresh()` once
@@ -688,6 +775,7 @@ const ChatView = {
           account_id: ChatState.accountId,
           chat_id: ChatState.chatId,
           thread_id: ChatState.threadId || null,
+          agent_id: ChatState.agentId || null,
           text,
           media,
         });
@@ -825,6 +913,21 @@ const ChatView = {
     window.addEventListener("samp:new-chat", onExternalNewChat);
 
     function renderStream(messages) {
+      // Preserve any optimistic bubbles the user appended via send()
+      // that haven't yet shown up in the server-returned `messages`.
+      // Without this, a polling refresh() that lands BEFORE PiAgent
+      // has flushed the user's new message to dashboard_history wipes
+      // the optimistic bubble; the operator sees a flicker (visible
+      // → disappear → reappear-on-next-poll). We only carry forward
+      // .pending-optimistic nodes whose textual body isn't already
+      // represented in the server response — once the server catches
+      // up the optimistic copy is dropped to avoid duplicate rendering.
+      const carry = Array.from(stream.querySelectorAll(".pending-optimistic"));
+      const serverTexts = new Set(
+        (messages || [])
+          .map((m) => (typeof m.content === "string" ? m.content.trim() : ""))
+          .filter(Boolean)
+      );
       stream.innerHTML = "";
       for (const m of messages) {
         if (m.role === "system") continue; // hide system prompt from chat UI
@@ -873,6 +976,16 @@ const ChatView = {
           }
         }
         stream.append(wrap);
+      }
+      // Re-attach optimistic bubbles whose text isn't represented yet
+      // in the server's view. They'll be dropped on a subsequent
+      // render once the server-side save catches up.
+      for (const node of carry) {
+        const body = node.querySelector(".body");
+        const txt = body ? body.textContent.trim() : "";
+        if (!txt) continue;
+        if (serverTexts.has(txt)) continue;
+        stream.append(node);
       }
       stream.scrollTop = stream.scrollHeight;
     }
@@ -1513,11 +1626,7 @@ const CronView = {
         if (ta) ta.focus();
       },
     }, "+ New job");
-    const advNewBtn = el("button", {
-      class: "btn btn-sm",
-      onclick: () => openModal("new", null),
-    }, "+ Advanced new job");
-    actions.append(newJobBtn, advNewBtn, refreshBtn);
+    actions.append(newJobBtn, refreshBtn);
 
     // ── Tab bar: Jobs / Run log ─────────────────────────────────────────
     const tabBar = el("div", { class: "cron-tab-bar" });
@@ -1543,7 +1652,7 @@ const CronView = {
     const quickCard = el("div", { class: "card cron-quick" });
     jobsPane.append(quickCard);
 
-    quickCard.append(el("h3", { class: "card-title" }, "+ Quick add"));
+    quickCard.append(el("h3", { class: "card-title" }, "+ New job"));
     quickCard.append(el("div", { class: "card-meta" },
       "Build any schedule below — daily at a chosen time, weekly on selected " +
       "days, monthly on a date, or every N minutes. Optionally limit it to a " +
@@ -1641,7 +1750,12 @@ const CronView = {
         Toast.error("create failed", e.message);
       }
     };
-    quickCard.append(quickPrompt, quickRow, quickCreate);
+    const advLink = el("button", {
+      type: "button",
+      class: "btn btn-sm btn-ghost cron-quick__advanced",
+      onclick: () => openModal("new", null),
+    }, "Advanced… (raw cron / every-N / one-shot datetime)");
+    quickCard.append(quickPrompt, quickRow, quickCreate, advLink);
 
     // ── Filter + sort bar ───────────────────────────────────────────────
     const filterBar = el("div", { class: "cron-filter-bar" });

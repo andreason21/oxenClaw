@@ -538,6 +538,45 @@ label { display: block; font-size: 11px; color: var(--fg-3); margin-bottom: 4px;
   margin: 8px 0;
 }
 .cron-quick__submit { margin-top: 8px; }
+.cron-quick__advanced {
+  display: block;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--fg-3);
+}
+
+/* ── Debug-prompt dialog (chat panel) ─────────────────────────────── */
+.debug-prompt-dialog {
+  max-width: min(900px, 92vw);
+  max-height: 80vh;
+  border: 1px solid var(--line);
+  border-radius: var(--r-3);
+  background: var(--bg-1);
+  color: var(--fg);
+  padding: var(--sp-3) var(--sp-4);
+  font: 12px var(--mono);
+}
+.debug-prompt-dialog::backdrop { background: rgba(0, 0, 0, 0.5); }
+.debug-prompt__header {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; padding-bottom: 6px; border-bottom: 1px solid var(--line);
+}
+.debug-prompt__stats {
+  margin: 8px 0; font-size: 11px; color: var(--fg-3);
+}
+.debug-prompt__hits {
+  width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 12px;
+}
+.debug-prompt__hits th, .debug-prompt__hits td {
+  border: 1px solid var(--line); padding: 4px 6px; text-align: left; vertical-align: top;
+}
+.debug-prompt__hits th { background: var(--bg-2); }
+.debug-prompt__pre {
+  max-height: 50vh; overflow: auto;
+  background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--r-1);
+  padding: 8px; white-space: pre-wrap; word-break: break-word;
+  font: 11px var(--mono); color: var(--fg);
+}
 
 /* ── Schedule builder (used in both Quick add and Advanced modal) ── */
 .cron-builder {

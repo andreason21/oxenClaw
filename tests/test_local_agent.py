@@ -101,12 +101,14 @@ async def _collect(agent, env):  # type: ignore[no-untyped-def]
 async def test_defaults_target_tool_capable_ollama_model(tmp_path) -> None:  # type: ignore[no-untyped-def]
     agent = LocalAgent(paths=_paths(tmp_path))
     assert agent._base_url.endswith("11434/v1")
-    assert agent._model == DEFAULT_MODEL == "gemma4:latest"
+    assert agent._model == DEFAULT_MODEL == "qwen3.5:9b"
 
 
 async def test_history_budget_scales_with_model_context_window(tmp_path) -> None:  # type: ignore[no-untyped-def]
     """LocalAgent derives `max_history_chars` from the model's window so a
-    big-context model like `gemma4:latest` (128K) actually uses the room."""
+    big-context model like `gemma4:latest` (128K) actually uses the room.
+    Probes a stable 128K-class model rather than whatever the current
+    `DEFAULT_MODEL` is, so the bounds stay valid as defaults shift."""
     big = LocalAgent(model="gemma4:latest", paths=_paths(tmp_path))
     small = LocalAgent(model="gemma3:4b", paths=_paths(tmp_path))
     # Big model should have a strictly larger budget than the small one.

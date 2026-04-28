@@ -68,12 +68,12 @@ def test_build_anthropic_with_explicit_model() -> None:
     assert agent._system_prompt == "You are brief."
 
 
-def test_build_ollama_picks_gemma4_default() -> None:
+def test_build_ollama_picks_qwen35_default() -> None:
     """openclaw-style: `--provider ollama` lands on PiAgent with the
-    catalog's tool-capable gemma4 default."""
+    catalog's tool-capable qwen3.5:9b default."""
     agent = build_agent(agent_id="a", provider="ollama")
     assert isinstance(agent, PiAgent)
-    assert agent._model.id == PROVIDER_DEFAULT_MODELS["ollama"]
+    assert agent._model.id == PROVIDER_DEFAULT_MODELS["ollama"] == "qwen3.5:9b"
     assert agent._model.provider == "ollama"
 
 

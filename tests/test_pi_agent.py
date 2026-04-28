@@ -88,10 +88,10 @@ def test_pi_runtime_drives_every_catalog_provider() -> None:
 
 def test_factory_builds_pi_agent_for_legacy_pi_alias(tmp_path: Path) -> None:
     """`provider='pi'` is a legacy alias; the factory still produces a
-    PiAgent backed by the Ollama catalog default (gemma4:latest)."""
+    PiAgent backed by the Ollama catalog default (qwen3.5:9b)."""
     a = build_agent(agent_id="a", provider="pi")
     assert isinstance(a, PiAgent)
-    assert a._model.id == "gemma4:latest"
+    assert a._model.id == "qwen3.5:9b"
     assert a._model.provider == "ollama"
 
 

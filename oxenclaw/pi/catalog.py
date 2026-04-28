@@ -89,6 +89,20 @@ def _seed_models() -> list[Model]:
                 supports_image_input=True,
             ),
             # ── Local / Ollama ──
+            # Default. qwen3.5:9b — multimodal (vision), native function
+            # calling, native thinking, 256K ctx, ~6.6 GB Q4_K_M. Picked
+            # over gemma4:latest as the recommended local default after
+            # the 2026-04-28 live e2e gate (18/18 PASS on PiAgent multi-
+            # turn + memory-driven tool-call flow at /tmp/qwen_live_e2e.py).
+            Model(
+                id="qwen3.5:9b",
+                provider="ollama",
+                context_window=262_144,  # 256K native via rope
+                max_output_tokens=8_192,
+                supports_tools=True,
+                supports_image_input=True,
+                supports_thinking=True,
+            ),
             # gemma4 family — multimodal, native function calling, 128K
             # ctx on E-class (2B/4B effective) and 256K on the 26B/31B
             # MoE variants. `gemma4:latest` aliases to e4b (~9.6 GB).

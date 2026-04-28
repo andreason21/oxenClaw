@@ -108,7 +108,7 @@ def test_pick_model_inline_provider_with_default_model_no_overrides() -> None:
     )
     choice = pick_model_interactively(prompter)
     assert choice.provider == "ollama"
-    assert choice.model == "gemma4:latest"
+    assert choice.model == "qwen3.5:9b"
     assert choice.base_url is None
     assert choice.api_key is None
 

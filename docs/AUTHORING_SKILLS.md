@@ -259,7 +259,7 @@ image blocks **automatically** — no per-tool wiring required. The
 runtime handles:
 
 - **Capability gating** — `multimodal.model_supports_images(model_id)`
-  consults the pi catalog (`gemma4:latest` / `claude-sonnet-4-6` /
+  consults the pi catalog (`qwen3.5:9b` / `gemma4:latest` / `claude-sonnet-4-6` /
   `gpt-4o` / `gemini-1.5-pro` / `llava` / `llama3.2-vision` / …) plus a
   heuristic substring match for non-cataloged tags.
 - **Normalization** — `multimodal.normalize_media_item()` accepts

@@ -112,7 +112,7 @@ def start(
         None,
         "--model",
         help=(
-            "Model id from the pi catalog (e.g. gemma4:latest, "
+            "Model id from the pi catalog (e.g. qwen3.5:9b, gemma4:latest, "
             "claude-sonnet-4-6, gpt-4o-mini, gemini-2.0-flash). When omitted, "
             "the provider's catalog default is used. Custom models not in the "
             "catalog (e.g. fine-tuned vLLM weights) are accepted with a "

@@ -6,7 +6,7 @@ exercise a live local Ollama, which CI machines don't have and which are
 slow (each call is multiple seconds).
 
 Override the target model/endpoint with:
-  - `OXENCLAW_OLLAMA_MODEL`     (default: gemma4:latest)
+  - `OXENCLAW_OLLAMA_MODEL`     (default: qwen3.5:9b)
   - `OXENCLAW_OLLAMA_BASE_URL`  (default: http://127.0.0.1:11434/v1)
 """
 
@@ -18,7 +18,7 @@ import urllib.request
 
 import pytest
 
-DEFAULT_MODEL = "gemma4:latest"
+DEFAULT_MODEL = "qwen3.5:9b"
 DEFAULT_BASE_URL = "http://127.0.0.1:11434/v1"
 
 

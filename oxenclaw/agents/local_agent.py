@@ -44,10 +44,13 @@ from oxenclaw.plugin_sdk.runtime_env import get_logger
 logger = get_logger("agents.local")
 
 DEFAULT_BASE_URL = "http://127.0.0.1:11434/v1"  # Ollama default
-# Tool-capable Ollama default. Earlier gemma3:4b was dropped due to weak
-# tool support; gemma4:latest restores native function calling. Override
-# per deployment if you prefer qwen2.5, llama3.x, etc.
-DEFAULT_MODEL = "gemma4:latest"
+# Tool-capable Ollama default. gemma3:4b was dropped due to weak tool
+# support; gemma4:latest then served as default. Switched to qwen3.5:9b
+# on 2026-04-28 after a live PiAgent e2e gate (18/18 PASS, see
+# /tmp/qwen_live_e2e.py): same vision + native tools, 256K ctx (vs 128K
+# on gemma4:latest), ~6.6 GB Q4_K_M (vs ~9.6 GB), and stronger tool-arg
+# fidelity on Korean prompts. Override per deployment as needed.
+DEFAULT_MODEL = "qwen3.5:9b"
 # vLLM canonical default (`vllm serve --port 8000` lands here). Override
 # with `--base-url http://internal-vllm:8000/v1` for a remote server.
 VLLM_DEFAULT_BASE_URL = "http://127.0.0.1:8000/v1"
@@ -75,9 +78,9 @@ DEFAULT_TIMEOUT = 300.0  # local models can be slow
 # Conservative *floor* — kept low to fit small-context models like
 # `gemma3:4b` (8K). When the runtime knows the actual model's context
 # window (via `pi.tokens.model_context_window`), it scales this up to
-# roughly half the window so large-context models like `gemma4:latest`
-# (128K) actually use the room they have. The constructor still accepts
-# an explicit override.
+# roughly half the window so large-context models like `qwen3.5:9b`
+# (256K) or `gemma4:latest` (128K) actually use the room they have.
+# The constructor still accepts an explicit override.
 DEFAULT_MAX_HISTORY_CHARS = 24_000  # ~6K tokens, safe even for 8K-ctx
 DEFAULT_MAX_RETRIES = 3
 DEFAULT_BACKOFF_INITIAL = 0.5

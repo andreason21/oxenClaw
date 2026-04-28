@@ -162,6 +162,7 @@ MODEL_CONTEXT_TOKENS: dict[str, int] = {
     "gemma4:e4b": 131_072,
     "gemma4:26b": 262_144,
     "gemma4:31b": 262_144,
+    "qwen3.5:9b": 262_144,
     "qwen2.5:7b-instruct": 32_768,
     "llama3.1:8b": 128_000,
     "mistral-nemo:12b": 128_000,

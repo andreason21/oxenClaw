@@ -37,7 +37,7 @@ Set credentials and config under `~/.oxenclaw/`:
 ```bash
 OXENCLAW_GATEWAY_TOKEN=$(openssl rand -hex 32) \
   oxenclaw gateway start \
-    --provider pi --model gemma4:latest \
+    --provider pi --model qwen3.5:9b \
     --port 7331
 ```
 

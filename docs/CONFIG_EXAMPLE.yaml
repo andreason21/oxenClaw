@@ -24,7 +24,7 @@ agents:
   assistant:
     id: assistant
     provider: local
-    model: gemma4:latest
+    model: qwen3.5:9b
     channels:
       dashboard:
         allow_from: []

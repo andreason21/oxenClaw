@@ -19,7 +19,7 @@ oxenClaw gateway with Ollama-backed local LLM, in 15–25 minutes.
 - **Admin rights** on first-time WSL setup.
 - **8 GB+ RAM**; 16 GB recommended if running a 7B-class model alongside other apps.
 - **Internet** for `pip install`, `ollama pull`, and Slack outbound (if used).
-- **NVIDIA GPU** is optional — Ollama runs on CPU just fine for the recommended `gemma4:latest`.
+- **NVIDIA GPU** is optional — Ollama runs on CPU just fine for the recommended `qwen3.5:9b`.
 
 ---
 
@@ -97,7 +97,7 @@ endpoint and oxenClaw's preflight check will warn at gateway start
 if the embedding model isn't available:
 
 ```bash
-ollama pull gemma4:latest        # chat
+ollama pull qwen3.5:9b           # chat (default)
 ollama pull nomic-embed-text     # embeddings (REQUIRED for memory features)
 ```
 
@@ -140,7 +140,7 @@ Then start the gateway with `--base-url`:
 
 ```bash
 oxenclaw gateway start \
-  --provider ollama --model gemma4:latest \
+  --provider ollama --model qwen3.5:9b \
   --base-url http://172.28.176.1:11434/v1
 ```
 
@@ -214,7 +214,7 @@ channels: {}
 agents:
   default:
     provider: ollama
-    model: gemma4:latest
+    model: qwen3.5:9b
     system_prompt: |
       You are a helpful assistant.
 ```
@@ -375,7 +375,7 @@ oxenClaw 게이트웨이까지 15–25분 소요.
 - 첫 WSL 설정 시 **관리자 권한**
 - **RAM 8GB 이상** (7B 모델 동시 실행 시 16GB 권장)
 - 인터넷 (pip / ollama pull / Slack 아웃바운드)
-- **NVIDIA GPU 선택** — 권장 모델 `gemma4:latest`은 CPU로도 충분
+- **NVIDIA GPU 선택** — 권장 모델 `qwen3.5:9b`은 CPU로도 충분
 
 ### 2. WSL2 + Ubuntu 설치
 
@@ -426,7 +426,7 @@ python3.12 --version    # → Python 3.12.x
 curl -fsSL https://ollama.com/install.sh | sh
 ollama serve &
 # 채팅 모델 + 임베딩 모델 둘 다 필요 (메모리 기능이 임베딩 사용)
-ollama pull gemma4:latest
+ollama pull qwen3.5:9b
 ollama pull nomic-embed-text
 curl -s http://127.0.0.1:11434/api/tags | head
 # 임베딩 endpoint 검증
@@ -451,7 +451,7 @@ ip route show default | awk '{print $3}'
 # 예: 172.28.176.1
 
 oxenclaw gateway start \
-  --provider ollama --model gemma4:latest \
+  --provider ollama --model qwen3.5:9b \
   --base-url http://172.28.176.1:11434/v1
 ```
 
@@ -500,7 +500,7 @@ channels: {}
 agents:
   default:
     provider: ollama
-    model: gemma4:latest
+    model: qwen3.5:9b
     system_prompt: |
       You are a helpful assistant.
 ```

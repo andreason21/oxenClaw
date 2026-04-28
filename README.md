@@ -59,13 +59,14 @@ running on `127.0.0.1:11434` — install Ollama and pull a tool-capable
 model, e.g.:
 
 ```bash
-ollama pull gemma4:latest
+ollama pull qwen3.5:9b
 ```
 
 Override the model with `--model <id>`. Tested models:
 
 | Model | Context | Notes |
 |---|---|---|
+| **`qwen3.5:9b`** *(default)* | 256K | Multimodal (vision), native function calling + thinking, ~6.6 GB Q4_K_M. Live e2e gate 18/18 PASS. |
 | `gemma4:latest` (= `e4b`) | 128K | Multimodal (text+image), native function calling, ~9.6 GB. |
 | `gemma4:e2b` | 128K | Lighter (~7.2 GB) — same family, smaller. |
 | `gemma4:26b` / `31b` | 256K | Heavier MoE variants when you have the RAM. |
@@ -118,7 +119,7 @@ agents:
   default:
     id: default
     provider: local              # local | vllm | anthropic | pi | echo
-    model: gemma4:latest
+    model: qwen3.5:9b
     system_prompt: |
       You are a helpful assistant.
 ```
@@ -243,7 +244,7 @@ Full guide: [`docs/DESKTOP_APP.md`](docs/DESKTOP_APP.md).
 
 ### Frontier delegation via ACP
 
-The local PiAgent model (Ollama / gemma4 / qwen) is reliably weak
+The local PiAgent model (Ollama / qwen3.5 / gemma4) is reliably weak
 at long-horizon planning, multi-file refactors, and careful tool
 sequencing. oxenClaw speaks the **Agent Client Protocol** (Zed's
 `@agentclientprotocol/sdk` 0.19.x) over stdio so the model can
@@ -554,13 +555,14 @@ oxenclaw config validate
 (`127.0.0.1:11434`). Ollama 설치 후 도구 호출 가능한 모델을 받는다, 예:
 
 ```bash
-ollama pull gemma4:latest
+ollama pull qwen3.5:9b
 ```
 
 기본값은 `--model <id>`로 오버라이드. 검증된 모델:
 
 | 모델 | 컨텍스트 | 비고 |
 |---|---|---|
+| **`qwen3.5:9b`** *(기본값)* | 256K | 멀티모달(vision), 네이티브 함수 호출 + thinking, 약 6.6 GB (Q4_K_M). 라이브 e2e 18/18 PASS. |
 | `gemma4:latest` (= `e4b`) | 128K | 멀티모달(text+image), 네이티브 함수 호출, 약 9.6 GB. |
 | `gemma4:e2b` | 128K | 더 가벼움 (약 7.2 GB) — 같은 계열의 작은 변종. |
 | `gemma4:26b` / `31b` | 256K | 고RAM 환경용 MoE 변종. |
@@ -609,7 +611,7 @@ agents:
   default:
     id: default
     provider: local
-    model: gemma4:latest
+    model: qwen3.5:9b
     system_prompt: |
       You are a helpful assistant.
 ```
@@ -726,7 +728,7 @@ OS에 맞는 파일을 받는다:
 
 #### Frontier 위임 (ACP)
 
-로컬 PiAgent 모델(Ollama / gemma4 / qwen)은 장기 계획, 다중 파일
+로컬 PiAgent 모델(Ollama / qwen3.5 / gemma4)은 장기 계획, 다중 파일
 리팩토링, 정교한 툴 시퀀싱에 약하다. oxenClaw가 **Agent Client
 Protocol** (Zed의 `@agentclientprotocol/sdk` 0.19.x) 을 stdio로
 지원하는 *주된 이유*는 모델이 그런 어려운 sub-task를 한 턴 단위로

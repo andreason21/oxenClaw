@@ -189,7 +189,7 @@ class PiAgent:
         self,
         *,
         agent_id: str = "pi",
-        model_id: str = "gemma4:latest",
+        model_id: str = "qwen3.5:9b",
         registry: ModelRegistry | None = None,
         auth: AuthStorage | None = None,
         sessions: SessionManager | None = None,

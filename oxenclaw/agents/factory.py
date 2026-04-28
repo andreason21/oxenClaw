@@ -86,7 +86,7 @@ SUPPORTED_PROVIDERS: tuple[str, ...] = (*CATALOG_PROVIDERS, "echo")
 # canonical catalog id. Mirrors openclaw's `normalizeProviderId`.
 LEGACY_ALIASES: dict[str, str] = {
     "local": "ollama",  # pre-pi LocalAgent was always Ollama-shaped
-    "pi": "ollama",  # pi default model was gemma4:latest (Ollama)
+    "pi": "ollama",  # pi default model is qwen3.5:9b (Ollama)
     "aws-bedrock": "bedrock",  # openclaw's normalizeProviderId mapping
     "z.ai": "zai",
     "z-ai": "zai",
@@ -100,13 +100,13 @@ PROVIDER_DEFAULT_MODELS: dict[str, str] = {
     "openai": "gpt-4o-mini",
     "google": "gemini-2.0-flash",
     "vertex-ai": "gemini-2.0-flash",
-    "ollama": "gemma4:latest",
-    "vllm": "gemma4:latest",
-    "lmstudio": "gemma4:latest",
-    "llamacpp": "gemma4:latest",
-    "openai-compatible": "gemma4:latest",
-    "proxy": "gemma4:latest",
-    "litellm": "gemma4:latest",
+    "ollama": "qwen3.5:9b",
+    "vllm": "qwen3.5:9b",
+    "lmstudio": "qwen3.5:9b",
+    "llamacpp": "qwen3.5:9b",
+    "openai-compatible": "qwen3.5:9b",
+    "proxy": "qwen3.5:9b",
+    "litellm": "qwen3.5:9b",
 }
 
 # Reasonable default context windows for synthesised (non-catalog) models.

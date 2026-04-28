@@ -213,7 +213,7 @@ async def test_pi_agent_with_image_capable_model_appends_image_block(tmp_path, m
     from oxenclaw.agents.factory import build_agent
     from oxenclaw.pi.messages import ImageContent, TextContent, UserMessage
 
-    agent = build_agent(agent_id="pi-test", provider="pi")  # default = gemma4:latest
+    agent = build_agent(agent_id="pi-test", provider="pi")  # default = qwen3.5:9b (vision)
     env = _envelope(text="caption", photo_b64=_jpeg_b64())
 
     async def _stub_run_turn(*args, **kwargs):  # type: ignore[no-untyped-def]

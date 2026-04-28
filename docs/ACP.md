@@ -6,7 +6,7 @@ NDJSON, defined by the Zed-led `@agentclientprotocol/sdk` 0.19.x).
 ## Why we ship it
 
 The **primary value** is the **client direction**: PiAgent's local
-model (Ollama / gemma4 / qwen) is reliably weak at long-horizon
+model (Ollama / qwen3.5 / gemma4) is reliably weak at long-horizon
 planning, multi-file refactors, and careful tool sequencing. ACP
 gives us a clean stdio handoff to a stronger external agent for
 those specific sub-tasks. Concretely:

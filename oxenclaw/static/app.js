@@ -2845,18 +2845,26 @@ const MemoryView = {
           }));
           return;
         }
-        const params = {
-          query: q, k,
-          hybrid: hybridChk.checked,
-          mmr:    mmrChk.checked,
-          decay:  decayChk.checked,
-        };
+        // Backend's _SearchParams expects nested objects, not bare
+        // booleans, and the key is `temporal_decay` (not `decay`).
+        // `extra="forbid"` rejects the wrong shape, which is why every
+        // call returned a ValidationError before. Send object form,
+        // omit the sub-block entirely when the toggle is off so we
+        // pass the backend's None-default.
+        const params = { query: q, k };
+        if (hybridChk.checked) params.hybrid = { enabled: true };
+        if (mmrChk.checked)    params.mmr    = { enabled: true };
+        if (decayChk.checked)  params.temporal_decay = { enabled: true };
         if (src) params.source = src;
         let res;
         try {
           res = await Rpc.call("memory.search", params);
         } catch (e) {
           results.append(el("div", { class: "empty" }, e.message));
+          return;
+        }
+        if (res && res.ok === false) {
+          results.append(el("div", { class: "empty" }, res.error || "search failed"));
           return;
         }
         const hits = (res && res.hits) || [];
@@ -2870,13 +2878,22 @@ const MemoryView = {
         }
         const list = el("ul", { class: "list memory-hits" });
         for (const h of hits) {
-          const preview = (h.text || h.content || "").slice(0, 200);
-          const full    = (h.text || h.content || "");
-          const startLine = h.start_line != null ? h.start_line : 1;
-          const endLine   = h.end_line   != null ? h.end_line   : "";
-          const citation  = h.path
-            ? (endLine ? `${h.path}:${startLine}-${endLine}` : `${h.path}:${startLine}`)
-            : (h.id || "(untitled)");
+          // Backend hit shape: {chunk: {id, path, source, start_line,
+          // end_line, text, hash}, score, distance, citation}. Earlier
+          // versions of this view read `h.text` / `h.path` at the top
+          // level, which produced empty previews and "(untitled)"
+          // citations. Read from h.chunk first.
+          const c = h.chunk || h;
+          const preview = (c.text || c.content || "").slice(0, 200);
+          const full    = (c.text || c.content || "");
+          const startLine = c.start_line != null ? c.start_line : 1;
+          const endLine   = c.end_line   != null ? c.end_line   : "";
+          const path = c.path || h.path;
+          const citation  = h.citation || (
+            path
+              ? (endLine ? `${path}:${startLine}-${endLine}` : `${path}:${startLine}`)
+              : (c.id || h.id || "(untitled)")
+          );
           let expanded = false;
 
           const scorePill = el("span", { class: "memory-hit__score" },
@@ -2888,7 +2905,7 @@ const MemoryView = {
 
           openBtn.onclick = (ev) => {
             ev.stopPropagation();
-            browseTarget = { path: h.path || h.id, start_line: startLine };
+            browseTarget = { path: path || c.id || h.id, start_line: startLine };
             switchTab("browse", browseTarget);
           };
 
@@ -3071,15 +3088,19 @@ const MemoryView = {
       }
 
       wrap.innerHTML = "";
+      // Backend shape: {ok, total_files, total_chunks, dimensions,
+      // path, meta: {provider, model, last_sync, ...}}.
       const stats = res || {};
+      const meta = (stats.meta || {});
 
       const cards = [
         ["Total chunks",     stats.total_chunks    ?? "—"],
         ["Total files",      stats.total_files     ?? "—"],
-        ["Embedding dims",   stats.embedding_dims  ?? "—"],
-        ["Provider",         stats.provider        ?? "—"],
-        ["Model",            stats.model           ?? "—"],
-        ["Last sync",        stats.last_sync ? fmtTime(stats.last_sync) : "—"],
+        ["Embedding dims",   stats.dimensions ?? stats.embedding_dims ?? "—"],
+        ["Provider",         meta.provider ?? stats.provider ?? "—"],
+        ["Model",            meta.model    ?? stats.model    ?? "—"],
+        ["Last sync",        (meta.last_sync ?? stats.last_sync)
+          ? fmtTime(meta.last_sync ?? stats.last_sync) : "—"],
         ["Cache hit rate",   stats.cache_hit_rate != null
           ? (Number(stats.cache_hit_rate) * 100).toFixed(1) + "%" : "—"],
       ];

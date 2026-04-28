@@ -47,7 +47,7 @@ class _TapSpec:
     subpath: str
 
     @classmethod
-    def parse(cls, raw: str) -> "_TapSpec":
+    def parse(cls, raw: str) -> _TapSpec:
         text = raw.strip()
         # Owner/repo always come first; an optional `#branch` clause may
         # be followed by a `/path` (path may contain slashes).

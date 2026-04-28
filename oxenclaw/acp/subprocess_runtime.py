@@ -83,9 +83,7 @@ class AcpWireError(Exception):
 @dataclass
 class _SessionState:
     session_id: str
-    queue: asyncio.Queue[AcpRuntimeEvent | None] = field(
-        default_factory=asyncio.Queue
-    )
+    queue: asyncio.Queue[AcpRuntimeEvent | None] = field(default_factory=asyncio.Queue)
     handle: AcpRuntimeHandle | None = None
 
 
@@ -126,9 +124,7 @@ class SubprocessAcpRuntime:
 
     # ---- AcpRuntime required surface --------------------------------------
 
-    async def ensure_session(
-        self, input: AcpRuntimeEnsureInput
-    ) -> AcpRuntimeHandle:
+    async def ensure_session(self, input: AcpRuntimeEnsureInput) -> AcpRuntimeHandle:
         await self._ensure_spawned()
         existing = self._sessions_by_key.get(input.session_key)
         if existing is not None and existing.handle is not None:
@@ -139,19 +135,13 @@ class SubprocessAcpRuntime:
                 "sessionKey": input.session_key,
                 "agent": input.agent,
                 "mode": input.mode,
-                **(
-                    {"resumeSessionId": input.resume_session_id}
-                    if input.resume_session_id
-                    else {}
-                ),
+                **({"resumeSessionId": input.resume_session_id} if input.resume_session_id else {}),
             },
         )
         result = await self._request("session/new", params)
         session_id = result.get("sessionId") if isinstance(result, dict) else None
         if not session_id:
-            raise AcpWireError(
-                -32603, "session/new response missing sessionId", data=result
-            )
+            raise AcpWireError(-32603, "session/new response missing sessionId", data=result)
         state = _SessionState(session_id=session_id)
         handle = AcpRuntimeHandle(
             session_key=input.session_key,
@@ -166,14 +156,10 @@ class SubprocessAcpRuntime:
         self._sessions_by_id[session_id] = state
         return handle
 
-    def run_turn(
-        self, input: AcpRuntimeTurnInput
-    ) -> AsyncIterator[AcpRuntimeEvent]:
+    def run_turn(self, input: AcpRuntimeTurnInput) -> AsyncIterator[AcpRuntimeEvent]:
         return self._run_turn(input)
 
-    async def _run_turn(
-        self, input: AcpRuntimeTurnInput
-    ) -> AsyncIterator[AcpRuntimeEvent]:
+    async def _run_turn(self, input: AcpRuntimeTurnInput) -> AsyncIterator[AcpRuntimeEvent]:
         state = self._sessions_by_key.get(input.handle.session_key)
         if state is None:
             yield AcpEventError(
@@ -258,18 +244,12 @@ class SubprocessAcpRuntime:
                     code=str(wire_err.code),
                 )
                 return
-            stop_reason = (
-                result.get("stopReason")
-                if isinstance(result, dict)
-                else None
-            )
+            stop_reason = result.get("stopReason") if isinstance(result, dict) else None
             yield AcpEventDone(stop_reason=stop_reason or "stop")
         finally:
             self._pending.pop(req_id, None)
 
-    async def cancel(
-        self, *, handle: AcpRuntimeHandle, reason: str | None = None
-    ) -> None:
+    async def cancel(self, *, handle: AcpRuntimeHandle, reason: str | None = None) -> None:
         state = self._sessions_by_key.get(handle.session_key)
         if state is None:
             return
@@ -306,9 +286,7 @@ class SubprocessAcpRuntime:
         # Resolve any pending requests with a closed-error.
         for fut in list(self._pending.values()):
             if not fut.done():
-                fut.set_exception(
-                    AcpWireError(-32001, "backend closed before response")
-                )
+                fut.set_exception(AcpWireError(-32001, "backend closed before response"))
         self._pending.clear()
         # Release any in-flight run_turn iterators.
         for state in self._sessions_by_key.values():
@@ -379,9 +357,7 @@ class SubprocessAcpRuntime:
             # Notify any waiters that the child closed.
             for fut in list(self._pending.values()):
                 if not fut.done():
-                    fut.set_exception(
-                        AcpWireError(-32001, "child stdout closed")
-                    )
+                    fut.set_exception(AcpWireError(-32001, "child stdout closed"))
             for state in list(self._sessions_by_key.values()):
                 with contextlib.suppress(Exception):
                     state.queue.put_nowait(None)
@@ -434,9 +410,7 @@ class SubprocessAcpRuntime:
         # Unknown notification — log and drop. Client-initiated
         # requests from the agent (file/permission/terminal) aren't
         # supported in this commit.
-        logger.info(
-            "acp.subprocess: unhandled notification method=%s", method
-        )
+        logger.info("acp.subprocess: unhandled notification method=%s", method)
 
     def _handle_session_update(self, params: dict[str, Any]) -> None:
         session_id = params.get("sessionId")
@@ -484,12 +458,7 @@ class SubprocessAcpRuntime:
                 title=update.get("title"),
             )
         # Fallback: status with the original tag preserved.
-        text = (
-            update.get("text")
-            or update.get("summary")
-            or update.get("title")
-            or ""
-        )
+        text = update.get("text") or update.get("summary") or update.get("title") or ""
         return AcpEventStatus(text=str(text), tag=tag)
 
     @staticmethod
@@ -509,18 +478,14 @@ class SubprocessAcpRuntime:
         future = asyncio.get_running_loop().create_future()
         self._pending[req_id] = future
         try:
-            await self._send_envelope(
-                request_envelope(id=req_id, method=method, params=params)
-            )
+            await self._send_envelope(request_envelope(id=req_id, method=method, params=params))
         except Exception:
             self._pending.pop(req_id, None)
             raise
         return await future
 
     async def _notify(self, method: str, params: Any) -> None:
-        await self._send_envelope(
-            notification_envelope(method=method, params=params)
-        )
+        await self._send_envelope(notification_envelope(method=method, params=params))
 
     async def _send_envelope(self, envelope: dict[str, Any]) -> None:
         if self._proc is None or self._proc.stdin is None:

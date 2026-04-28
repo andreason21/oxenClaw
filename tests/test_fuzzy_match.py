@@ -67,14 +67,7 @@ def test_strategy_unicode_normalized() -> None:
 
 
 def test_strategy_block_anchor() -> None:
-    content = (
-        "def foo():\n"
-        "    a = 1\n"
-        "    b = 2\n"
-        "    c = 3\n"
-        "    return a + b + c\n"
-        "    # done\n"
-    )
+    content = "def foo():\n    a = 1\n    b = 2\n    c = 3\n    return a + b + c\n    # done\n"
     # First 2 + last 2 lines exactly match; middle slightly different.
     pattern = (
         "def foo():\n"
@@ -106,9 +99,7 @@ def test_count_mismatch_raises() -> None:
 
 
 def test_ambiguous_match_with_correct_count() -> None:
-    new, strat = fuzzy_find_and_replace(
-        "foo\nfoo\nfoo\n", "foo", "bar", expected_count=3
-    )
+    new, strat = fuzzy_find_and_replace("foo\nfoo\nfoo\n", "foo", "bar", expected_count=3)
     assert strat == "exact"
     assert new == "bar\nbar\nbar\n"
 

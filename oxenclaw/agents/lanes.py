@@ -104,9 +104,7 @@ class LaneRegistry:
     def _session_lock(self, agent_id: str, session_key: str) -> asyncio.Lock:
         return self.lane(agent_id, session_key).lock
 
-    def maybe_busy_ack(
-        self, agent_id: str, session_key: str
-    ) -> tuple[bool, LaneState]:
+    def maybe_busy_ack(self, agent_id: str, session_key: str) -> tuple[bool, LaneState]:
         """Return `(should_emit, lane_state)` — True if the caller should
         push a "still busy" status event for this lane.
 

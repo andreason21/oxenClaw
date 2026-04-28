@@ -102,6 +102,9 @@ ignore = [
     "E701",
     # B017 assert-raises-exception: tests deliberately catch broad Exception in some cases.
     "B017",
+    # B027 empty-method-without-abstract-decorator: MemoryProvider exposes optional override hooks
+    # whose default no-op behavior is part of the contract — they are intentionally non-abstract.
+    "B027",
     # RUF001/002/003 ambiguous-unicode-character: Korean text in strings/docstrings/comments is intentional.
     "RUF001",
     "RUF002",

@@ -26,7 +26,6 @@ from oxenclaw.pi.streaming import (
     TextDeltaEvent,
 )
 
-
 # ─── Reason taxonomy round-trip ─────────────────────────────────────
 
 

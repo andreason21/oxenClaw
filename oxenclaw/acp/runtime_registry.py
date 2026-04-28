@@ -12,7 +12,6 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
 
 from oxenclaw.agents.acp_runtime import AcpRuntime
 
@@ -41,12 +40,8 @@ def register_acp_runtime_backend(backend: AcpRuntimeBackend) -> None:
     if not bid:
         raise AcpRegistryError("ACP runtime backend id is required")
     if backend.runtime is None:
-        raise AcpRegistryError(
-            f"ACP runtime backend {bid!r} is missing runtime implementation"
-        )
-    _BACKENDS[bid] = AcpRuntimeBackend(
-        id=bid, runtime=backend.runtime, healthy=backend.healthy
-    )
+        raise AcpRegistryError(f"ACP runtime backend {bid!r} is missing runtime implementation")
+    _BACKENDS[bid] = AcpRuntimeBackend(id=bid, runtime=backend.runtime, healthy=backend.healthy)
 
 
 def unregister_acp_runtime_backend(backend_id: str) -> None:
@@ -89,9 +84,7 @@ def require_acp_runtime_backend(backend_id: str | None = None) -> AcpRuntimeBack
     backend = get_acp_runtime_backend(backend_id)
     if backend is None:
         if backend_id:
-            raise AcpRegistryError(
-                f"ACP runtime backend {backend_id!r} is not registered"
-            )
+            raise AcpRegistryError(f"ACP runtime backend {backend_id!r} is not registered")
         raise AcpRegistryError("no ACP runtime backends registered")
     return backend
 

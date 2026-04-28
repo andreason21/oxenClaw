@@ -28,7 +28,6 @@ from oxenclaw.tools_pkg.session_tools import (
     sessions_yield_tool,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -275,9 +274,7 @@ async def test_sessions_spawn_creates_child_with_meta() -> None:
     child_key = "child-session-001"
 
     tool = sessions_spawn_tool(sm)
-    raw = await tool.execute(
-        {"parent_session_key": parent_id, "child_session_key": child_key}
-    )
+    raw = await tool.execute({"parent_session_key": parent_id, "child_session_key": child_key})
     result = json.loads(raw)
 
     assert result["ok"] is True
@@ -297,9 +294,7 @@ async def test_sessions_spawn_creates_child_with_meta() -> None:
 async def test_sessions_spawn_missing_parent() -> None:
     sm = InMemorySessionManager()
     tool = sessions_spawn_tool(sm)
-    raw = await tool.execute(
-        {"parent_session_key": "no-parent", "child_session_key": "child-x"}
-    )
+    raw = await tool.execute({"parent_session_key": "no-parent", "child_session_key": "child-x"})
     result = json.loads(raw)
     assert "error" in result
 
@@ -309,16 +304,12 @@ async def test_sessions_spawn_existing_child_is_rejected() -> None:
     parent_id = await _make_session(sm)
     # Spawn once — captures the auto-generated child id.
     tool = sessions_spawn_tool(sm)
-    raw1 = await tool.execute(
-        {"parent_session_key": parent_id, "child_session_key": "child-dup"}
-    )
+    raw1 = await tool.execute({"parent_session_key": parent_id, "child_session_key": "child-dup"})
     r1 = json.loads(raw1)
     child_id = r1["child_session_key"]
 
     # Try to spawn again using the returned child id as the child key.
-    raw2 = await tool.execute(
-        {"parent_session_key": parent_id, "child_session_key": child_id}
-    )
+    raw2 = await tool.execute({"parent_session_key": parent_id, "child_session_key": child_id})
     r2 = json.loads(raw2)
     assert "error" in r2
 
@@ -407,9 +398,7 @@ def test_build_session_tools_readonly_never_gated() -> None:
 
     # Read-only tools must NOT be gated.
     for name in ("sessions_status", "sessions_list", "sessions_history"):
-        assert "approval" not in names[name].description.lower(), (
-            f"{name} should not be gated"
-        )
+        assert "approval" not in names[name].description.lower(), f"{name} should not be gated"
 
 
 def test_build_session_tools_mutating_gated_when_manager_present() -> None:
@@ -422,9 +411,7 @@ def test_build_session_tools_mutating_gated_when_manager_present() -> None:
     names = {t.name: t for t in tools}
 
     for name in ("sessions_send", "sessions_spawn", "sessions_yield"):
-        assert "approval" in names[name].description.lower(), (
-            f"{name} should be gated"
-        )
+        assert "approval" in names[name].description.lower(), f"{name} should be gated"
 
 
 def test_build_session_tools_mutating_ungated_without_manager() -> None:

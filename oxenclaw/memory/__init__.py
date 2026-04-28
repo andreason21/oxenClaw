@@ -19,11 +19,6 @@ from oxenclaw.memory.embeddings import (
     build_embedder,
 )
 from oxenclaw.memory.indexer import MemoryIndexer
-from oxenclaw.memory.provider import (
-    BuiltinMemoryProvider,
-    MemoryProvider,
-    MemoryProviderRegistry,
-)
 from oxenclaw.memory.models import (
     FileEntry,
     MemoryChunk,
@@ -31,6 +26,11 @@ from oxenclaw.memory.models import (
     MemorySearchResult,
     MemorySource,
     SyncReport,
+)
+from oxenclaw.memory.provider import (
+    BuiltinMemoryProvider,
+    MemoryProvider,
+    MemoryProviderRegistry,
 )
 from oxenclaw.memory.retriever import MemoryRetriever, format_memories_for_prompt
 from oxenclaw.memory.store import MemoryStore

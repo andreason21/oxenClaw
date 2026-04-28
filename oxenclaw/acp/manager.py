@@ -29,12 +29,9 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from typing import Any
 
 from oxenclaw.acp.runtime_registry import (
-    AcpRegistryError,
     AcpRuntimeBackend,
-    get_acp_runtime_backend,
     require_acp_runtime_backend,
 )
 from oxenclaw.agents.acp_runtime import (
@@ -98,9 +95,7 @@ class AcpSessionManager:
         self._sessions: dict[str, _SessionRecord] = {}
         self._lock = asyncio.Lock()
 
-    async def initialize_session(
-        self, input: AcpInitializeSessionInput
-    ) -> AcpRuntimeHandle:
+    async def initialize_session(self, input: AcpInitializeSessionInput) -> AcpRuntimeHandle:
         """Open (or resume) an ACP session against a backend.
 
         If the session_key is already live, the existing handle is
@@ -113,10 +108,7 @@ class AcpSessionManager:
         async with self._lock:
             existing = self._sessions.get(input.session_key)
             if existing is not None:
-                if (
-                    input.backend_id
-                    and existing.backend.id != input.backend_id.lower()
-                ):
+                if input.backend_id and existing.backend.id != input.backend_id.lower():
                     raise AcpManagerError(
                         f"session {input.session_key!r} is bound to backend "
                         f"{existing.backend.id!r}, refusing rebind to "
@@ -134,9 +126,7 @@ class AcpSessionManager:
                     env=input.env,
                 )
             )
-            self._sessions[input.session_key] = _SessionRecord(
-                handle=handle, backend=backend
-            )
+            self._sessions[input.session_key] = _SessionRecord(handle=handle, backend=backend)
             return handle
 
     def run_turn(self, input: AcpRunTurnInput) -> AsyncIterator[AcpRuntimeEvent]:
@@ -148,9 +138,7 @@ class AcpSessionManager:
         """
         record = self._sessions.get(input.session_key)
         if record is None:
-            raise AcpManagerError(
-                f"session {input.session_key!r} is not initialised"
-            )
+            raise AcpManagerError(f"session {input.session_key!r} is not initialised")
         return record.backend.runtime.run_turn(
             AcpRuntimeTurnInput(
                 handle=record.handle,
@@ -161,17 +149,11 @@ class AcpSessionManager:
             )
         )
 
-    async def cancel_session(
-        self, *, session_key: str, reason: str | None = None
-    ) -> None:
+    async def cancel_session(self, *, session_key: str, reason: str | None = None) -> None:
         record = self._sessions.get(session_key)
         if record is None:
-            raise AcpManagerError(
-                f"session {session_key!r} is not initialised"
-            )
-        await record.backend.runtime.cancel(
-            handle=record.handle, reason=reason
-        )
+            raise AcpManagerError(f"session {session_key!r} is not initialised")
+        await record.backend.runtime.cancel(handle=record.handle, reason=reason)
 
     async def close_session(self, input: AcpCloseSessionInput) -> None:
         async with self._lock:
@@ -186,9 +168,7 @@ class AcpSessionManager:
 
     def observability_snapshot(self) -> AcpManagerObservabilitySnapshot:
         return AcpManagerObservabilitySnapshot(
-            sessions={
-                key: rec.backend.id for key, rec in self._sessions.items()
-            },
+            sessions={key: rec.backend.id for key, rec in self._sessions.items()},
             backends=[rec.backend.id for rec in self._sessions.values()],
         )
 

@@ -4,11 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
+from oxenclaw.tools_pkg.wiki_tools import wiki_get_tool, wiki_save_tool, wiki_search_tool
 from oxenclaw.wiki.models import WikiPage, WikiPageKind
 from oxenclaw.wiki.store import WikiVaultStore
-from oxenclaw.tools_pkg.wiki_tools import wiki_get_tool, wiki_save_tool, wiki_search_tool
 
 
 def _vault(tmp_path: Path) -> WikiVaultStore:
@@ -111,7 +109,9 @@ async def test_save_tool_updates_existing_page(tmp_path: Path) -> None:
     vault = _vault(tmp_path)
     vault.create(_page(name="Existing", slug="existing", body="old"))
     tool = wiki_save_tool(vault)
-    result = await tool.execute({"slug": "existing", "kind": "concept", "title": "Existing", "body": "new body"})
+    result = await tool.execute(
+        {"slug": "existing", "kind": "concept", "title": "Existing", "body": "new body"}
+    )
     assert "updated" in result
     page = vault.get("existing")
     assert page is not None
@@ -121,7 +121,9 @@ async def test_save_tool_updates_existing_page(tmp_path: Path) -> None:
 async def test_save_tool_appends_claims(tmp_path: Path) -> None:
     vault = _vault(tmp_path)
     tool = wiki_save_tool(vault)
-    await tool.execute({"kind": "entity", "title": "Bob", "body": "researcher", "claims": ["Bob likes Python."]})
+    await tool.execute(
+        {"kind": "entity", "title": "Bob", "body": "researcher", "claims": ["Bob likes Python."]}
+    )
     page = vault.get("bob")
     assert page is not None
     assert any("Python" in c.text for c in page.claims)

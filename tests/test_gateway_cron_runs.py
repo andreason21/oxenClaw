@@ -8,7 +8,6 @@ from unittest.mock import AsyncMock
 from oxenclaw.agents.dispatch import Dispatcher
 from oxenclaw.agents.echo import EchoAgent
 from oxenclaw.agents.registry import AgentRegistry
-from oxenclaw.cron.models import NewCronJob
 from oxenclaw.cron.run_log import CronRunEntry, CronRunStore
 from oxenclaw.cron.scheduler import CronScheduler
 from oxenclaw.cron.store import CronJobStore
@@ -21,10 +20,10 @@ from oxenclaw.plugin_sdk.config_schema import (
     RootConfig,
 )
 
-
 # ──────────────────────────────────────────────────────────
 # Helpers
 # ──────────────────────────────────────────────────────────
+
 
 def _dispatcher() -> Dispatcher:
     agents = AgentRegistry()
@@ -78,8 +77,9 @@ def _seed_runs(run_store: CronRunStore, job_id: str, count: int = 3) -> list[Cro
 # 1. cron.runs returns paged list
 # ──────────────────────────────────────────────────────────
 
+
 async def test_cron_runs_paged_list(tmp_path) -> None:
-    router, scheduler, run_store = _setup(tmp_path)
+    router, _scheduler, run_store = _setup(tmp_path)
     create_resp = await router.dispatch(
         {"jsonrpc": "2.0", "id": 1, "method": "cron.create", "params": _create_params()}
     )
@@ -87,7 +87,12 @@ async def test_cron_runs_paged_list(tmp_path) -> None:
     _seed_runs(run_store, job_id, count=5)
 
     resp = await router.dispatch(
-        {"jsonrpc": "2.0", "id": 2, "method": "cron.runs", "params": {"job_id": job_id, "limit": 3, "offset": 0}}
+        {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "cron.runs",
+            "params": {"job_id": job_id, "limit": 3, "offset": 0},
+        }
     )
     assert resp.error is None
     body = resp.result
@@ -100,8 +105,9 @@ async def test_cron_runs_paged_list(tmp_path) -> None:
 # 2. cron.runs status filter
 # ──────────────────────────────────────────────────────────
 
+
 async def test_cron_runs_status_filter(tmp_path) -> None:
-    router, scheduler, run_store = _setup(tmp_path)
+    router, _scheduler, run_store = _setup(tmp_path)
     run_store.append(CronRunEntry(job_id="j1", started_at=1.0, status="ok"))
     run_store.append(CronRunEntry(job_id="j1", started_at=2.0, status="error"))
     run_store.append(CronRunEntry(job_id="j1", started_at=3.0, status="ok"))
@@ -118,8 +124,9 @@ async def test_cron_runs_status_filter(tmp_path) -> None:
 # 3. cron.runs query substring filter
 # ──────────────────────────────────────────────────────────
 
+
 async def test_cron_runs_query_filter(tmp_path) -> None:
-    router, scheduler, run_store = _setup(tmp_path)
+    router, _scheduler, run_store = _setup(tmp_path)
     run_store.append(CronRunEntry(job_id="j1", started_at=1.0, summary="morning digest done"))
     run_store.append(CronRunEntry(job_id="j1", started_at=2.0, summary="afternoon update"))
 
@@ -135,11 +142,17 @@ async def test_cron_runs_query_filter(tmp_path) -> None:
 # 4. cron.run_status of unknown id returns None
 # ──────────────────────────────────────────────────────────
 
+
 async def test_cron_run_status_unknown(tmp_path) -> None:
-    router, scheduler, run_store = _setup(tmp_path)
+    router, _scheduler, _run_store = _setup(tmp_path)
 
     resp = await router.dispatch(
-        {"jsonrpc": "2.0", "id": 1, "method": "cron.run_status", "params": {"run_id": "ghost-run-id"}}
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "cron.run_status",
+            "params": {"run_id": "ghost-run-id"},
+        }
     )
     assert resp.error is None
     assert resp.result is None
@@ -149,8 +162,9 @@ async def test_cron_run_status_unknown(tmp_path) -> None:
 # 5. cron.run_status returns existing entry
 # ──────────────────────────────────────────────────────────
 
+
 async def test_cron_run_status_existing(tmp_path) -> None:
-    router, scheduler, run_store = _setup(tmp_path)
+    router, _scheduler, run_store = _setup(tmp_path)
     entry = CronRunEntry(job_id="j1", started_at=time.time(), status="ok", summary="done")
     run_store.append(entry)
 
@@ -167,10 +181,16 @@ async def test_cron_run_status_existing(tmp_path) -> None:
 # 6. cron.update changes a field and persists
 # ──────────────────────────────────────────────────────────
 
+
 async def test_cron_update_prompt(tmp_path) -> None:
-    router, scheduler, run_store = _setup(tmp_path)
+    router, scheduler, _run_store = _setup(tmp_path)
     create_resp = await router.dispatch(
-        {"jsonrpc": "2.0", "id": 1, "method": "cron.create", "params": _create_params(prompt="old prompt")}
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "cron.create",
+            "params": _create_params(prompt="old prompt"),
+        }
     )
     job_id = create_resp.result["id"]
 
@@ -196,8 +216,9 @@ async def test_cron_update_prompt(tmp_path) -> None:
 # 7. cron.update with no fields returns error
 # ──────────────────────────────────────────────────────────
 
+
 async def test_cron_update_no_fields(tmp_path) -> None:
-    router, scheduler, run_store = _setup(tmp_path)
+    router, _scheduler, _run_store = _setup(tmp_path)
     create_resp = await router.dispatch(
         {"jsonrpc": "2.0", "id": 1, "method": "cron.create", "params": _create_params()}
     )
@@ -215,8 +236,9 @@ async def test_cron_update_no_fields(tmp_path) -> None:
 # 8. cron.update with invalid schedule returns error
 # ──────────────────────────────────────────────────────────
 
+
 async def test_cron_update_invalid_schedule(tmp_path) -> None:
-    router, scheduler, run_store = _setup(tmp_path)
+    router, _scheduler, _run_store = _setup(tmp_path)
     create_resp = await router.dispatch(
         {"jsonrpc": "2.0", "id": 1, "method": "cron.create", "params": _create_params()}
     )
@@ -239,8 +261,9 @@ async def test_cron_update_invalid_schedule(tmp_path) -> None:
 # 9. cron.update valid schedule persists
 # ──────────────────────────────────────────────────────────
 
+
 async def test_cron_update_valid_schedule(tmp_path) -> None:
-    router, scheduler, run_store = _setup(tmp_path)
+    router, scheduler, _run_store = _setup(tmp_path)
     create_resp = await router.dispatch(
         {"jsonrpc": "2.0", "id": 1, "method": "cron.create", "params": _create_params()}
     )
@@ -263,14 +286,13 @@ async def test_cron_update_valid_schedule(tmp_path) -> None:
 # 10. cron.runs without run_store returns empty
 # ──────────────────────────────────────────────────────────
 
+
 async def test_cron_runs_no_run_store(tmp_path) -> None:
     job_store = CronJobStore(path=tmp_path / "cron.json")
     scheduler = CronScheduler(store=job_store, dispatcher=_dispatcher())
     router = Router()
     register_cron_methods(router, scheduler, run_store=None)
 
-    resp = await router.dispatch(
-        {"jsonrpc": "2.0", "id": 1, "method": "cron.runs", "params": {}}
-    )
+    resp = await router.dispatch({"jsonrpc": "2.0", "id": 1, "method": "cron.runs", "params": {}})
     assert resp.error is None
     assert resp.result == {"runs": [], "total": 0, "has_more": False}

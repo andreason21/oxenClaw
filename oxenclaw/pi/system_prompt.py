@@ -280,10 +280,7 @@ def load_project_context_files(
 
     if not sections:
         return ""
-    header = (
-        "# Project Context\n"
-        "The following project files have been loaded from the workspace."
-    )
+    header = "# Project Context\nThe following project files have been loaded from the workspace."
     return header + "\n\n" + "\n\n".join(sections)
 
 

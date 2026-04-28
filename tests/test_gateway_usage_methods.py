@@ -87,11 +87,8 @@ async def test_usage_totals_aggregates_across_sessions_and_agents(router) -> Non
     r, paths = router
     _write_usage(paths, "assistant", "k1", turns=2, input=100, output=50, cost_usd=0.01)
     _write_usage(paths, "assistant", "k2", turns=1, input=50, output=20, cost_usd=0.005)
-    _write_usage(paths, "coder", "k3", turns=4, input=200, output=80, cost_usd=0.02,
-                 cache_read=60)
-    resp = await r.dispatch(
-        {"jsonrpc": "2.0", "id": 1, "method": "usage.totals", "params": {}}
-    )
+    _write_usage(paths, "coder", "k3", turns=4, input=200, output=80, cost_usd=0.02, cache_read=60)
+    resp = await r.dispatch({"jsonrpc": "2.0", "id": 1, "method": "usage.totals", "params": {}})
     assert resp.error is None
     total = resp.result["total"]
     assert total["turns"] == 7
@@ -113,7 +110,9 @@ async def test_usage_totals_filters_by_agent_id(router) -> None:  # type: ignore
     _write_usage(paths, "coder", "k2", turns=4, input=200)
     resp = await r.dispatch(
         {
-            "jsonrpc": "2.0", "id": 1, "method": "usage.totals",
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "usage.totals",
             "params": {"agent_id": "coder"},
         }
     )

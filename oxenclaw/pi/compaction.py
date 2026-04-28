@@ -179,7 +179,7 @@ def decide_compaction(
     keep_tail_turns: int = 6,
     reason: CompactReason = "auto",
     force: bool = False,
-    guard: "CompactionGuard | None" = None,
+    guard: CompactionGuard | None = None,
     guard_threshold_pct: float = 10.0,
 ) -> CompactionPlan:
     """Decide whether to compact and where to split.
@@ -579,8 +579,7 @@ def _sanitize_tool_pairs(messages: list[AgentMessage]) -> int:
             msg = messages[i]
             if isinstance(msg, AssistantMessage):
                 pending = [
-                    b for b in msg.content
-                    if isinstance(b, ToolUseBlock) and b.id in missing_ids
+                    b for b in msg.content if isinstance(b, ToolUseBlock) and b.id in missing_ids
                 ]
                 if pending:
                     stub_blocks = [
@@ -617,17 +616,13 @@ def _align_boundary_backward(messages: list[AgentMessage], cut_idx: int) -> int:
     while check >= 0 and isinstance(messages[check], ToolResultMessage):
         check -= 1
     if check >= 0 and isinstance(messages[check], AssistantMessage):
-        has_tool_use = any(
-            isinstance(b, ToolUseBlock) for b in messages[check].content
-        )
+        has_tool_use = any(isinstance(b, ToolUseBlock) for b in messages[check].content)
         if has_tool_use:
             return check
     return cut_idx
 
 
-def _ensure_last_user_message_in_tail(
-    messages: list[AgentMessage], cut_idx: int
-) -> int:
+def _ensure_last_user_message_in_tail(messages: list[AgentMessage], cut_idx: int) -> int:
     """Guarantee the most recent user message is at or after `cut_idx`.
 
     Mirrors hermes `_ensure_last_user_message_in_tail`. The last user
@@ -752,7 +747,9 @@ def _serialize_messages_for_summary(messages: list[AgentMessage]) -> str:
             if len(text) > content_max:
                 text = text[:head] + "\n...[truncated]...\n" + text[-tail:]
             if tool_lines:
-                text = (text + "\n" if text else "") + "[Tool calls:\n" + "\n".join(tool_lines) + "\n]"
+                text = (
+                    (text + "\n" if text else "") + "[Tool calls:\n" + "\n".join(tool_lines) + "\n]"
+                )
             parts.append(f"[ASSISTANT]: {text}")
             continue
         if isinstance(m, ToolResultMessage):
@@ -896,16 +893,12 @@ async def structured_summarizer_pipeline(
                 if isinstance(b, ToolUseBlock):
                     args_json = json.dumps(b.input or {}, ensure_ascii=False)
                     if len(args_json) > 4000:
-                        truncated = _truncate_tool_call_args_json(
-                            args_json, max_chars=4000
-                        )
+                        truncated = _truncate_tool_call_args_json(args_json, max_chars=4000)
                         try:
                             new_args = json.loads(truncated)
                         except (ValueError, TypeError):
                             new_args = {"_truncated": True}
-                        new_content.append(
-                            ToolUseBlock(id=b.id, name=b.name, input=new_args)
-                        )
+                        new_content.append(ToolUseBlock(id=b.id, name=b.name, input=new_args))
                         modified = True
                         continue
                 new_content.append(b)
@@ -935,9 +928,7 @@ async def structured_summarizer_pipeline(
 
     repaired = _sanitize_tool_pairs(new_messages)
     if repaired:
-        logger.info(
-            "structured pipeline: repaired %d orphan tool pair(s)", repaired
-        )
+        logger.info("structured pipeline: repaired %d orphan tool pair(s)", repaired)
 
     tokens_after = estimate_tokens(new_messages)
     if guard is not None:
@@ -953,10 +944,10 @@ async def structured_summarizer_pipeline(
 
 
 __all__ = [
+    "SUMMARY_PREFIX",
     "CompactReason",
     "CompactionGuard",
     "CompactionPlan",
-    "SUMMARY_PREFIX",
     "SummarizerFn",
     "apply_compaction",
     "decide_compaction",

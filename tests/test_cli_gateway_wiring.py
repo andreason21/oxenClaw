@@ -5,8 +5,6 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
-
 from oxenclaw.agents import AgentRegistry, Dispatcher, EchoAgent
 from oxenclaw.approvals import ApprovalManager
 from oxenclaw.channels import ChannelRouter
@@ -161,9 +159,7 @@ async def test_outbound_only_channel_skips_monitor_supervisor(tmp_path) -> None:
         assert runners == [], f"expected no runners for outbound-only slack, got {runners!r}"
 
 
-async def test_chat_send_passes_media_into_inbound_envelope(
-    tmp_path, monkeypatch
-) -> None:  # type: ignore[no-untyped-def]
+async def test_chat_send_passes_media_into_inbound_envelope(tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
     """Dashboard image-upload path: `chat.send` accepts a `media` array
     and the items reach the dispatcher's InboundEnvelope unchanged."""
     router, *_ = _setup_gateway(tmp_path)
@@ -261,9 +257,7 @@ async def test_chat_send_unrouted_returns_local_ok_with_warning(tmp_path) -> Non
     assert "dashboard" in resp.result["reason"]
 
 
-async def test_supervise_monitors_spawns_and_cancels_tasks(
-    tmp_path, monkeypatch
-) -> None:  # type: ignore[no-untyped-def]
+async def test_supervise_monitors_spawns_and_cancels_tasks(tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
     class _FakeRunner:
         def __init__(self, channel, opts, **kwargs):  # type: ignore[no-untyped-def]
             self.channel = channel

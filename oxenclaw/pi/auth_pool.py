@@ -81,9 +81,7 @@ class AuthKeyPool:
     locked_key_id: dict[str, str] = field(default_factory=dict)
 
     def add(self, provider: str, key_id: str, api_key: str) -> None:
-        self.by_provider.setdefault(provider, []).append(
-            _PoolEntry(key_id=key_id, api_key=api_key)
-        )
+        self.by_provider.setdefault(provider, []).append(_PoolEntry(key_id=key_id, api_key=api_key))
 
     def lock(self, provider: str, key_id: str) -> None:
         """Pin the active key — useful for cache-prefix-sensitive runs."""
@@ -115,11 +113,11 @@ class AuthKeyPool:
             # Anthropic-friendly: keep hitting the same warm key so the
             # provider's prompt cache prefix stays valid. Only advance
             # when the head goes into cooldown.
-            idx, entry = alive[0]
+            _idx, entry = alive[0]
         elif self.strategy == "least_used":
-            idx, entry = min(alive, key=lambda x: x[1].use_count)
+            _idx, entry = min(alive, key=lambda x: x[1].use_count)
         elif self.strategy == "random":
-            idx, entry = random.choice(alive)
+            _idx, entry = random.choice(alive)
         else:  # round_robin
             n = len(entries)
             start = self.cursor.get(provider, 0) % n
@@ -133,7 +131,7 @@ class AuthKeyPool:
                     break
             if picked is None:
                 return None
-            idx, entry = picked
+            _idx, entry = picked
         entry.use_count += 1
         return (entry.key_id, entry.api_key)
 
@@ -170,7 +168,8 @@ class AuthKeyPool:
             if e.last_failure_ts is not None and now - e.last_failure_ts < 5.0:
                 logger.info(
                     "auth_pool: ignoring duplicate failure for %s/%s",
-                    provider, key_id,
+                    provider,
+                    key_id,
                 )
                 return
             e.failure_count += 1
@@ -182,7 +181,13 @@ class AuthKeyPool:
             e.cooldown_until = now + cd
             logger.warning(
                 "auth_pool: %s/%s failed (status=%s, msg=%s) — cooldown=%.0fs streak=%d retry_after=%s",
-                provider, key_id, status, message, cd, e.failure_count, retry_after_seconds,
+                provider,
+                key_id,
+                status,
+                message,
+                cd,
+                e.failure_count,
+                retry_after_seconds,
             )
             return
 
@@ -197,14 +202,16 @@ class AuthKeyPool:
         """Inspector view for `agents.auth_status` RPC."""
         out = []
         for e in self.by_provider.get(provider, []):
-            out.append({
-                "key_id": e.key_id,
-                "alive": e.is_alive,
-                "failure_count": e.failure_count,
-                "cooldown_until": e.cooldown_until,
-                "last_failure_ts": e.last_failure_ts,
-                "use_count": e.use_count,
-            })
+            out.append(
+                {
+                    "key_id": e.key_id,
+                    "alive": e.is_alive,
+                    "failure_count": e.failure_count,
+                    "cooldown_until": e.cooldown_until,
+                    "last_failure_ts": e.last_failure_ts,
+                    "use_count": e.use_count,
+                }
+            )
         return out
 
 

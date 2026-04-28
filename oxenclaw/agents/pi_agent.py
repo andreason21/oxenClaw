@@ -97,26 +97,26 @@ DEFAULT_SYSTEM_PROMPT = (
     "Be concise. Use tools when helpful.\n"
     "\n"
     "Time + freshness. You do NOT know the current date or time without\n"
-    "calling a tool. If the user asks about \"now\", \"today\", \"이번 주\",\n"
-    "\"지금\", or any question whose answer depends on the current\n"
+    'calling a tool. If the user asks about "now", "today", "이번 주",\n'
+    '"지금", or any question whose answer depends on the current\n'
     "date/time, call `get_time` first. Never guess the date.\n"
     "\n"
     "Memory playbook. Long-term facts about the user / project / past\n"
     "decisions live in a vector-indexed memory store with two tiers:\n"
     "the raw `inbox` (everything you save) and the curated `short_term`\n"
     "tier (durable facts you've explicitly promoted).\n"
-    "  - `memory_save(text=\"...\", tags=[\"...\"])` — append a stable fact\n"
+    '  - `memory_save(text="...", tags=["..."])` — append a stable fact\n'
     "    to the inbox whenever the user asks you to remember something\n"
     "    OR you learn a durable preference (their name, role, deadline,\n"
     "    tooling preference). Rules of thumb for `text`:\n"
     "      * Write a COMPLETE natural-language sentence, not a\n"
-    "        `key:value` line. \"사용자는 수원에 거주한다. The user lives\n"
-    "        in Suwon, South Korea.\" beats `user_location:Suwon`.\n"
+    '        `key:value` line. "사용자는 수원에 거주한다. The user lives\n'
+    '        in Suwon, South Korea." beats `user_location:Suwon`.\n'
     "      * Include BOTH the user's language and English when the\n"
     "        user wrote in a non-English language — same fact, two\n"
     "        phrasings. The embedding store hits cross-language\n"
-    "        queries that way (\"내가 사는 곳 날씨\" / \"weather where I\n"
-    "        live\" both surface the chunk).\n"
+    '        queries that way ("내가 사는 곳 날씨" / "weather where I\n'
+    '        live" both surface the chunk).\n'
     "    Arg names are exactly `text` (string) and `tags` (list of\n"
     "    strings). Common-alias forms (`content`, `body`, `note`,\n"
     "    `key`, `category`, `tag`) are also accepted but `text`+`tags`\n"
@@ -124,8 +124,8 @@ DEFAULT_SYSTEM_PROMPT = (
     "    transcript details.\n"
     "  - `memory_search(query, k?)` — explicit recall when the auto-\n"
     "    injected memory block at prompt-time didn't surface what you\n"
-    "    need (e.g. \"what did I tell you about X last week?\",\n"
-    "    \"remember my deadline?\").\n"
+    '    need (e.g. "what did I tell you about X last week?",\n'
+    '    "remember my deadline?").\n'
     "  - When the user explicitly says \"this is important, don't\n"
     "    forget\" or you've verified a fact across multiple turns, use\n"
     "    `memory.promote` (RPC) to lift the inbox chunk into\n"
@@ -136,19 +136,19 @@ DEFAULT_SYSTEM_PROMPT = (
     "lists installed skills as documentation, not callable tools. If\n"
     "the user's request implies a domain you have no listed skill for\n"
     "(weather / stock prices / calendar / etc.), call\n"
-    "`skill_resolver(query=\"...\")` — it searches ClawHub, installs the\n"
+    '`skill_resolver(query="...")` — it searches ClawHub, installs the\n'
     "best match, and returns the SKILL.md path + how to invoke it via\n"
     "the shell tool. Don't refuse before trying skill_resolver.\n"
     "\n"
     "Weather playbook. For weather / temperature / forecast questions\n"
-    "(\"날씨\", \"weather\", \"temperature\", \"forecast\", \"비 와?\")\n"
+    '("날씨", "weather", "temperature", "forecast", "비 와?")\n'
     "ALWAYS prefer the dedicated `weather` tool — do NOT use web_search\n"
     "for weather. Required arg: `city` (string) OR `lat`+`lon` (numbers).\n"
-    "  - If the user named a city: `weather(city=\"<city>\")`.\n"
+    '  - If the user named a city: `weather(city="<city>")`.\n'
     "  - If they didn't: check the recalled-memories block first for a\n"
-    "    location fact (e.g. \"User lives in Suwon\") and use that. Only\n"
+    '    location fact (e.g. "User lives in Suwon") and use that. Only\n'
     "    if neither the question nor recall reveals a location, ask the\n"
-    "    user once: \"어느 도시 날씨를 알려드릴까요?\".\n"
+    '    user once: "어느 도시 날씨를 알려드릴까요?".\n'
     "  - The tool returns one short line (e.g. `Suwon: 🌦 +18°C`); read\n"
     "    it back to the user. wttr.in is the upstream provider — it\n"
     "    rarely returns errors so don't fall back to web_search after\n"
@@ -272,10 +272,7 @@ class PiAgent:
     ) -> str:
         """Run the active-memory sub-agent if enabled and return the
         rendered prelude (or "")."""
-        if (
-            self._memory is None
-            or not self._active_memory_config.enabled
-        ):
+        if self._memory is None or not self._active_memory_config.enabled:
             return ""
         if self._active_runner is None:
             self._active_runner = ActiveMemoryRunner(
@@ -361,9 +358,7 @@ class PiAgent:
             return truncating_summarizer
 
         async def _summarize(messages):
-            prior, guard = self._compaction_state.get(
-                session_key, (None, CompactionGuard())
-            )
+            prior, guard = self._compaction_state.get(session_key, (None, CompactionGuard()))
             try:
                 summary = await llm_structured_summarizer(
                     messages,
@@ -403,18 +398,18 @@ class PiAgent:
 
     async def _system_for(self, query: str, *, session_key: str | None = None) -> str:
         prompt, _hits, _mblock, _skills_block = await self._assemble_system(
-            query, session_key=session_key,
+            query,
+            session_key=session_key,
         )
         return prompt
 
-    async def debug_assemble(
-        self, query: str, *, session_key: str | None = None
-    ) -> dict[str, Any]:
+    async def debug_assemble(self, query: str, *, session_key: str | None = None) -> dict[str, Any]:
         """Return the same artefacts a real turn would build, for the
         `chat.debug_prompt` RPC. We never want a debug-RPC failure to
         break the gateway, so each step is isolated."""
         prompt, hits, mblock, skills_block = await self._assemble_system(
-            query, session_key=session_key,
+            query,
+            session_key=session_key,
         )
         prelude = format_memories_as_prelude(hits)
         hit_payload = [
@@ -467,6 +462,7 @@ class PiAgent:
         try:
             from oxenclaw.memory.hybrid import HybridConfig
             from oxenclaw.memory.temporal_decay import TemporalDecayConfig
+
             # Generic "user / preferences / identity" probe — pulls the
             # most recall-worthy long-lived facts. Empty / weak result
             # is OK; we still want to freeze "" for the session so a
@@ -485,7 +481,8 @@ class PiAgent:
         if block:
             logger.info(
                 "recall snapshot frozen for session=%s hits=%d",
-                session_key, len(hits),
+                session_key,
+                len(hits),
             )
         return block
 
@@ -517,9 +514,7 @@ class PiAgent:
         if self._project_context_dir is not None:
             files_block = load_project_context_files(self._project_context_dir)
             if files_block:
-                contributions.append(
-                    embedded_context_contribution(files_block=files_block)
-                )
+                contributions.append(embedded_context_contribution(files_block=files_block))
         skills_block = ""
         if self._include_skills:
             skills_block = format_skills_for_prompt(load_installed_skills(self._paths))
@@ -537,6 +532,7 @@ class PiAgent:
             snapshot = await self._ensure_recall_snapshot(session_key)
             if snapshot:
                 from oxenclaw.pi.system_prompt import SystemPromptContribution
+
                 contributions.append(
                     SystemPromptContribution(
                         name="recall_snapshot",
@@ -562,6 +558,7 @@ class PiAgent:
                 # arm. Same defaults openclaw ships.
                 from oxenclaw.memory.hybrid import HybridConfig
                 from oxenclaw.memory.temporal_decay import TemporalDecayConfig
+
                 hits = await self._memory.search(
                     query=query,
                     k=self._memory_top_k,
@@ -672,9 +669,10 @@ class PiAgent:
                         seeded += 1
                 if seeded:
                     logger.info(
-                        "pi session rehydrated from disk: agent=%s "
-                        "session=%s seeded=%d",
-                        self.id, key, seeded,
+                        "pi session rehydrated from disk: agent=%s session=%s seeded=%d",
+                        self.id,
+                        key,
+                        seeded,
                     )
         except Exception:
             logger.exception("pi session rehydrate failed for %s/%s", self.id, key)
@@ -767,6 +765,7 @@ class PiAgent:
         # ingest it as ground truth. Tag bodies stay; only the open/close
         # tags are removed so the user's own words aren't lost.
         from oxenclaw.memory.privacy import sanitize_recall_fence
+
         sanitized_text = sanitize_recall_fence(text)
         user_text_raw = "\n".join(t for t in (sanitized_text, *dropped_notes) if t)
         user_text_for_model = user_text_raw
@@ -822,9 +821,7 @@ class PiAgent:
         # dashboard wants a flat role/content list. The dashboard sees the
         # ORIGINAL user text (what they typed), not the recall-augmented
         # version — operator UX shouldn't leak the synthetic prelude.
-        dashboard_history = ConversationHistory(
-            self._paths.session_file(self.id, ctx.session_key)
-        )
+        dashboard_history = ConversationHistory(self._paths.session_file(self.id, ctx.session_key))
         dashboard_history.append({"role": "user", "content": user_text_raw or "(image)"})
         dashboard_history.save()
 
@@ -958,9 +955,7 @@ class PiAgent:
         # timing data. `result.tool_executions` is populated by the run loop;
         # use getattr() because some test mocks return a SimpleNamespace
         # that omits the field.
-        exec_by_id = {
-            e.id: e for e in (getattr(result, "tool_executions", None) or [])
-        }
+        exec_by_id = {e.id: e for e in (getattr(result, "tool_executions", None) or [])}
 
         # Walk appended messages to persist tool-call timing into the dashboard
         # history. We use `ts_turn_start` (wall clock captured before the run)
@@ -1047,10 +1042,12 @@ class PiAgent:
                         "Check gateway.log; if persistent, try "
                         "`agents.set_model` to swap to a stronger model.)"
                     )
-                    dashboard_history.append({
-                        "role": "assistant",
-                        "content": placeholder,
-                    })
+                    dashboard_history.append(
+                        {
+                            "role": "assistant",
+                            "content": placeholder,
+                        }
+                    )
                     dashboard_history.save()
                     yield SendParams(target=inbound.target, text=placeholder)
                     await self._hooks.run_on_turn_end(placeholder, hook_ctx)
@@ -1102,6 +1099,7 @@ class PiAgent:
         tmp = path.with_suffix(path.suffix + ".tmp")
         tmp.write_text(_json.dumps(payload), encoding="utf-8")
         import os as _os
+
         _os.replace(tmp, path)
 
 

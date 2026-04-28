@@ -222,9 +222,9 @@ def format_memories_for_prompt(results: list[MemorySearchResult]) -> str:
         "and retrieved just now because they're relevant to the current "
         "question. Treat them as authoritative ground truth about the "
         "user / project / past decisions. If the user asks something "
-        "these chunks answer (e.g. \"내가 어디 살지?\" + a memory saying "
-        "\"User lives in Suwon\"), USE the memory — do NOT respond with "
-        "\"I don't know\" or \"I have no record of that.\" When you answer "
+        'these chunks answer (e.g. "내가 어디 살지?" + a memory saying '
+        '"User lives in Suwon"), USE the memory — do NOT respond with '
+        '"I don\'t know" or "I have no record of that." When you answer '
         "from a specific memory, cite it inline with `[mem:&lt;id&gt;]` "
         "(e.g. `[mem:abc123]`); skip the citation only when you're "
         "answering from general knowledge that doesn't trace to one of "

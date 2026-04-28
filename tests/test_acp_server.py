@@ -19,8 +19,6 @@ import sys
 from collections.abc import AsyncIterator
 from typing import Any
 
-import pytest
-
 from oxenclaw.acp.fake_runtime import InMemoryFakeRuntime
 from oxenclaw.acp.framing import BytesIOReader, BytesIOWriter, encode_message
 from oxenclaw.acp.protocol import PROTOCOL_VERSION
@@ -28,9 +26,7 @@ from oxenclaw.acp.server import AcpServer
 from oxenclaw.acp.subprocess_runtime import SubprocessAcpRuntime
 from oxenclaw.agents.acp_runtime import (
     AcpEventDone,
-    AcpEventStatus,
     AcpEventTextDelta,
-    AcpEventToolCall,
     AcpRuntimeEvent,
 )
 
@@ -148,9 +144,7 @@ async def test_session_new_then_prompt_unit() -> None:
     assert by_id[3]["result"]["stopReason"] == "stop"
 
     # Fake echoes the prompt as one text-delta notification.
-    upds = [
-        n for n in notifications if n["method"] == "session/update"
-    ]
+    upds = [n for n in notifications if n["method"] == "session/update"]
     assert len(upds) >= 1
     body = upds[0]["params"]["update"]
     assert body["sessionUpdate"] == "agent_message_chunk"
@@ -161,11 +155,7 @@ async def test_unknown_method_returns_method_not_found_unit() -> None:
     runtime = InMemoryFakeRuntime()
     server = AcpServer(runtime=runtime)
     inbound = io.BytesIO()
-    inbound.write(
-        encode_message(
-            {"jsonrpc": "2.0", "id": 7, "method": "does/not/exist"}
-        )
-    )
+    inbound.write(encode_message({"jsonrpc": "2.0", "id": 7, "method": "does/not/exist"}))
     inbound.seek(0)
     outbound = io.BytesIO()
     await server.serve(BytesIOReader(inbound), BytesIOWriter(outbound))
@@ -184,11 +174,7 @@ async def test_invalid_initialize_params_returns_invalid_params() -> None:
     server = AcpServer(runtime=runtime)
     inbound = io.BytesIO()
     # Missing protocolVersion → InitializeParams.model_validate raises.
-    inbound.write(
-        encode_message(
-            {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}
-        )
-    )
+    inbound.write(encode_message({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}))
     inbound.seek(0)
     outbound = io.BytesIO()
     await server.serve(BytesIOReader(inbound), BytesIOWriter(outbound))
@@ -266,9 +252,7 @@ async def test_loopback_against_python_dash_m_oxenclaw_acp_server() -> None:
         from oxenclaw.acp import runtime_registry as registry_mod
 
         registry_mod.reset_for_tests()
-        registry_mod.register_acp_runtime_backend(
-            AcpRuntimeBackend(id="loopback", runtime=rt)
-        )
+        registry_mod.register_acp_runtime_backend(AcpRuntimeBackend(id="loopback", runtime=rt))
 
         handle = await mgr.initialize_session(
             AcpInitializeSessionInput(
@@ -292,18 +276,12 @@ async def test_loopback_against_python_dash_m_oxenclaw_acp_server() -> None:
         # The fake on the server emits one text_delta echoing the
         # input + done(stop). Our client wraps that as
         # AcpEventTextDelta + AcpEventDone(stop).
-        assert any(
-            isinstance(e, AcpEventTextDelta)
-            and "hello loopback" in e.text
-            for e in events
-        )
+        assert any(isinstance(e, AcpEventTextDelta) and "hello loopback" in e.text for e in events)
         done = events[-1]
         assert isinstance(done, AcpEventDone)
         assert done.stop_reason == "stop"
 
-        await mgr.close_session(
-            AcpCloseSessionInput(session_key="loopback:1")
-        )
+        await mgr.close_session(AcpCloseSessionInput(session_key="loopback:1"))
         registry_mod.reset_for_tests()
     finally:
         await rt.aclose()
@@ -322,18 +300,16 @@ async def test_loopback_two_turns_share_one_session() -> None:
         backend_id="loopback",
     )
     try:
+        from oxenclaw.acp import runtime_registry as registry_mod
         from oxenclaw.acp.manager import (
             AcpInitializeSessionInput,
             AcpRunTurnInput,
             AcpSessionManager,
         )
         from oxenclaw.acp.runtime_registry import AcpRuntimeBackend
-        from oxenclaw.acp import runtime_registry as registry_mod
 
         registry_mod.reset_for_tests()
-        registry_mod.register_acp_runtime_backend(
-            AcpRuntimeBackend(id="loopback", runtime=rt)
-        )
+        registry_mod.register_acp_runtime_backend(AcpRuntimeBackend(id="loopback", runtime=rt))
         mgr = AcpSessionManager()
 
         await mgr.initialize_session(
@@ -355,10 +331,7 @@ async def test_loopback_two_turns_share_one_session() -> None:
                     )
                 )
             )
-            assert any(
-                isinstance(e, AcpEventTextDelta) and prompt in e.text
-                for e in events
-            )
+            assert any(isinstance(e, AcpEventTextDelta) and prompt in e.text for e in events)
             assert isinstance(events[-1], AcpEventDone)
             assert events[-1].stop_reason == "stop"
         registry_mod.reset_for_tests()

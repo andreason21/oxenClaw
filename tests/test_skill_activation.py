@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from oxenclaw.clawhub.activation import (
     build_skill_invocation_message,
     detect_skill_slash_command,

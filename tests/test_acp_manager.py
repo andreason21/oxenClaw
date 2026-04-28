@@ -58,9 +58,7 @@ def test_register_and_resolve_by_id() -> None:
 
 
 def test_register_normalises_id_to_lowercase() -> None:
-    register_acp_runtime_backend(
-        AcpRuntimeBackend(id="MIXED", runtime=InMemoryFakeRuntime())
-    )
+    register_acp_runtime_backend(AcpRuntimeBackend(id="MIXED", runtime=InMemoryFakeRuntime()))
     assert get_acp_runtime_backend("mixed") is not None
     assert get_acp_runtime_backend("MIXED") is not None
     assert "mixed" in list_acp_runtime_backends()
@@ -68,17 +66,13 @@ def test_register_normalises_id_to_lowercase() -> None:
 
 def test_register_rejects_empty_id() -> None:
     with pytest.raises(AcpRegistryError, match="id is required"):
-        register_acp_runtime_backend(
-            AcpRuntimeBackend(id="", runtime=InMemoryFakeRuntime())
-        )
+        register_acp_runtime_backend(AcpRuntimeBackend(id="", runtime=InMemoryFakeRuntime()))
 
 
 def test_resolve_without_id_returns_first_healthy_backend() -> None:
     a = InMemoryFakeRuntime()
     b = InMemoryFakeRuntime()
-    register_acp_runtime_backend(
-        AcpRuntimeBackend(id="a", runtime=a, healthy=lambda: False)
-    )
+    register_acp_runtime_backend(AcpRuntimeBackend(id="a", runtime=a, healthy=lambda: False))
     register_acp_runtime_backend(AcpRuntimeBackend(id="b", runtime=b))
     found = get_acp_runtime_backend(None)
     assert found is not None
@@ -91,9 +85,7 @@ def test_require_raises_when_unknown_id() -> None:
 
 
 def test_unregister_removes_backend() -> None:
-    register_acp_runtime_backend(
-        AcpRuntimeBackend(id="x", runtime=InMemoryFakeRuntime())
-    )
+    register_acp_runtime_backend(AcpRuntimeBackend(id="x", runtime=InMemoryFakeRuntime()))
     unregister_acp_runtime_backend("x")
     assert get_acp_runtime_backend("x") is None
 
@@ -162,43 +154,29 @@ async def test_initialize_idempotent_returns_same_handle() -> None:
     mgr = get_acp_session_manager()
 
     h1 = await mgr.initialize_session(
-        AcpInitializeSessionInput(
-            session_key="s", agent="a", backend_id="fake"
-        )
+        AcpInitializeSessionInput(session_key="s", agent="a", backend_id="fake")
     )
     h2 = await mgr.initialize_session(
-        AcpInitializeSessionInput(
-            session_key="s", agent="a", backend_id="fake"
-        )
+        AcpInitializeSessionInput(session_key="s", agent="a", backend_id="fake")
     )
     assert h1 is h2 or h1 == h2
 
 
 async def test_initialize_rejects_backend_swap_on_existing_session() -> None:
-    register_acp_runtime_backend(
-        AcpRuntimeBackend(id="fake", runtime=InMemoryFakeRuntime())
-    )
-    register_acp_runtime_backend(
-        AcpRuntimeBackend(id="fake2", runtime=InMemoryFakeRuntime())
-    )
+    register_acp_runtime_backend(AcpRuntimeBackend(id="fake", runtime=InMemoryFakeRuntime()))
+    register_acp_runtime_backend(AcpRuntimeBackend(id="fake2", runtime=InMemoryFakeRuntime()))
     mgr = get_acp_session_manager()
     await mgr.initialize_session(
-        AcpInitializeSessionInput(
-            session_key="s", agent="a", backend_id="fake"
-        )
+        AcpInitializeSessionInput(session_key="s", agent="a", backend_id="fake")
     )
     with pytest.raises(AcpManagerError, match="refusing rebind"):
         await mgr.initialize_session(
-            AcpInitializeSessionInput(
-                session_key="s", agent="a", backend_id="fake2"
-            )
+            AcpInitializeSessionInput(session_key="s", agent="a", backend_id="fake2")
         )
 
 
 async def test_run_turn_on_unknown_session_raises() -> None:
-    register_acp_runtime_backend(
-        AcpRuntimeBackend(id="fake", runtime=InMemoryFakeRuntime())
-    )
+    register_acp_runtime_backend(AcpRuntimeBackend(id="fake", runtime=InMemoryFakeRuntime()))
     mgr = get_acp_session_manager()
     with pytest.raises(AcpManagerError, match="not initialised"):
         async for _ in mgr.run_turn(
@@ -212,16 +190,12 @@ async def test_cancel_makes_next_turn_emit_cancel_done() -> None:
     register_acp_runtime_backend(AcpRuntimeBackend(id="fake", runtime=rt))
     mgr = get_acp_session_manager()
     handle = await mgr.initialize_session(
-        AcpInitializeSessionInput(
-            session_key="s", agent="a", backend_id="fake"
-        )
+        AcpInitializeSessionInput(session_key="s", agent="a", backend_id="fake")
     )
     # Pre-cancel so the next turn observes the flag at its first yield.
     await rt.cancel(handle=handle)
     events: list[AcpRuntimeEvent] = []
-    async for ev in mgr.run_turn(
-        AcpRunTurnInput(session_key="s", text="t", request_id="r")
-    ):
+    async for ev in mgr.run_turn(AcpRunTurnInput(session_key="s", text="t", request_id="r")):
         events.append(ev)
     assert len(events) == 1
     assert isinstance(events[0], AcpEventDone)
@@ -229,14 +203,10 @@ async def test_cancel_makes_next_turn_emit_cancel_done() -> None:
 
 
 async def test_close_session_is_idempotent_after_already_closed() -> None:
-    register_acp_runtime_backend(
-        AcpRuntimeBackend(id="fake", runtime=InMemoryFakeRuntime())
-    )
+    register_acp_runtime_backend(AcpRuntimeBackend(id="fake", runtime=InMemoryFakeRuntime()))
     mgr = get_acp_session_manager()
     await mgr.initialize_session(
-        AcpInitializeSessionInput(
-            session_key="s", agent="a", backend_id="fake"
-        )
+        AcpInitializeSessionInput(session_key="s", agent="a", backend_id="fake")
     )
     await mgr.close_session(AcpCloseSessionInput(session_key="s"))
     # Second close on an unknown session is a silent no-op.
@@ -249,9 +219,7 @@ async def test_scripted_events_drive_turn_output() -> None:
     register_acp_runtime_backend(AcpRuntimeBackend(id="fake", runtime=rt))
     mgr = get_acp_session_manager()
     await mgr.initialize_session(
-        AcpInitializeSessionInput(
-            session_key="s", agent="a", backend_id="fake"
-        )
+        AcpInitializeSessionInput(session_key="s", agent="a", backend_id="fake")
     )
     rt.script_session(
         "s",
@@ -263,9 +231,7 @@ async def test_scripted_events_drive_turn_output() -> None:
         ],
     )
     events: list[AcpRuntimeEvent] = []
-    async for ev in mgr.run_turn(
-        AcpRunTurnInput(session_key="s", text="ignored", request_id="r")
-    ):
+    async for ev in mgr.run_turn(AcpRunTurnInput(session_key="s", text="ignored", request_id="r")):
         events.append(ev)
     assert len(events) == 4
     assert isinstance(events[0], AcpEventStatus)
@@ -274,9 +240,7 @@ async def test_scripted_events_drive_turn_output() -> None:
 
 
 async def test_observability_snapshot_lists_live_sessions() -> None:
-    register_acp_runtime_backend(
-        AcpRuntimeBackend(id="fake", runtime=InMemoryFakeRuntime())
-    )
+    register_acp_runtime_backend(AcpRuntimeBackend(id="fake", runtime=InMemoryFakeRuntime()))
     mgr = get_acp_session_manager()
     await mgr.initialize_session(
         AcpInitializeSessionInput(session_key="s1", agent="a", backend_id="fake")
@@ -297,13 +261,9 @@ async def test_initialize_without_backend_id_uses_first_healthy() -> None:
             healthy=lambda: False,
         )
     )
-    register_acp_runtime_backend(
-        AcpRuntimeBackend(id="healthy", runtime=InMemoryFakeRuntime())
-    )
+    register_acp_runtime_backend(AcpRuntimeBackend(id="healthy", runtime=InMemoryFakeRuntime()))
     mgr = get_acp_session_manager()
-    await mgr.initialize_session(
-        AcpInitializeSessionInput(session_key="s", agent="a")
-    )
+    await mgr.initialize_session(AcpInitializeSessionInput(session_key="s", agent="a"))
     # `handle.backend` is the runtime's self-reported id (both fakes
     # report "fake"); the registry binding is what the manager uses
     # to route, so assert on the observability snapshot instead.

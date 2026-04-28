@@ -103,6 +103,7 @@ def wiki_get_tool(vault: WikiVaultStore) -> Tool:
                 verified = ""
                 if c.last_verified_at is not None:
                     import time as _t
+
                     age = (_t.time() - c.last_verified_at) / 86400
                     verified = f" (verified {age:.0f}d ago)"
                 conf = f" [{c.confidence:.0%}]" if c.confidence is not None else ""

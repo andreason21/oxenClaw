@@ -43,8 +43,8 @@ async def test_gateway_restart_rejects_extra_params() -> None:
 
 
 def test_server_request_restart_flag() -> None:
-    from oxenclaw.gateway.server import GatewayServer
     from oxenclaw.gateway.router import Router
+    from oxenclaw.gateway.server import GatewayServer
 
     server = GatewayServer(Router())
     assert server.restart_requested is False

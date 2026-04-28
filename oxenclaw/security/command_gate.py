@@ -28,17 +28,16 @@ import re
 from dataclasses import dataclass, field
 from typing import Literal
 
-
 Verdict = Literal["hardline", "dangerous", "ok"]
 
 
 # Anchor the start of a command (start of string, after a separator,
 # possibly preceded by sudo/env/exec wrappers).
 _CMDPOS = (
-    r"(?:^|[;&|\n`]|\$\()"            # start position
-    r"\s*"                              # optional whitespace
-    r"(?:sudo\s+(?:-[^\s]+\s+)*)?"     # optional sudo with flags
-    r"(?:env\s+(?:\w+=\S*\s+)*)?"      # optional env VAR=VAL ...
+    r"(?:^|[;&|\n`]|\$\()"  # start position
+    r"\s*"  # optional whitespace
+    r"(?:sudo\s+(?:-[^\s]+\s+)*)?"  # optional sudo with flags
+    r"(?:env\s+(?:\w+=\S*\s+)*)?"  # optional env VAR=VAL ...
     r"(?:(?:exec|nohup|setsid|time)\s+)*"
     r"\s*"
 )
@@ -47,36 +46,85 @@ _CMDPOS = (
 # Compiled (regex, label) pairs.
 HARDLINE_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     # rm -rf rooted at / or sensitive prefixes
-    (re.compile(_CMDPOS + r"rm\s+(?:-[a-zA-Z]*\s+)*-?[a-zA-Z]*r[a-zA-Z]*f?[^\s]*\s+/(?:\s|$)", re.IGNORECASE), "rm -rf of root filesystem"),
-    (re.compile(_CMDPOS + r"rm\s+(?:-[a-zA-Z]*\s+)*-?[a-zA-Z]*r[a-zA-Z]*f?[^\s]*\s+/(?:etc|var|usr|bin|sbin|boot|lib|lib64|root|home)(?:/|\s|$)", re.IGNORECASE), "rm -rf of system directory"),
-    (re.compile(_CMDPOS + r"rm\s+(?:-[a-zA-Z]*\s+)*-?[a-zA-Z]*r[a-zA-Z]*f?[^\s]*\s+(?:~|\$HOME)(?:/|\s|$)", re.IGNORECASE), "rm -rf of home directory"),
+    (
+        re.compile(
+            _CMDPOS + r"rm\s+(?:-[a-zA-Z]*\s+)*-?[a-zA-Z]*r[a-zA-Z]*f?[^\s]*\s+/(?:\s|$)",
+            re.IGNORECASE,
+        ),
+        "rm -rf of root filesystem",
+    ),
+    (
+        re.compile(
+            _CMDPOS
+            + r"rm\s+(?:-[a-zA-Z]*\s+)*-?[a-zA-Z]*r[a-zA-Z]*f?[^\s]*\s+/(?:etc|var|usr|bin|sbin|boot|lib|lib64|root|home)(?:/|\s|$)",
+            re.IGNORECASE,
+        ),
+        "rm -rf of system directory",
+    ),
+    (
+        re.compile(
+            _CMDPOS
+            + r"rm\s+(?:-[a-zA-Z]*\s+)*-?[a-zA-Z]*r[a-zA-Z]*f?[^\s]*\s+(?:~|\$HOME)(?:/|\s|$)",
+            re.IGNORECASE,
+        ),
+        "rm -rf of home directory",
+    ),
     # mkfs
     (re.compile(_CMDPOS + r"mkfs(?:\.[a-z0-9]+)?\b", re.IGNORECASE), "mkfs (format filesystem)"),
     # dd to raw block device
-    (re.compile(r"\bdd\b[^\n]*\bof=/dev/(?:sd|nvme|hd|mmcblk|vd|xvd)[a-z0-9]*", re.IGNORECASE), "dd to raw block device"),
+    (
+        re.compile(r"\bdd\b[^\n]*\bof=/dev/(?:sd|nvme|hd|mmcblk|vd|xvd)[a-z0-9]*", re.IGNORECASE),
+        "dd to raw block device",
+    ),
     # > /dev/sd…
-    (re.compile(r">\s*/dev/(?:sd|nvme|hd|mmcblk|vd|xvd)[a-z0-9]*\b", re.IGNORECASE), "redirect to raw block device"),
+    (
+        re.compile(r">\s*/dev/(?:sd|nvme|hd|mmcblk|vd|xvd)[a-z0-9]*\b", re.IGNORECASE),
+        "redirect to raw block device",
+    ),
     # Fork bomb
     (re.compile(r":\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:"), "fork bomb"),
     # kill -1 / kill -9 -1
     (re.compile(_CMDPOS + r"kill\s+(?:-[^\s]+\s+)*-1\b", re.IGNORECASE), "kill all processes"),
     # shutdown / reboot / halt / poweroff at command position
-    (re.compile(_CMDPOS + r"(?:shutdown|reboot|halt|poweroff)\b", re.IGNORECASE), "system shutdown/reboot"),
+    (
+        re.compile(_CMDPOS + r"(?:shutdown|reboot|halt|poweroff)\b", re.IGNORECASE),
+        "system shutdown/reboot",
+    ),
     (re.compile(_CMDPOS + r"init\s+[06]\b", re.IGNORECASE), "init 0/6"),
-    (re.compile(_CMDPOS + r"systemctl\s+(?:poweroff|reboot|halt|kexec)\b", re.IGNORECASE), "systemctl poweroff/reboot"),
+    (
+        re.compile(_CMDPOS + r"systemctl\s+(?:poweroff|reboot|halt|kexec)\b", re.IGNORECASE),
+        "systemctl poweroff/reboot",
+    ),
     # chmod -R 777 /
-    (re.compile(_CMDPOS + r"chmod\s+(?:-[^\s]*\s+)*-?[^\s]*R[^\s]*\s+777\s+/(?:\s|$)", re.IGNORECASE), "chmod -R 777 of root"),
+    (
+        re.compile(
+            _CMDPOS + r"chmod\s+(?:-[^\s]*\s+)*-?[^\s]*R[^\s]*\s+777\s+/(?:\s|$)", re.IGNORECASE
+        ),
+        "chmod -R 777 of root",
+    ),
     # curl|sh / wget|bash
-    (re.compile(r"\b(?:curl|wget)\b[^\n|]*\|\s*(?:ba)?sh\b", re.IGNORECASE), "curl|sh remote execution"),
+    (
+        re.compile(r"\b(?:curl|wget)\b[^\n|]*\|\s*(?:ba)?sh\b", re.IGNORECASE),
+        "curl|sh remote execution",
+    ),
     # eval "$(curl …)"
-    (re.compile(r"\beval\s+[\"']?\$\(\s*(?:curl|wget)\b", re.IGNORECASE), "eval $(curl ...) remote execution"),
+    (
+        re.compile(r"\beval\s+[\"']?\$\(\s*(?:curl|wget)\b", re.IGNORECASE),
+        "eval $(curl ...) remote execution",
+    ),
 ]
 
 
 DANGEROUS_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     # rm -rf of any path (non-root, non-system) — caught here as dangerous.
-    (re.compile(_CMDPOS + r"rm\s+(?:-[a-zA-Z]*\s+)*-?[a-zA-Z]*r[a-zA-Z]*f", re.IGNORECASE), "rm -rf of user path"),
-    (re.compile(_CMDPOS + r"rm\s+(?:-[a-zA-Z]*\s+)*--recursive\b", re.IGNORECASE), "rm --recursive"),
+    (
+        re.compile(_CMDPOS + r"rm\s+(?:-[a-zA-Z]*\s+)*-?[a-zA-Z]*r[a-zA-Z]*f", re.IGNORECASE),
+        "rm -rf of user path",
+    ),
+    (
+        re.compile(_CMDPOS + r"rm\s+(?:-[a-zA-Z]*\s+)*--recursive\b", re.IGNORECASE),
+        "rm --recursive",
+    ),
     # git destructive
     (re.compile(r"\bgit\s+push\b.*--force\b", re.IGNORECASE), "git push --force"),
     (re.compile(r"\bgit\s+push\b.*\s-f(?:\s|$)", re.IGNORECASE), "git push -f"),
@@ -86,14 +134,26 @@ DANGEROUS_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     # dd in any form
     (re.compile(_CMDPOS + r"dd\s+.*\bif=", re.IGNORECASE), "dd disk copy"),
     # broad chmod -R
-    (re.compile(_CMDPOS + r"chmod\s+(?:-[^\s]*\s+)*-?[^\s]*R", re.IGNORECASE), "chmod -R (broad recursion)"),
+    (
+        re.compile(_CMDPOS + r"chmod\s+(?:-[^\s]*\s+)*-?[^\s]*R", re.IGNORECASE),
+        "chmod -R (broad recursion)",
+    ),
     # npm publish, pip install --user
     (re.compile(_CMDPOS + r"npm\s+publish\b", re.IGNORECASE), "npm publish"),
-    (re.compile(_CMDPOS + r"pip\s+install\s+(?:[^\n]*\s)?--user\b", re.IGNORECASE), "pip install --user"),
+    (
+        re.compile(_CMDPOS + r"pip\s+install\s+(?:[^\n]*\s)?--user\b", re.IGNORECASE),
+        "pip install --user",
+    ),
     # piping through sudo
     (re.compile(r"\|\s*sudo\b", re.IGNORECASE), "pipe into sudo"),
     # appending to shell rc / profile files
-    (re.compile(r">>\s*[\"']?(?:~|\$HOME)?/?\.(?:bashrc|zshrc|profile|bash_profile|zshenv|zprofile)\b", re.IGNORECASE), "append to shell rc file"),
+    (
+        re.compile(
+            r">>\s*[\"']?(?:~|\$HOME)?/?\.(?:bashrc|zshrc|profile|bash_profile|zshenv|zprofile)\b",
+            re.IGNORECASE,
+        ),
+        "append to shell rc file",
+    ),
     # mkfs / overwriting block devices were caught by hardline; xargs+rm and find -exec rm are still risky
     (re.compile(r"\bxargs\s+.*\brm\b", re.IGNORECASE), "xargs with rm"),
     (re.compile(r"\bfind\b.*-exec\s+(?:/\S*/)?rm\b", re.IGNORECASE), "find -exec rm"),
@@ -149,9 +209,9 @@ class CommandGate:
 
 
 __all__ = [
-    "CommandGate",
     "DANGEROUS_PATTERNS",
     "HARDLINE_PATTERNS",
+    "CommandGate",
     "Verdict",
     "detect_command_threats",
 ]

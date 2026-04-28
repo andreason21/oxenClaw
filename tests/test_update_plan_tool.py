@@ -109,9 +109,7 @@ async def test_update_plan_rejects_empty_steps(tmp_path: Path) -> None:
     tool = update_plan_tool(paths=paths)
 
     with pytest.raises(Exception):
-        await tool.execute(
-            {"session_key": "s", "agent_id": "coding", "steps": []}
-        )
+        await tool.execute({"session_key": "s", "agent_id": "coding", "steps": []})
 
 
 async def test_update_plan_rejects_invalid_status(tmp_path: Path) -> None:

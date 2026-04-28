@@ -148,9 +148,9 @@ async def test_memory_layer_recalls_suwon_for_deictic_query(
         # the user used in the second turn.
         hits = await retriever.search("내가 사는 곳", k=5)
         assert hits, "memory recall returned nothing for the deictic query"
-        assert any(
-            "Suwon" in h.chunk.text or "수원" in h.chunk.text for h in hits
-        ), "recall did not surface the Suwon chunk"
+        assert any("Suwon" in h.chunk.text or "수원" in h.chunk.text for h in hits), (
+            "recall did not surface the Suwon chunk"
+        )
     finally:
         await retriever.aclose()
 
@@ -214,19 +214,13 @@ async def test_suwon_weather_scenario_resolves_deictic_via_memory(
         if state["calls"] == 1:
             # Model "decided" the deictic resolves to Suwon based on
             # the recall prelude it just received in the user message.
-            yield TextDeltaEvent(
-                delta="확인했습니다. 수원의 현재 날씨를 조회합니다.\n"
-            )
+            yield TextDeltaEvent(delta="확인했습니다. 수원의 현재 날씨를 조회합니다.\n")
             yield ToolUseStartEvent(id="w1", name="weather")
-            yield ToolUseInputDeltaEvent(
-                id="w1", input_delta='{"location":"Suwon"}'
-            )
+            yield ToolUseInputDeltaEvent(id="w1", input_delta='{"location":"Suwon"}')
             yield ToolUseEndEvent(id="w1")
             yield StopEvent(reason="tool_use")
         else:
-            yield TextDeltaEvent(
-                delta="수원은 현재 맑고 20도입니다."
-            )
+            yield TextDeltaEvent(delta="수원은 현재 맑고 20도입니다.")
             yield StopEvent(reason="end_turn")
 
     register_provider_stream("memory_disambig_suwon", fake_stream)
@@ -257,9 +251,7 @@ async def test_suwon_weather_scenario_resolves_deictic_via_memory(
         memory_inject_into_user=True,  # default, but explicit for clarity
     )
     runtime = PiAgentAcpRuntime(agent=agent, backend_id="pi")
-    register_acp_runtime_backend(
-        AcpRuntimeBackend(id="pi", runtime=runtime)
-    )
+    register_acp_runtime_backend(AcpRuntimeBackend(id="pi", runtime=runtime))
     mgr = get_acp_session_manager()
 
     await mgr.initialize_session(
@@ -290,9 +282,7 @@ async def test_suwon_weather_scenario_resolves_deictic_via_memory(
     # PiAgent recall prelude doing its job.
     assert seen_user_messages, "fake stream never ran"
     first_user_message = seen_user_messages[0]
-    assert (
-        "Suwon" in first_user_message or "수원" in first_user_message
-    ), (
+    assert "Suwon" in first_user_message or "수원" in first_user_message, (
         "Recall prelude did not inject the user's location into the user "
         f"message. Got: {first_user_message!r}"
     )
@@ -356,9 +346,7 @@ async def test_without_memory_recall_fake_stream_sees_only_deictic(
         seen_user_messages.append(latest_user)
         # No tool call — model stays uncertain because it has no
         # location to plug in.
-        yield TextDeltaEvent(
-            delta="어디에 사는지 알려주시면 날씨를 알려드릴게요."
-        )
+        yield TextDeltaEvent(delta="어디에 사는지 알려주시면 날씨를 알려드릴게요.")
         yield StopEvent(reason="end_turn")
 
     register_provider_stream("memory_disambig_no_recall", fake_stream)
@@ -385,9 +373,7 @@ async def test_without_memory_recall_fake_stream_sees_only_deictic(
         # NO memory= here — that's the whole point.
     )
     runtime = PiAgentAcpRuntime(agent=agent, backend_id="pi")
-    register_acp_runtime_backend(
-        AcpRuntimeBackend(id="pi", runtime=runtime)
-    )
+    register_acp_runtime_backend(AcpRuntimeBackend(id="pi", runtime=runtime))
     mgr = get_acp_session_manager()
     await mgr.initialize_session(
         AcpInitializeSessionInput(

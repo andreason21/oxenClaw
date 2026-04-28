@@ -148,9 +148,7 @@ class PromptResult(BaseModel):
     """Response to `session/prompt` — final stop reason for the turn."""
 
     model_config = _strict
-    stop_reason: Literal["stop", "cancel", "error"] = Field(
-        ..., alias="stopReason"
-    )
+    stop_reason: Literal["stop", "cancel", "error"] = Field(..., alias="stopReason")
 
 
 # --- session/cancel ---------------------------------------------------------

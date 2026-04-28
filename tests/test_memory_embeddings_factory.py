@@ -9,9 +9,9 @@ Covers:
 
 from __future__ import annotations
 
+import httpx
 import pytest
 import respx
-import httpx
 
 from oxenclaw.memory.embeddings import (
     AnthropicEmbeddings,
@@ -22,7 +22,6 @@ from oxenclaw.memory.embeddings import (
     UnknownEmbedderProvider,
     build_embedder,
 )
-
 
 # ---------------------------------------------------------------------------
 # Factory routing tests
@@ -75,7 +74,9 @@ def test_factory_model_override() -> None:
 
 
 def test_factory_kwargs_forwarded_to_openai() -> None:
-    embedder = build_embedder("openai-compatible", base_url="http://my-vllm:8080/v1", model="my-model")
+    embedder = build_embedder(
+        "openai-compatible", base_url="http://my-vllm:8080/v1", model="my-model"
+    )
     assert isinstance(embedder, OpenAIEmbeddings)
     assert embedder.base_url == "http://my-vllm:8080/v1"
     assert embedder.model == "my-model"
@@ -137,6 +138,7 @@ async def test_anthropic_embeddings_shape() -> None:
     assert route.called
     request = route.calls.last.request
     import json
+
     body = json.loads(request.content)
     assert body["model"] == "voyage-3"
     assert body["input"] == ["hello world", "foo bar"]
@@ -219,6 +221,7 @@ async def test_cohere_embeddings_shape() -> None:
     assert route.called
     request = route.calls.last.request
     import json
+
     body = json.loads(request.content)
     assert body["model"] == "embed-english-v3.0"
     assert body["texts"] == ["hello world", "foo bar"]

@@ -54,10 +54,10 @@ from oxenclaw.gateway.config_methods import register_config_methods
 from oxenclaw.gateway.cron_methods import register_cron_methods
 from oxenclaw.gateway.isolation_methods import register_isolation_methods
 from oxenclaw.gateway.memory_methods import register_memory_methods
-from oxenclaw.gateway.skills_methods import register_skills_methods
-from oxenclaw.gateway.wiki_methods import register_wiki_methods
 from oxenclaw.gateway.plan_methods import register_plan_methods
+from oxenclaw.gateway.skills_methods import register_skills_methods
 from oxenclaw.gateway.usage_methods import register_usage_methods
+from oxenclaw.gateway.wiki_methods import register_wiki_methods
 from oxenclaw.memory import MemoryRetriever, build_embedder
 from oxenclaw.memory.walker import WalkerConfig
 from oxenclaw.plugin_sdk.channel_contract import (
@@ -433,7 +433,9 @@ async def _run_gateway(
     # the gateway already has, so no extra credentials are needed.
     from oxenclaw.tools_pkg.skill_resolver_tool import skill_resolver_tool as _skill_resolver_tool
 
-    tool_registry.register(_skill_resolver_tool(registries=clawhub_client, installer=skill_installer, paths=paths))
+    tool_registry.register(
+        _skill_resolver_tool(registries=clawhub_client, installer=skill_installer, paths=paths)
+    )
 
     # Memory tools — let the model actively save facts AND search the
     # store on demand. Without these the model only saw memories

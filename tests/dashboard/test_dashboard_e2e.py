@@ -296,7 +296,9 @@ async def test_cron_view_quick_add_wizard_renders_presets(page) -> None:
     # Click another preset; active state must move.
     cards = page.locator(".cron-preset")
     await cards.nth(2).click()
-    active_label = await page.locator(".cron-preset.active .cron-preset__label").first.text_content()
+    active_label = await page.locator(
+        ".cron-preset.active .cron-preset__label"
+    ).first.text_content()
     assert active_label.strip() == "Hourly"
     # Topbar New job button focuses the prompt textarea.
     assert await page.locator("#topbar-actions button", has_text="New job").count() == 1
@@ -572,11 +574,15 @@ async def test_cron_view_full_edit_modal_opens_and_validates(page) -> None:
     # The error list should appear.
     await page.wait_for_selector(".cron-modal__error-list", timeout=2000)
     error_list_visible = await page.locator(".cron-modal__error-list").is_visible()
-    assert error_list_visible, "blocking error list must appear on submit with missing required fields"
+    assert error_list_visible, (
+        "blocking error list must appear on submit with missing required fields"
+    )
 
     # The prompt textarea should have aria-invalid.
     aria_invalid = await page.locator("#cme-prompt").get_attribute("aria-invalid")
-    assert aria_invalid == "true", f"#cme-prompt must have aria-invalid='true', got {aria_invalid!r}"
+    assert aria_invalid == "true", (
+        f"#cme-prompt must have aria-invalid='true', got {aria_invalid!r}"
+    )
 
     # Esc closes the modal.
     await page.keyboard.press("Escape")
@@ -663,7 +669,7 @@ async def test_memory_view_tabs_render(page) -> None:
     tabs = await page.locator(".memory-tab").all_text_contents()
     assert "Search" in tabs, f"Search tab missing, got: {tabs}"
     assert "Browse" in tabs, f"Browse tab missing, got: {tabs}"
-    assert "Stats"  in tabs, f"Stats tab missing, got: {tabs}"
+    assert "Stats" in tabs, f"Stats tab missing, got: {tabs}"
 
     # Default tab is Search — it should be active.
     active_text = await page.locator(".memory-tab.active").first.text_content()
@@ -727,9 +733,7 @@ async def test_memory_view_search_renders_hits_with_relevance_pill(page) -> None
     assert "0.84" in score_text, f"score pill text unexpected: {score_text!r}"
 
     citation_text = await page.locator(".memory-hit__citation").first.text_content()
-    assert "sessions/chat-001.md" in citation_text, (
-        f"citation text unexpected: {citation_text!r}"
-    )
+    assert "sessions/chat-001.md" in citation_text, f"citation text unexpected: {citation_text!r}"
 
     # Restore original Rpc.call.
     await page.evaluate("() => { if (window._origRpcCall) Rpc.call = window._origRpcCall; }")
@@ -772,7 +776,7 @@ async def test_memory_view_stats_card_shows_provider_and_dimensions(page) -> Non
     # Provider and embedding dims must appear somewhere in the grid.
     grid_text = await page.locator(".memory-stats__grid").text_content()
     assert "openai" in grid_text, f"provider 'openai' not found in stats grid: {grid_text!r}"
-    assert "1536"   in grid_text, f"embedding dims '1536' not found in stats grid: {grid_text!r}"
+    assert "1536" in grid_text, f"embedding dims '1536' not found in stats grid: {grid_text!r}"
 
     # Restore original Rpc.call.
     await page.evaluate("() => { if (window._origRpcCall2) Rpc.call = window._origRpcCall2; }")

@@ -93,21 +93,36 @@ class _FakePiAgent:
     id = "pi"
 
     def __init__(self) -> None:
-        self._model = type("M", (), {"id": "m1", "provider": "ollama", "aliases": (), "context_window": 4096})()
+        self._model = type(
+            "M", (), {"id": "m1", "provider": "ollama", "aliases": (), "context_window": 4096}
+        )()
         self._registry = self  # so getattr(_registry, "list", ...) finds list()
         self._calls: list[str] = []
 
     def list(self) -> list:
         return [
-            type("M", (), {"id": "m1", "provider": "ollama", "aliases": (), "context_window": 4096})(),
-            type("M", (), {"id": "m2", "provider": "anthropic", "aliases": ("claude",), "context_window": 200000})(),
+            type(
+                "M", (), {"id": "m1", "provider": "ollama", "aliases": (), "context_window": 4096}
+            )(),
+            type(
+                "M",
+                (),
+                {
+                    "id": "m2",
+                    "provider": "anthropic",
+                    "aliases": ("claude",),
+                    "context_window": 200000,
+                },
+            )(),
         ]
 
     def set_model_id(self, model_id: str) -> str:
         if model_id not in {"m1", "m2"}:
             raise KeyError(f"unknown model {model_id!r}")
         self._calls.append(model_id)
-        self._model = type("M", (), {"id": model_id, "provider": "ollama", "aliases": (), "context_window": 4096})()
+        self._model = type(
+            "M", (), {"id": model_id, "provider": "ollama", "aliases": (), "context_window": 4096}
+        )()
         return model_id
 
 
@@ -182,9 +197,7 @@ async def test_set_model_unknown_model_returns_keyerror() -> None:
 async def test_models_lists_from_first_pi_registry() -> None:
     router, registry = _setup()
     registry.register(_FakePiAgent())
-    resp = await router.dispatch(
-        {"jsonrpc": "2.0", "id": 1, "method": "agents.models"}
-    )
+    resp = await router.dispatch({"jsonrpc": "2.0", "id": 1, "method": "agents.models"})
     ids = [m["id"] for m in resp.result]
     assert ids == ["m1", "m2"]
     # aliases passed through
@@ -195,7 +208,5 @@ async def test_models_lists_from_first_pi_registry() -> None:
 
 async def test_models_empty_when_no_pi_agent() -> None:
     router, _ = _setup()
-    resp = await router.dispatch(
-        {"jsonrpc": "2.0", "id": 1, "method": "agents.models"}
-    )
+    resp = await router.dispatch({"jsonrpc": "2.0", "id": 1, "method": "agents.models"})
     assert resp.result == []

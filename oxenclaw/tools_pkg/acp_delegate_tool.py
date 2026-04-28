@@ -96,19 +96,14 @@ class _DelegateArgs(BaseModel):
         300.0,
         gt=0,
         le=3600,
-        description=(
-            "Hard cap on the entire delegation (initialize → done). "
-            "Default 5 min."
-        ),
+        description=("Hard cap on the entire delegation (initialize → done). Default 5 min."),
     )
 
 
 def _resolve_argv(args: _DelegateArgs) -> list[str]:
     if args.runtime == "custom":
         if not args.argv:
-            raise ValueError(
-                "runtime='custom' requires an explicit `argv` list"
-            )
+            raise ValueError("runtime='custom' requires an explicit `argv` list")
         return list(args.argv)
     if args.argv:
         # Allow override even on a known runtime — operator might
@@ -124,9 +119,7 @@ async def _run_delegation(args: _DelegateArgs) -> str:
         argv = _resolve_argv(args)
     except ValueError as exc:
         return f"[delegate_to_acp/{args.runtime} failed: {exc}]"
-    runtime = SubprocessAcpRuntime(
-        argv=argv, backend_id=f"delegate-{args.runtime}", cwd=args.cwd
-    )
+    runtime = SubprocessAcpRuntime(argv=argv, backend_id=f"delegate-{args.runtime}", cwd=args.cwd)
     text_chunks: list[str] = []
     tool_count = 0
     last_tool_status: str | None = None
@@ -170,19 +163,14 @@ async def _run_delegation(args: _DelegateArgs) -> str:
             f"{''.join(text_chunks)[:500]!r}]"
         )
     except AcpWireError as exc:
-        return (
-            f"[delegate_to_acp/{args.runtime} wire error "
-            f"{exc.code}: {exc.message}]"
-        )
+        return f"[delegate_to_acp/{args.runtime} wire error {exc.code}: {exc.message}]"
     except FileNotFoundError as exc:
         return (
             f"[delegate_to_acp/{args.runtime} CLI not found — "
             f"{exc}. Install the runtime or pass an explicit argv.]"
         )
     except Exception as exc:  # pragma: no cover — defensive
-        logger.exception(
-            "delegate_to_acp failed: runtime=%s", args.runtime
-        )
+        logger.exception("delegate_to_acp failed: runtime=%s", args.runtime)
         return f"[delegate_to_acp/{args.runtime} failed: {exc}]"
     finally:
         await runtime.aclose()
@@ -193,9 +181,7 @@ async def _run_delegation(args: _DelegateArgs) -> str:
         f"stopReason={stop_reason}",
     ]
     if tool_count:
-        summary_bits.append(
-            f"tool_calls={tool_count} last_status={last_tool_status}"
-        )
+        summary_bits.append(f"tool_calls={tool_count} last_status={last_tool_status}")
     head = f"[delegate_to_acp {' '.join(summary_bits)}]\n"
     return head + full_text
 

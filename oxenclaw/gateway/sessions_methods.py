@@ -308,9 +308,7 @@ def register_sessions_methods(
         if not plan.needed:
             return {"ok": True, "compacted": False, "reason": "below threshold"}
 
-        new_messages, entry = await apply_compaction(
-            s.messages, plan, truncating_summarizer
-        )
+        new_messages, entry = await apply_compaction(s.messages, plan, truncating_summarizer)
         s.messages = new_messages
         s.compactions.append(entry)
         await sm.save(s)

@@ -66,10 +66,10 @@ def _exact(content: str, old: str, new: str) -> tuple[str, int] | None:
 
 
 def _line_trimmed(content: str, old: str, new: str) -> tuple[str, int] | None:
-    old_lines = [l.rstrip().lstrip() for l in old.split("\n")]
+    old_lines = [ln.rstrip().lstrip() for ln in old.split("\n")]
     pat = "\n".join(old_lines)
     content_lines = content.split("\n")
-    norm_lines = [l.rstrip().lstrip() for l in content_lines]
+    norm_lines = [ln.rstrip().lstrip() for ln in content_lines]
     n = len(old_lines)
     if n == 0 or n > len(norm_lines):
         return None
@@ -96,7 +96,7 @@ def _whitespace_normalized(content: str, old: str, new: str) -> tuple[str, int] 
     if old_n not in norm_content_full:
         return None
     content_lines = content.split("\n")
-    norm_lines = [norm(l) for l in content_lines]
+    norm_lines = [norm(ln) for ln in content_lines]
     pat_lines = old_n.split("\n")
     n = len(pat_lines)
     if n == 0 or n > len(norm_lines):
@@ -112,10 +112,10 @@ def _whitespace_normalized(content: str, old: str, new: str) -> tuple[str, int] 
 
 
 def _indentation_flexible(content: str, old: str, new: str) -> tuple[str, int] | None:
-    old_lines = [l.lstrip() for l in old.split("\n")]
+    old_lines = [ln.lstrip() for ln in old.split("\n")]
     pat = "\n".join(old_lines)
     content_lines = content.split("\n")
-    norm_lines = [l.lstrip() for l in content_lines]
+    norm_lines = [ln.lstrip() for ln in content_lines]
     n = len(old_lines)
     if n == 0 or n > len(norm_lines):
         return None
@@ -170,8 +170,8 @@ def _block_anchor(content: str, old: str, new: str) -> tuple[str, int] | None:
     old_lines = old.split("\n")
     if len(old_lines) < 4:
         return None  # need first+last 2 lines for a meaningful anchor
-    head = [l.strip() for l in old_lines[:2]]
-    tail = [l.strip() for l in old_lines[-2:]]
+    head = [ln.strip() for ln in old_lines[:2]]
+    tail = [ln.strip() for ln in old_lines[-2:]]
     content_lines = content.split("\n")
     n = len(old_lines)
     if n > len(content_lines):
@@ -246,10 +246,7 @@ def detect_escape_drift(content: str, old_str: str) -> bool:
     those backslashes into source code. Refuse instead — the caller can
     re-emit without the spurious escapes.
     """
-    for suspect in ("\\'", '\\"'):
-        if suspect in old_str and suspect not in content:
-            return True
-    return False
+    return any(suspect in old_str and suspect not in content for suspect in ("\\'", '\\"'))
 
 
 # ── Public entry point ────────────────────────────────────────────────
@@ -351,8 +348,8 @@ def fuzzy_find_and_replace(
 
 
 __all__ = [
-    "FuzzyMatchError",
-    "fuzzy_find_and_replace",
-    "detect_escape_drift",
     "UNICODE_MAP",
+    "FuzzyMatchError",
+    "detect_escape_drift",
+    "fuzzy_find_and_replace",
 ]

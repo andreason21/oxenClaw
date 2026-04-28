@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import concurrent.futures
 import logging
-from typing import Iterable
+from collections.abc import Iterable
 
 from oxenclaw.clawhub.sources.base import SkillRef, SkillSource
 
@@ -44,7 +44,11 @@ def parallel_search_sources(
 
     # If a fresh `IndexSource` is configured, prefer the aggregate.
     fresh_index = next(
-        (s for s in src_list if getattr(s, "source_id", "") == "index" and getattr(s, "fresh", False)),
+        (
+            s
+            for s in src_list
+            if getattr(s, "source_id", "") == "index" and getattr(s, "fresh", False)
+        ),
         None,
     )
     if fresh_index is not None:
@@ -56,13 +60,13 @@ def parallel_search_sources(
     collected: list[SkillRef] = []
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, len(active_sources))) as pool:
-        futures = {
-            pool.submit(_safe_search, s, query, limit): s for s in active_sources
-        }
-        for fut in concurrent.futures.as_completed(futures, timeout=_PER_SOURCE_TIMEOUT_S * len(active_sources)):
+        futures = {pool.submit(_safe_search, s, query, limit): s for s in active_sources}
+        for fut in concurrent.futures.as_completed(
+            futures, timeout=_PER_SOURCE_TIMEOUT_S * len(active_sources)
+        ):
             try:
                 refs = fut.result(timeout=_PER_SOURCE_TIMEOUT_S)
-            except (concurrent.futures.TimeoutError, Exception) as exc:  # noqa: BLE001
+            except (concurrent.futures.TimeoutError, Exception) as exc:
                 logger.debug("source %s timed out / errored: %s", futures[fut].source_id, exc)
                 continue
             for r in refs:
@@ -79,7 +83,7 @@ def parallel_search_sources(
 def _safe_search(source: SkillSource, query: str, limit: int) -> list[SkillRef]:
     try:
         return source.search(query, limit)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.debug("source %s search raised: %s", source.source_id, exc)
         return []
 

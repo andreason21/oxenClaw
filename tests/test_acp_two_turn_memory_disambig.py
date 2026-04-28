@@ -140,9 +140,7 @@ def _latest_user_text(ctx) -> str:  # type: ignore[no-untyped-def]
     """Pull the most recent user message text from a streaming ctx —
     handles both string content and pi-format multimodal blocks."""
     for msg in reversed(getattr(ctx, "messages", [])):
-        role = getattr(msg, "role", None) or (
-            msg.get("role") if isinstance(msg, dict) else None
-        )
+        role = getattr(msg, "role", None) or (msg.get("role") if isinstance(msg, dict) else None)
         if role != "user":
             continue
         content = getattr(msg, "content", None) or (
@@ -217,16 +215,14 @@ async def test_two_turn_suwon_weather_resolves_via_memory(
         # location==Suwon assertion downstream.
         if state["calls"] == 3:
             resolved_location = _resolve_location_from_recall(latest)
-            args_json = (
-                '{"location":"' + resolved_location.replace('"', '\\"') + '"}'
-            )
+            args_json = '{"location":"' + resolved_location.replace('"', '\\"') + '"}'
             yield ToolUseStartEvent(id="w1", name="weather")
             yield ToolUseInputDeltaEvent(id="w1", input_delta=args_json)
             yield ToolUseEndEvent(id="w1")
             yield StopEvent(reason="tool_use")
             return
         # Final reply on turn 2.
-        yield TextDeltaEvent(delta=f"수원은 현재 맑고 20도입니다.")
+        yield TextDeltaEvent(delta="수원은 현재 맑고 20도입니다.")
         yield StopEvent(reason="end_turn")
 
     register_provider_stream("memory_two_turn_suwon", fake_stream)
@@ -255,9 +251,7 @@ async def test_two_turn_suwon_weather_resolves_via_memory(
         memory_inject_into_user=True,
     )
     runtime = PiAgentAcpRuntime(agent=agent, backend_id="pi")
-    register_acp_runtime_backend(
-        AcpRuntimeBackend(id="pi", runtime=runtime)
-    )
+    register_acp_runtime_backend(AcpRuntimeBackend(id="pi", runtime=runtime))
     mgr = get_acp_session_manager()
 
     await mgr.initialize_session(
@@ -283,15 +277,12 @@ async def test_two_turn_suwon_weather_resolves_via_memory(
         # Turn 1: the agent must have called memory_save, and memory
         # must now contain a Suwon-bearing chunk.
         ms_cards = [
-            e
-            for e in turn1_events
-            if isinstance(e, AcpEventToolCall) and e.title == "memory_save"
+            e for e in turn1_events if isinstance(e, AcpEventToolCall) and e.title == "memory_save"
         ]
         assert len(ms_cards) == 2  # pending + completed
         recall_hits_after_turn1 = await retriever.search("내가 사는 곳", k=5)
         assert any(
-            "Suwon" in h.chunk.text or "수원" in h.chunk.text
-            for h in recall_hits_after_turn1
+            "Suwon" in h.chunk.text or "수원" in h.chunk.text for h in recall_hits_after_turn1
         ), "memory_save did not actually persist the Suwon fact"
 
         # ===== TURN 2 =====
@@ -320,9 +311,7 @@ async def test_two_turn_suwon_weather_resolves_via_memory(
 
     # Wire-shape assertion: weather card pair on turn 2.
     weather_cards = [
-        e
-        for e in turn2_events
-        if isinstance(e, AcpEventToolCall) and e.title == "weather"
+        e for e in turn2_events if isinstance(e, AcpEventToolCall) and e.title == "weather"
     ]
     assert len(weather_cards) == 2
     pending, completed = weather_cards
@@ -331,9 +320,7 @@ async def test_two_turn_suwon_weather_resolves_via_memory(
     assert pending.tool_call_id == completed.tool_call_id
 
     # Final assistant text mentions Suwon, in Korean, after the tool.
-    text_deltas = [
-        e for e in turn2_events if isinstance(e, AcpEventTextDelta)
-    ]
+    text_deltas = [e for e in turn2_events if isinstance(e, AcpEventTextDelta)]
     full_text = "".join(t.text for t in text_deltas)
     assert "수원" in full_text
 

@@ -129,16 +129,12 @@ class AcpServer:
         params = msg.get("params") or {}
         if not isinstance(method, str):
             if mid is not None:
-                await self._send_error(
-                    sink, mid, INVALID_REQUEST, "missing method"
-                )
+                await self._send_error(sink, mid, INVALID_REQUEST, "missing method")
             return
         handler = self._handlers.get(method)
         if handler is None:
             if mid is not None:
-                await self._send_error(
-                    sink, mid, METHOD_NOT_FOUND, f"unknown method {method!r}"
-                )
+                await self._send_error(sink, mid, METHOD_NOT_FOUND, f"unknown method {method!r}")
             return
         try:
             await handler(self, mid, params, sink)
@@ -148,9 +144,7 @@ class AcpServer:
         except Exception as exc:
             logger.exception("acp.server handler %s failed", method)
             if mid is not None:
-                await self._send_error(
-                    sink, mid, INTERNAL_ERROR, f"internal error: {exc}"
-                )
+                await self._send_error(sink, mid, INTERNAL_ERROR, f"internal error: {exc}")
 
     # ---- per-method handlers --------------------------------------------
 
@@ -187,9 +181,7 @@ class AcpServer:
         session_key = (
             meta.get("sessionKey") if isinstance(meta, dict) else None
         ) or self._mint_session_key()
-        agent_name = (
-            meta.get("agent") if isinstance(meta, dict) else None
-        ) or "default"
+        agent_name = (meta.get("agent") if isinstance(meta, dict) else None) or "default"
         mode = (meta.get("mode") if isinstance(meta, dict) else None) or "persistent"
         try:
             handle = await self._runtime.ensure_session(
@@ -199,16 +191,12 @@ class AcpServer:
                     mode="persistent" if mode == "persistent" else "oneshot",
                     cwd=parsed.cwd,
                     resume_session_id=(
-                        meta.get("resumeSessionId")
-                        if isinstance(meta, dict)
-                        else None
+                        meta.get("resumeSessionId") if isinstance(meta, dict) else None
                     ),
                 )
             )
         except Exception as exc:
-            raise _AcpServerHandlerError(
-                INTERNAL_ERROR, f"ensure_session failed: {exc}"
-            ) from exc
+            raise _AcpServerHandlerError(INTERNAL_ERROR, f"ensure_session failed: {exc}") from exc
         sid = self._mint_session_id()
         self._sessions[sid] = _ServerSession(session_id=sid, handle=handle)
         await self._send_result(sink, mid, {"sessionId": sid})
@@ -225,16 +213,10 @@ class AcpServer:
             raise _AcpServerHandlerError(INVALID_PARAMS, str(exc)) from exc
         sess = self._sessions.get(parsed.session_id)
         if sess is None:
-            raise _AcpServerHandlerError(
-                INVALID_PARAMS, f"unknown sessionId {parsed.session_id!r}"
-            )
+            raise _AcpServerHandlerError(INVALID_PARAMS, f"unknown sessionId {parsed.session_id!r}")
         # Concatenate text content blocks. Image/resource blocks are
         # ignored in this commit — translator gains support later.
-        text = "".join(
-            block.text
-            for block in parsed.prompt
-            if hasattr(block, "text")
-        )
+        text = "".join(block.text for block in parsed.prompt if hasattr(block, "text"))
         sess.cancel_event.clear()
         stop_reason: str = "stop"
         try:
@@ -260,18 +242,14 @@ class AcpServer:
                     stop_reason = ev.stop_reason or "stop"
                     break
                 if isinstance(ev, AcpEventError):
-                    raise _AcpServerHandlerError(
-                        INTERNAL_ERROR, ev.message
-                    )
+                    raise _AcpServerHandlerError(INTERNAL_ERROR, ev.message)
                 if sess.cancel_event.is_set():
                     stop_reason = "cancel"
                     break
         except _AcpServerHandlerError:
             raise
         except Exception as exc:
-            raise _AcpServerHandlerError(
-                INTERNAL_ERROR, f"run_turn failed: {exc}"
-            ) from exc
+            raise _AcpServerHandlerError(INTERNAL_ERROR, f"run_turn failed: {exc}") from exc
         await self._send_result(sink, mid, {"stopReason": stop_reason})
 
     async def _handle_cancel(
@@ -282,16 +260,12 @@ class AcpServer:
         sid = params.get("sessionId")
         if not isinstance(sid, str):
             if mid is not None:
-                raise _AcpServerHandlerError(
-                    INVALID_PARAMS, "sessionId required"
-                )
+                raise _AcpServerHandlerError(INVALID_PARAMS, "sessionId required")
             return
         sess = self._sessions.get(sid)
         if sess is None:
             if mid is not None:
-                raise _AcpServerHandlerError(
-                    INVALID_PARAMS, f"unknown sessionId {sid!r}"
-                )
+                raise _AcpServerHandlerError(INVALID_PARAMS, f"unknown sessionId {sid!r}")
             return
         sess.cancel_event.set()
         with contextlib.suppress(Exception):
@@ -320,9 +294,7 @@ class AcpServer:
     def _project_event(ev: AcpRuntimeEvent) -> dict[str, Any] | None:
         if isinstance(ev, AcpEventTextDelta):
             tag = ev.tag or (
-                "agent_thought_chunk"
-                if ev.stream == "thought"
-                else "agent_message_chunk"
+                "agent_thought_chunk" if ev.stream == "thought" else "agent_message_chunk"
             )
             return {
                 "sessionUpdate": tag,
@@ -474,9 +446,7 @@ def _build_runtime(name: str) -> AcpRuntime:
 
         agent._tools.register(acp_delegate_tool())
         return PiAgentAcpRuntime(agent=agent)
-    raise SystemExit(
-        f"unknown backend {name!r} (built-in choices: 'fake', 'pi')"
-    )
+    raise SystemExit(f"unknown backend {name!r} (built-in choices: 'fake', 'pi')")
 
 
 async def _run_cli(argv: list[str] | None = None) -> int:

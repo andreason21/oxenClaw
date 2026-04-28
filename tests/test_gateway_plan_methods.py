@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import pytest
 
 from oxenclaw.config.paths import OxenclawPaths
-from oxenclaw.gateway.router import Router
 from oxenclaw.gateway.plan_methods import register_plan_methods
+from oxenclaw.gateway.router import Router
 from oxenclaw.tools_pkg.update_plan_tool import update_plan_tool
 
 
@@ -102,7 +101,7 @@ async def test_plan_list_rpc_aggregates_across_sessions(router_and_paths) -> Non
 
 async def test_plan_get_returns_empty_when_missing(router_and_paths) -> None:
     """Missing plan file must return empty steps array without error."""
-    r, paths = router_and_paths
+    r, _paths = router_and_paths
 
     resp = await r.dispatch(
         {
@@ -118,7 +117,7 @@ async def test_plan_get_returns_empty_when_missing(router_and_paths) -> None:
 
 async def test_plan_list_returns_empty_when_no_plans(router_and_paths) -> None:
     """Listing plans for an agent with no session dir returns an empty list."""
-    r, paths = router_and_paths
+    r, _paths = router_and_paths
 
     resp = await r.dispatch(
         {
@@ -137,16 +136,10 @@ async def test_plan_list_all_agents(router_and_paths) -> None:
     r, paths = router_and_paths
     tool = update_plan_tool(paths=paths)
 
-    await tool.execute(
-        {"session_key": "s1", "agent_id": "alpha", "steps": _steps(["completed"])}
-    )
-    await tool.execute(
-        {"session_key": "s2", "agent_id": "beta", "steps": _steps(["pending"])}
-    )
+    await tool.execute({"session_key": "s1", "agent_id": "alpha", "steps": _steps(["completed"])})
+    await tool.execute({"session_key": "s2", "agent_id": "beta", "steps": _steps(["pending"])})
 
-    resp = await r.dispatch(
-        {"jsonrpc": "2.0", "id": 5, "method": "plan.list", "params": {}}
-    )
+    resp = await r.dispatch({"jsonrpc": "2.0", "id": 5, "method": "plan.list", "params": {}})
     assert resp.error is None
     agent_ids = {row["agent_id"] for row in resp.result["plans"]}
     assert "alpha" in agent_ids

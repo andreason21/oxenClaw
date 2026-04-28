@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from oxenclaw.gateway.router import Router
 from oxenclaw.gateway.wiki_methods import register_wiki_methods
 from oxenclaw.wiki.models import WikiPage, WikiPageKind
@@ -119,9 +117,7 @@ async def test_create_duplicate_slug_returns_error(tmp_path: Path) -> None:
 
 async def test_create_invalid_kind_returns_error(tmp_path: Path) -> None:
     router, _ = _setup(tmp_path)
-    result = await _call(
-        router, "wiki.create", {"kind": "bogus", "title": "Oops"}
-    )
+    result = await _call(router, "wiki.create", {"kind": "bogus", "title": "Oops"})
     assert result["ok"] is False
 
 
@@ -131,9 +127,7 @@ async def test_create_invalid_kind_returns_error(tmp_path: Path) -> None:
 async def test_update_title_and_body(tmp_path: Path) -> None:
     router, vault = _setup(tmp_path)
     vault.create(WikiPage(kind=WikiPageKind.CONCEPT, name="Old", slug="old", body="old body"))
-    result = await _call(
-        router, "wiki.update", {"slug": "old", "title": "New", "body": "new body"}
-    )
+    result = await _call(router, "wiki.update", {"slug": "old", "title": "New", "body": "new body"})
     assert result["ok"] is True
     assert result["page"]["title"] == "New"
     assert result["page"]["body"] == "new body"
@@ -187,9 +181,7 @@ async def test_search_empty_query(tmp_path: Path) -> None:
 async def test_add_claim_success(tmp_path: Path) -> None:
     router, vault = _setup(tmp_path)
     vault.create(WikiPage(kind=WikiPageKind.CONCEPT, name="P", slug="p", body=""))
-    result = await _call(
-        router, "wiki.add_claim", {"slug": "p", "text": "A new fact."}
-    )
+    result = await _call(router, "wiki.add_claim", {"slug": "p", "text": "A new fact."})
     assert result["ok"] is True
     assert result["claim"]["text"] == "A new fact."
     assert result["claim"]["claim_id"] is not None
@@ -222,9 +214,7 @@ async def test_verify_success(tmp_path: Path) -> None:
     vault.update("p", page)
     result = await _call(router, "wiki.verify", {"slug": "p", "claim_id": claim.claim_id})
     assert result["ok"] is True
-    found = next(
-        (c for c in result["page"]["claims"] if c["claim_id"] == claim.claim_id), None
-    )
+    found = next((c for c in result["page"]["claims"] if c["claim_id"] == claim.claim_id), None)
     assert found is not None
     assert found["last_verified_at"] is not None
 

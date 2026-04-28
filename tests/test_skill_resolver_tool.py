@@ -14,8 +14,6 @@ import zipfile
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
-
 from oxenclaw.clawhub.lockfile import OriginMetadata
 from oxenclaw.config.paths import OxenclawPaths
 from oxenclaw.tools_pkg.skill_resolver_tool import skill_resolver_tool
@@ -135,7 +133,7 @@ def test_resolver_installs_via_fake_registry(tmp_path: Path) -> None:
     fake_registries.names.return_value = ["public"]
 
     # Fake installer: writes SKILL.md into paths.home/skills/<slug>/ on install.
-    async def _fake_install(slug_arg: str, **kwargs) -> None:  # noqa: ANN001
+    async def _fake_install(slug_arg: str, **kwargs) -> None:
         target = paths.home / "skills" / slug_arg
         target.mkdir(parents=True, exist_ok=True)
         (target / "SKILL.md").write_text(_SAMPLE_SKILL_MD)
@@ -146,9 +144,7 @@ def test_resolver_installs_via_fake_registry(tmp_path: Path) -> None:
     fake_installer = MagicMock()
     fake_installer.install = AsyncMock(side_effect=_fake_install)
 
-    tool = skill_resolver_tool(
-        registries=fake_registries, installer=fake_installer, paths=paths
-    )
+    tool = skill_resolver_tool(registries=fake_registries, installer=fake_installer, paths=paths)
 
     result = _run_tool_sync(tool, {"query": "AAPL stock analysis", "auto_install": True})
 

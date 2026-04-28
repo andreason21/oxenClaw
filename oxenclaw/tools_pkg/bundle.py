@@ -44,7 +44,15 @@ def default_bundled_tools() -> list[Tool]:
     # By wiring the specialised tool's logic here, web_search returns
     # what looks like a successful answer on the first call.
     weather_keywords = (
-        "날씨", "weather", "기온", "temperature", "forecast", "비 와", "rain", "snow", "눈 와",
+        "날씨",
+        "weather",
+        "기온",
+        "temperature",
+        "forecast",
+        "비 와",
+        "rain",
+        "snow",
+        "눈 와",
     )
 
     async def _weather_redirect(query: str) -> str:
@@ -79,9 +87,18 @@ def default_bundled_tools() -> list[Tool]:
         ),
         (
             "get_time",
-            lambda q: any(k in q for k in (
-                "today", "오늘", "지금", "current time", "what time", "시간", "현재 시각",
-            )),
+            lambda q: any(
+                k in q
+                for k in (
+                    "today",
+                    "오늘",
+                    "지금",
+                    "current time",
+                    "what time",
+                    "시간",
+                    "현재 시각",
+                )
+            ),
             _time_redirect,
         ),
     ]

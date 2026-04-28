@@ -161,11 +161,7 @@ class AcpEventError:
 
 
 AcpRuntimeEvent = (
-    AcpEventTextDelta
-    | AcpEventStatus
-    | AcpEventToolCall
-    | AcpEventDone
-    | AcpEventError
+    AcpEventTextDelta | AcpEventStatus | AcpEventToolCall | AcpEventDone | AcpEventError
 )
 
 
@@ -183,17 +179,11 @@ class AcpRuntime(Protocol):
     `AcpSessionManager` can target a stable shape.
     """
 
-    async def ensure_session(
-        self, input: AcpRuntimeEnsureInput
-    ) -> AcpRuntimeHandle: ...
+    async def ensure_session(self, input: AcpRuntimeEnsureInput) -> AcpRuntimeHandle: ...
 
-    def run_turn(
-        self, input: AcpRuntimeTurnInput
-    ) -> AsyncIterator[AcpRuntimeEvent]: ...
+    def run_turn(self, input: AcpRuntimeTurnInput) -> AsyncIterator[AcpRuntimeEvent]: ...
 
-    async def cancel(
-        self, *, handle: AcpRuntimeHandle, reason: str | None = None
-    ) -> None: ...
+    async def cancel(self, *, handle: AcpRuntimeHandle, reason: str | None = None) -> None: ...
 
     async def close(
         self,
@@ -217,13 +207,9 @@ class AcpRuntimeOptional(Protocol):
         self, *, handle: AcpRuntimeHandle | None = None
     ) -> AcpRuntimeCapabilities: ...
 
-    async def get_status(
-        self, *, handle: AcpRuntimeHandle
-    ) -> AcpRuntimeStatus: ...
+    async def get_status(self, *, handle: AcpRuntimeHandle) -> AcpRuntimeStatus: ...
 
-    async def set_mode(
-        self, *, handle: AcpRuntimeHandle, mode: str
-    ) -> None: ...
+    async def set_mode(self, *, handle: AcpRuntimeHandle, mode: str) -> None: ...
 
     async def set_config_option(
         self, *, handle: AcpRuntimeHandle, key: str, value: str
@@ -235,6 +221,7 @@ class AcpRuntimeOptional(Protocol):
 
 
 __all__ = [
+    "OFFICIAL_SESSION_UPDATE_TAGS",
     "AcpEventDone",
     "AcpEventError",
     "AcpEventStatus",
@@ -254,5 +241,4 @@ __all__ = [
     "AcpRuntimeTurnAttachment",
     "AcpRuntimeTurnInput",
     "AcpSessionUpdateTag",
-    "OFFICIAL_SESSION_UPDATE_TAGS",
 ]

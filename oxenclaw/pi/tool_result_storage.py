@@ -137,14 +137,18 @@ def maybe_persist_tool_result(
     except OSError as exc:
         logger.warning(
             "tool_result_storage: write failed for %s (%s) — returning original",
-            tool_use_id, exc,
+            tool_use_id,
+            exc,
         )
         return output
 
     preview = output[:PREVIEW_CHARS]
     logger.info(
         "tool_result_storage: persisted %s (%s, %d chars -> %s)",
-        tool_name, tool_use_id, len(output), target,
+        tool_name,
+        tool_use_id,
+        len(output),
+        target,
     )
     return _build_block(target, len(output), preview)
 
@@ -218,18 +222,21 @@ def enforce_turn_budget(
         persisted_chars += len(original)
         logger.info(
             "turn_budget: persisted %s (%d chars; total now %d / budget %d)",
-            target.get("id"), len(original), total, turn_budget,
+            target.get("id"),
+            len(original),
+            total,
+            turn_budget,
         )
 
     return persisted_chars
 
 
 __all__ = [
-    "BudgetConfig",
+    "DEFAULT_TURN_BUDGET",
     "PERSISTED_OUTPUT_TAG",
     "PREVIEW_CHARS",
-    "DEFAULT_TURN_BUDGET",
-    "resolve_threshold",
-    "maybe_persist_tool_result",
+    "BudgetConfig",
     "enforce_turn_budget",
+    "maybe_persist_tool_result",
+    "resolve_threshold",
 ]

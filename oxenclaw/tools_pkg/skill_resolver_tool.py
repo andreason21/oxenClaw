@@ -54,9 +54,7 @@ def _skill_payload(skill: InstalledSkill) -> dict[str, Any]:
     }
 
 
-def _match_installed(
-    skills: list[InstalledSkill], query: str
-) -> InstalledSkill | None:
+def _match_installed(skills: list[InstalledSkill], query: str) -> InstalledSkill | None:
     q = query.lower()
     words = q.split()
     # Exact slug / name match first.
@@ -118,7 +116,9 @@ def skill_resolver_tool(
     async def _handler(args: _Args) -> str:
         query = args.query.strip()
         if not query:
-            return json.dumps({"found": "error", "error": "query must not be empty", "step": "validate"})
+            return json.dumps(
+                {"found": "error", "error": "query must not be empty", "step": "validate"}
+            )
 
         # ── 1. Check installed skills ─────────────────────────────────────
         try:
@@ -135,12 +135,14 @@ def skill_resolver_tool(
         if registries is not None:
             try:
                 from oxenclaw.clawhub.sources.clawhub import ClawHubSource
+
                 sources.append(ClawHubSource(registries))
             except Exception:
                 pass
         try:
             from oxenclaw.clawhub.sources.github import GitHubSource
             from oxenclaw.clawhub.sources.index import IndexSource
+
             sources.append(GitHubSource())
             idx = IndexSource()
             if idx.configured:

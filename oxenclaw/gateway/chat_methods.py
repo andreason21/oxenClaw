@@ -85,6 +85,7 @@ def register_chat_methods(
         return {"sessions": rows}
 
     if agents is not None:
+
         @router.method("chat.debug_prompt", _DebugPromptParams)
         async def _debug_prompt(p: _DebugPromptParams) -> dict:  # type: ignore[type-arg]
             agent = agents.get(p.agent_id)

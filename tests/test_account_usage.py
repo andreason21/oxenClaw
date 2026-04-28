@@ -18,6 +18,7 @@ def _reset_request_fn():
 def _make_canned(responses: dict[str, dict[str, Any] | None]):
     async def _fn(method: str, url: str, headers, body):
         return responses.get(url)
+
     return _fn
 
 
@@ -68,9 +69,7 @@ async def test_openrouter_usage_combines_credits_and_key() -> None:
         "https://openrouter.ai/api/v1/credits": {
             "data": {"total_credits": 10.0, "total_usage": 3.5}
         },
-        "https://openrouter.ai/api/v1/key": {
-            "data": {"limit": 20.0, "limit_remaining": 12.0}
-        },
+        "https://openrouter.ai/api/v1/key": {"data": {"limit": 20.0, "limit_remaining": 12.0}},
     }
     account_usage.set_request_fn(_make_canned(responses))
     snap = await account_usage.fetch_openrouter_usage("sk-or-test")
@@ -112,9 +111,7 @@ async def test_dispatch_routes_to_correct_provider() -> None:
 async def test_to_dict_round_trip() -> None:
     snap = account_usage.AccountUsageSnapshot(
         provider="anthropic",
-        windows=[
-            account_usage.AccountUsageWindow(label="Session", used_percent=42.0)
-        ],
+        windows=[account_usage.AccountUsageWindow(label="Session", used_percent=42.0)],
         extra_credit=5.0,
     )
     d = snap.to_dict()

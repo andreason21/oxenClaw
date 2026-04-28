@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import time
-from pathlib import Path
 
 import pytest
 
 from oxenclaw.wiki.claims import add_claim, find_contradictions, verify_claim
-from oxenclaw.wiki.models import WikiClaim, WikiEvidence, WikiPage, WikiPageKind
+from oxenclaw.wiki.models import WikiEvidence, WikiPage, WikiPageKind
 
 
 def _empty_page() -> WikiPage:
@@ -20,7 +19,7 @@ def _empty_page() -> WikiPage:
 
 def test_add_claim_appends_to_page() -> None:
     page = _empty_page()
-    new_page, claim = add_claim(page, "Water boils at 100°C.")
+    new_page, _claim = add_claim(page, "Water boils at 100°C.")
     assert len(new_page.claims) == 1
     assert new_page.claims[0].text == "Water boils at 100°C."
     # Original page must be untouched (dataclass is mutable but
@@ -77,9 +76,7 @@ def test_verify_claim_sets_last_verified_at() -> None:
     assert claim.last_verified_at is None
     before = time.time()
     verified_page = verify_claim(page, claim.claim_id)
-    matched = next(
-        (c for c in verified_page.claims if c.claim_id == claim.claim_id), None
-    )
+    matched = next((c for c in verified_page.claims if c.claim_id == claim.claim_id), None)
     assert matched is not None
     assert matched.last_verified_at is not None
     assert matched.last_verified_at >= before

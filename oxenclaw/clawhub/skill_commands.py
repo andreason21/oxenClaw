@@ -39,9 +39,7 @@ _TYPE_MAP: dict[str, type] = {
 }
 
 
-def _build_input_model(
-    cmd: SkillCommand, *, model_name: str
-) -> type[BaseModel]:
+def _build_input_model(cmd: SkillCommand, *, model_name: str) -> type[BaseModel]:
     """Synthesise a Pydantic model for the command's `inputs:` block."""
     field_defs: dict[str, tuple[Any, Any]] = {}
     for key, spec in cmd.inputs.items():
@@ -97,9 +95,7 @@ async def _run_shell(rendered: str, *, timeout_seconds: float) -> tuple[int, str
         stderr=asyncio.subprocess.PIPE,
     )
     try:
-        stdout, stderr = await asyncio.wait_for(
-            proc.communicate(), timeout=timeout_seconds
-        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout_seconds)
     except TimeoutError:
         proc.kill()
         try:
@@ -107,7 +103,11 @@ async def _run_shell(rendered: str, *, timeout_seconds: float) -> tuple[int, str
         except Exception:
             pass
         return -1, "", f"timeout after {timeout_seconds}s"
-    return proc.returncode or 0, stdout.decode("utf-8", "replace"), stderr.decode("utf-8", "replace")
+    return (
+        proc.returncode or 0,
+        stdout.decode("utf-8", "replace"),
+        stderr.decode("utf-8", "replace"),
+    )
 
 
 def build_skill_command_tool(
@@ -126,11 +126,11 @@ def build_skill_command_tool(
         rendered = _render_template(cmd.template, kwargs)
         logger.info(
             "skill-command exec: skill=%s cmd=%s args=%s",
-            skill_name, cmd.name, sorted(kwargs.keys()),
+            skill_name,
+            cmd.name,
+            sorted(kwargs.keys()),
         )
-        rc, stdout, stderr = await _run_shell(
-            rendered, timeout_seconds=cmd.timeout_seconds
-        )
+        rc, stdout, stderr = await _run_shell(rendered, timeout_seconds=cmd.timeout_seconds)
         body = stdout if rc == 0 else f"{stdout}\n[stderr]\n{stderr}"
         if len(body) > max_output_chars:
             body = body[:max_output_chars] + "\n[...truncated]"
@@ -145,9 +145,7 @@ def build_skill_command_tool(
     )
 
 
-def build_skill_command_tools(
-    skill_name: str, commands: list[SkillCommand]
-) -> list[Tool]:
+def build_skill_command_tools(skill_name: str, commands: list[SkillCommand]) -> list[Tool]:
     """Convenience: build one tool per declared command."""
     return [build_skill_command_tool(skill_name, c) for c in commands]
 
@@ -174,9 +172,7 @@ def maybe_route_slash_command(
     if parsed is None:
         return None
     slug, remaining = parsed
-    return build_skill_invocation_message(
-        slug, remaining, paths=paths, session_id=session_id
-    )
+    return build_skill_invocation_message(slug, remaining, paths=paths, session_id=session_id)
 
 
 __all__ = [

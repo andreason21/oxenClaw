@@ -332,9 +332,7 @@ def register_memory_methods(router: Router, retriever: MemoryRetriever) -> None:
             )
             return {"ok": True, "id": entry_id, "promoted_from": p.chunk_id}
         if p.text:
-            entry_id = store.short_term_add(
-                text=p.text, tags=p.tags, confidence=p.confidence
-            )
+            entry_id = store.short_term_add(text=p.text, tags=p.tags, confidence=p.confidence)
             return {"ok": True, "id": entry_id, "promoted_from": None}
         return {"ok": False, "error": "either chunk_id or text is required"}
 
@@ -406,9 +404,14 @@ def register_memory_methods(router: Router, retriever: MemoryRetriever) -> None:
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, strftime('%s','now'))
                     """,
                     (
-                        c["id"], c["path"], c["source"],
-                        int(c["start_line"]), int(c["end_line"]),
-                        c["hash"], c["text"], c.get("model"),
+                        c["id"],
+                        c["path"],
+                        c["source"],
+                        int(c["start_line"]),
+                        int(c["end_line"]),
+                        c["hash"],
+                        c["text"],
+                        c.get("model"),
                     ),
                 )
                 conn.execute(

@@ -11,7 +11,6 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from pathlib import Path
-from typing import Any
 
 from oxenclaw.clawhub.loader import InstalledSkill, load_installed_skills
 from oxenclaw.clawhub.preprocessing import preprocess_skill_body

@@ -173,7 +173,7 @@ class IndexSource(SkillSource):
                     return SkillManifest.model_validate(
                         {"name": skill_id, "description": s.get("description", "")}
                     )
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
                     raise SkillManifestError(str(exc)) from exc
         raise SkillManifestError(f"skill {skill_id!r} not in index")
 

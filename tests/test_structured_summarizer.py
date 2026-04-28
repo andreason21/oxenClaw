@@ -31,7 +31,6 @@ from oxenclaw.pi.messages import (
     UserMessage,
 )
 
-
 # ─── Helper builders ────────────────────────────────────────────────
 
 
@@ -54,9 +53,7 @@ def _assistant_tool(tool_id: str, name: str, args: dict | None = None) -> Assist
 
 
 def _tool_result(tool_id: str, body: str) -> ToolResultMessage:
-    return ToolResultMessage(
-        results=[ToolResultBlock(tool_use_id=tool_id, content=body)]
-    )
+    return ToolResultMessage(results=[ToolResultBlock(tool_use_id=tool_id, content=body)])
 
 
 # ─── _summarize_tool_result ─────────────────────────────────────────

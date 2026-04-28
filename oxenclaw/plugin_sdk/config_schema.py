@@ -63,9 +63,7 @@ class MemoryPrivacyConfig(BaseModel):
 
     redact_level: Literal["off", "light", "strict"] = "light"
     allow_globs: list[str] = Field(default_factory=list)
-    deny_globs: list[str] = Field(
-        default_factory=lambda: ["*.log", "secrets/**", "credentials/**"]
-    )
+    deny_globs: list[str] = Field(default_factory=lambda: ["*.log", "secrets/**", "credentials/**"])
     min_file_size: int = 0
     max_file_size: int = 1_048_576  # 1 MiB
 

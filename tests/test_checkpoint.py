@@ -63,9 +63,7 @@ def test_snapshot_returns_commit_hash(project: Path, checkpoints_root: Path) -> 
     assert "first label" in labels
 
 
-def test_list_snapshots_returns_most_recent_first(
-    project: Path, checkpoints_root: Path
-) -> None:
+def test_list_snapshots_returns_most_recent_first(project: Path, checkpoints_root: Path) -> None:
     m = CheckpointManager(project, checkpoints_root=checkpoints_root)
     h1 = m.snapshot("first")
     (project / "hello.txt").write_text("second content\n", encoding="utf-8")
@@ -76,9 +74,7 @@ def test_list_snapshots_returns_most_recent_first(
     assert any(s.commit_hash == h1 for s in snaps)
 
 
-def test_restore_brings_back_old_content(
-    project: Path, checkpoints_root: Path
-) -> None:
+def test_restore_brings_back_old_content(project: Path, checkpoints_root: Path) -> None:
     m = CheckpointManager(project, checkpoints_root=checkpoints_root)
     h1 = m.snapshot("v1")
     (project / "hello.txt").write_text("changed!\n", encoding="utf-8")
@@ -88,18 +84,14 @@ def test_restore_brings_back_old_content(
     assert (project / "hello.txt").read_text(encoding="utf-8") == "first content\n"
 
 
-def test_restore_rejects_traversal_path(
-    project: Path, checkpoints_root: Path
-) -> None:
+def test_restore_rejects_traversal_path(project: Path, checkpoints_root: Path) -> None:
     m = CheckpointManager(project, checkpoints_root=checkpoints_root)
     h = m.snapshot("v1")
     with pytest.raises(ValueError, match="escapes"):
         m.restore(h, file_path="../etc/passwd")
 
 
-def test_restore_rejects_dash_prefixed_hash(
-    project: Path, checkpoints_root: Path
-) -> None:
+def test_restore_rejects_dash_prefixed_hash(project: Path, checkpoints_root: Path) -> None:
     m = CheckpointManager(project, checkpoints_root=checkpoints_root)
     m.init()
     with pytest.raises(ValueError, match="must not start with"):

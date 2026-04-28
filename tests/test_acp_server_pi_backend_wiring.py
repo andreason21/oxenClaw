@@ -40,7 +40,6 @@ def test_pi_backend_factory_registers_memory_tools(
         "default_paths",
         lambda: paths_mod.OxenclawPaths(home=tmp_path),
     )
-    from oxenclaw.config import default_paths as cfg_default_paths
 
     monkeypatch.setattr(
         "oxenclaw.config.default_paths",
@@ -48,7 +47,6 @@ def test_pi_backend_factory_registers_memory_tools(
     )
 
     # Stub build_embedder so we don't need a real embedder env.
-    from oxenclaw.memory import retriever as retriever_mod
     from tests._memory_stubs import StubEmbeddings
 
     monkeypatch.setattr(
@@ -57,8 +55,8 @@ def test_pi_backend_factory_registers_memory_tools(
     )
 
     # Now boot the factory.
-    from oxenclaw.acp.server import _build_runtime
     from oxenclaw.acp.pi_agent_runtime import PiAgentAcpRuntime
+    from oxenclaw.acp.server import _build_runtime
 
     runtime = _build_runtime("pi")
     assert isinstance(runtime, PiAgentAcpRuntime)

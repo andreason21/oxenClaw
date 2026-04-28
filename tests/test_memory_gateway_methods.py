@@ -170,8 +170,13 @@ async def test_memory_promote_text_creates_curated_entry(tmp_path: Path) -> None
     router, retriever = _setup(tmp_path)
     try:
         res = await _call(
-            router, "memory.promote",
-            {"text": "Project deadline is May 1.", "tags": ["deadline", "project"], "confidence": 0.9},
+            router,
+            "memory.promote",
+            {
+                "text": "Project deadline is May 1.",
+                "tags": ["deadline", "project"],
+                "confidence": 0.9,
+            },
         )
         assert res["ok"] is True
         assert res["id"]
@@ -194,7 +199,8 @@ async def test_memory_promote_chunk_id_round_trip(tmp_path: Path) -> None:
         search = await _call(router, "memory.search", {"query": "alpha", "k": 1})
         chunk_id = search["hits"][0]["chunk"]["id"]
         promoted = await _call(
-            router, "memory.promote",
+            router,
+            "memory.promote",
             {"chunk_id": chunk_id, "tags": ["fact"]},
         )
         assert promoted["ok"] is True
@@ -221,9 +227,7 @@ async def test_memory_short_term_review_and_archive(tmp_path: Path) -> None:
         assert arc["ok"] is True
         active = await _call(router, "memory.short_term_list", {})
         assert active["count"] == 0
-        all_rows = await _call(
-            router, "memory.short_term_list", {"include_archived": True}
-        )
+        all_rows = await _call(router, "memory.short_term_list", {"include_archived": True})
         assert all_rows["count"] == 1
         assert all_rows["entries"][0]["archived"] is True
     finally:

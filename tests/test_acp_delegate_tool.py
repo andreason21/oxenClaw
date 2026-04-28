@@ -10,8 +10,6 @@ from __future__ import annotations
 
 import sys
 
-import pytest
-
 from oxenclaw.tools_pkg.acp_delegate_tool import acp_delegate_tool
 
 
@@ -61,9 +59,7 @@ async def test_delegate_to_acp_custom_requires_argv() -> None:
     # Pydantic model validation is happy (argv is optional), but the
     # handler raises ValueError when runtime='custom' without argv —
     # which the tool surfaces as a failure string.
-    result = await tool.execute(
-        {"runtime": "custom", "prompt": "x"}
-    )
+    result = await tool.execute({"runtime": "custom", "prompt": "x"})
     assert "failed" in result.lower() or "argv" in result.lower()
 
 
@@ -74,9 +70,7 @@ async def test_delegate_to_acp_known_runtime_falls_back_when_cli_missing() -> No
     tool = acp_delegate_tool()
     # Neither claude nor codex nor gemini is guaranteed installed in
     # CI, so any of these should produce a friendly error if missing.
-    result = await tool.execute(
-        {"runtime": "claude", "prompt": "test", "timeout_seconds": 5}
-    )
+    result = await tool.execute({"runtime": "claude", "prompt": "test", "timeout_seconds": 5})
     # Pass criterion: tool returned a string starting with "[delegate"
     # rather than raising. The string content depends on the host
     # — installed → real text; missing → friendly error.
@@ -93,6 +87,5 @@ async def test_delegate_tool_is_registered_in_default_bundle() -> None:
 
     names = {t.name for t in default_bundled_tools()}
     assert "delegate_to_acp" in names, (
-        "delegate_to_acp must ship in the default bundled tools — "
-        f"got: {sorted(names)}"
+        f"delegate_to_acp must ship in the default bundled tools — got: {sorted(names)}"
     )

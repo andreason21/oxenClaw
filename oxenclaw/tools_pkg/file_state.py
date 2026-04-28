@@ -27,10 +27,10 @@ from __future__ import annotations
 import os
 import threading
 import time
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Literal
-
+from typing import Literal
 
 StaleKind = Literal["sibling_wrote", "mtime_drift", "write_without_read"]
 
@@ -164,17 +164,12 @@ class FileStateRegistry:
             if disk_mtime is not None and disk_mtime != stamp.last_read_mtime:
                 return StaleWarning(
                     kind="mtime_drift",
-                    message=(
-                        f"{resolved} was modified on disk after this "
-                        "agent's last read"
-                    ),
+                    message=(f"{resolved} was modified on disk after this agent's last read"),
                 )
             if stamp.partial_read:
                 return StaleWarning(
                     kind="mtime_drift",
-                    message=(
-                        f"{resolved} was last read with offset/limit pagination"
-                    ),
+                    message=(f"{resolved} was last read with offset/limit pagination"),
                 )
 
         # Never read — net-new file is fine, but if it exists and we have
@@ -187,9 +182,7 @@ class FileStateRegistry:
             if exists:
                 return StaleWarning(
                     kind="write_without_read",
-                    message=(
-                        f"{resolved} exists but was not read by this agent"
-                    ),
+                    message=(f"{resolved} exists but was not read by this agent"),
                 )
         return None
 

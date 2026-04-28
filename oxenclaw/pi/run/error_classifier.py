@@ -37,7 +37,7 @@ if TYPE_CHECKING:
     from oxenclaw.pi.streaming import ErrorEvent
 
 
-class FailoverReason(str, enum.Enum):
+class FailoverReason(enum.StrEnum):
     """Why an API call failed; selects the recovery strategy."""
 
     NONE = "none"
@@ -192,10 +192,7 @@ _CLIENT_ABORT_PATTERNS = (
 
 
 def _match_any(message: str, patterns: tuple[str, ...]) -> bool:
-    for p in patterns:
-        if p in message:
-            return True
-    return False
+    return any(p in message for p in patterns)
 
 
 # Heuristic threshold for "huge" approx_tokens — over this with a
@@ -410,9 +407,7 @@ def classify_api_error(
     if _match_any(msg_lc, _TRANSPORT_PATTERNS):
         is_huge = False
         if approx_tokens is not None:
-            if approx_tokens >= _CONTEXT_OVERFLOW_TOKEN_FLOOR:
-                is_huge = True
-            elif (
+            if approx_tokens >= _CONTEXT_OVERFLOW_TOKEN_FLOOR or (
                 context_window is not None
                 and context_window > 0
                 and approx_tokens > int(context_window * 0.6)

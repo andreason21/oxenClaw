@@ -165,9 +165,7 @@ async def _maybe_rotate_credential(
         logger.debug("auth pool report_failure swallowed", exc_info=True)
 
 
-def _maybe_record_long_context_tier(
-    config: RuntimeConfig, model: Model, message: str
-) -> None:
+def _maybe_record_long_context_tier(config: RuntimeConfig, model: Model, message: str) -> None:
     """Detect Anthropic's "exceeds 200k context tier" signal and flag it.
 
     The next request will need to hard-cap at 200K tokens before sending
@@ -257,9 +255,7 @@ async def _run_tools(
             )
             if decision is not None:
                 if decision.abort:
-                    out_text = decision.substitute_output or (
-                        f"tool {req.name!r} aborted by hook"
-                    )
+                    out_text = decision.substitute_output or (f"tool {req.name!r} aborted by hook")
                     result = ToolExecutionResult(
                         id=req.id,
                         name=req.name,
@@ -294,6 +290,7 @@ async def _run_tools(
             from oxenclaw.agents.tools import (
                 _canonicalise_tool_name as _canon,
             )
+
             canon = _canon(req.name)
             for live_name, live_tool in tools_by_name.items():
                 if _canon(live_name) == canon:
@@ -364,9 +361,7 @@ async def run_agent_turn(
     # preemptive compactor can shrink context before the next attempt.
     # Capped to keep a permanently-broken turn from looping forever.
     compression_self_heals = 0
-    max_compression_self_heals = max(
-        1, getattr(config, "max_compression_self_heals", 2)
-    )
+    max_compression_self_heals = max(1, getattr(config, "max_compression_self_heals", 2))
     # Failover state: chain head is the active model; cursor walks the
     # configured chain when the active model misbehaves.
     failover_chain: list[str] = list(config.failover_chain or [])
@@ -382,9 +377,7 @@ async def run_agent_turn(
             # AND emits "yielded: ..." text in its result; if any of
             # the tools we just executed match that signature, treat
             # this as a yield rather than an abort.
-            yielded_results = [
-                r for r in executions if r.name == "sessions_yield"
-            ]
+            yielded_results = [r for r in executions if r.name == "sessions_yield"]
             if yielded_results:
                 reason = (yielded_results[-1].output or "yielded").strip()
                 yield_msg = AssistantMessage(
@@ -495,7 +488,9 @@ async def run_agent_turn(
                 )
                 logger.info(
                     "mid-stream silent retry %d/%d after %.2fs (no text emitted yet): %s",
-                    silent_retries, max_silent_retries, delay,
+                    silent_retries,
+                    max_silent_retries,
+                    delay,
                     result.error.message,
                 )
                 await asyncio.sleep(delay)
@@ -539,8 +534,10 @@ async def run_agent_turn(
                     if next_model is not None:
                         logger.warning(
                             "failover: %s → %s reason=%s classifier=%s",
-                            active_model.id, next_model.id,
-                            decision.reason, classified.reason.value,
+                            active_model.id,
+                            next_model.id,
+                            decision.reason,
+                            classified.reason.value,
                         )
                         active_model = next_model
                         failover_cursor = new_cursor
@@ -549,6 +546,7 @@ async def run_agent_turn(
                         # provider may need different auth.
                         try:
                             from oxenclaw.pi.auth import resolve_api as _resolve_api
+
                             new_api = await _resolve_api(active_model, config.hook_runner._auth)  # type: ignore[attr-defined]
                             api = new_api
                         except Exception:
@@ -565,7 +563,8 @@ async def run_agent_turn(
             # attempts so a permanently-broken request can't loop forever.
             if (
                 classified.should_compress
-                and classified.reason in (
+                and classified.reason
+                in (
                     FailoverReason.CONTEXT_OVERFLOW,
                     FailoverReason.PAYLOAD_TOO_LARGE,
                 )
@@ -644,15 +643,11 @@ async def run_agent_turn(
                 failover_empty_streak += 1
             else:
                 failover_empty_streak = 0
-            if (
-                recoveries_used < config.stop_reason_recovery_attempts
-                and is_recoverable_empty(msg)
-            ):
+            if recoveries_used < config.stop_reason_recovery_attempts and is_recoverable_empty(msg):
                 recoveries_used += 1
                 nudge = build_recovery_nudge(msg.stop_reason)
                 logger.warning(
-                    "stop-reason recovery: stop_reason=%r → re-ask "
-                    "(attempt %d/%d)",
+                    "stop-reason recovery: stop_reason=%r → re-ask (attempt %d/%d)",
                     msg.stop_reason,
                     recoveries_used,
                     config.stop_reason_recovery_attempts,
@@ -705,10 +700,7 @@ async def run_agent_turn(
                     )
                 else:
                     _persisted.append(r)
-            _shadow = [
-                {"id": r.id, "name": r.name, "output": r.output or ""}
-                for r in _persisted
-            ]
+            _shadow = [{"id": r.id, "name": r.name, "output": r.output or ""} for r in _persisted]
             enforce_turn_budget(
                 _shadow,
                 _budget,
@@ -724,7 +716,7 @@ async def run_agent_turn(
                 )
                 if r.output != sh["output"]
                 else r
-                for r, sh in zip(_persisted, _shadow)
+                for r, sh in zip(_persisted, _shadow, strict=False)
             ]
         executions.extend(results)
         # Loop detection: count this iteration's unknown-tool calls. If

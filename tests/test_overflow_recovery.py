@@ -104,10 +104,7 @@ async def test_413_caps_self_heal_attempts(caplog) -> None:
     # Verify the compress-then-retry self-heal counter caps at 2 by
     # counting the structured warning the loop emits each time it
     # decides to break-and-retry. Silent transport retries are exempt.
-    self_heal_logs = [
-        rec for rec in caplog.records
-        if "compress-then-retry" in rec.getMessage()
-    ]
+    self_heal_logs = [rec for rec in caplog.records if "compress-then-retry" in rec.getMessage()]
     assert len(self_heal_logs) == cfg.max_compression_self_heals
     assert result.stopped_reason == "error"
 
@@ -181,10 +178,7 @@ async def test_compress_then_retry_disabled_propagates_error(caplog) -> None:
             config=cfg,
         )
     # No structured "compress-then-retry" log entries should appear.
-    self_heal_logs = [
-        rec for rec in caplog.records
-        if "compress-then-retry" in rec.getMessage()
-    ]
+    self_heal_logs = [rec for rec in caplog.records if "compress-then-retry" in rec.getMessage()]
     assert self_heal_logs == []
     assert result.stopped_reason == "error"
 

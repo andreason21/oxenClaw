@@ -130,9 +130,7 @@ class _ToolTelemetry:
         ) -> None:
             if ctx.session_key != self.session_key:
                 return
-            tid = self.pending_ids.pop(0) if self.pending_ids else (
-                f"acp-tc-orphan-{self.counter}"
-            )
+            tid = self.pending_ids.pop(0) if self.pending_ids else (f"acp-tc-orphan-{self.counter}")
             self.queue.put_nowait(
                 AcpEventToolCall(
                     text=tool_name,
@@ -179,9 +177,7 @@ class PiAgentAcpRuntime:
 
     # ---- AcpRuntime required surface -------------------------------------
 
-    async def ensure_session(
-        self, input: AcpRuntimeEnsureInput
-    ) -> AcpRuntimeHandle:
+    async def ensure_session(self, input: AcpRuntimeEnsureInput) -> AcpRuntimeHandle:
         existing = self._sessions.get(input.session_key)
         if existing is not None and not existing.closed:
             return existing.handle
@@ -195,14 +191,10 @@ class PiAgentAcpRuntime:
         self._sessions[input.session_key] = _PiSession(handle=handle)
         return handle
 
-    def run_turn(
-        self, input: AcpRuntimeTurnInput
-    ) -> AsyncIterator[AcpRuntimeEvent]:
+    def run_turn(self, input: AcpRuntimeTurnInput) -> AsyncIterator[AcpRuntimeEvent]:
         return self._run_turn(input)
 
-    async def _run_turn(
-        self, input: AcpRuntimeTurnInput
-    ) -> AsyncIterator[AcpRuntimeEvent]:
+    async def _run_turn(self, input: AcpRuntimeTurnInput) -> AsyncIterator[AcpRuntimeEvent]:
         state = self._sessions.get(input.handle.session_key)
         if state is None or state.closed:
             yield AcpEventError(
@@ -313,9 +305,7 @@ class PiAgentAcpRuntime:
 
         return uninstall
 
-    async def cancel(
-        self, *, handle: AcpRuntimeHandle, reason: str | None = None
-    ) -> None:
+    async def cancel(self, *, handle: AcpRuntimeHandle, reason: str | None = None) -> None:
         state = self._sessions.get(handle.session_key)
         if state is None:
             return
@@ -336,9 +326,7 @@ class PiAgentAcpRuntime:
             # Best-effort: ask PiAgent to forget the recall snapshot
             # for this key. Underlying transcript is left alone — the
             # operator must delete the JSON file explicitly.
-            invalidate = getattr(
-                self._agent, "invalidate_recall_snapshot", None
-            )
+            invalidate = getattr(self._agent, "invalidate_recall_snapshot", None)
             if callable(invalidate):
                 try:
                     invalidate(handle.session_key)

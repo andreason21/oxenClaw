@@ -9,7 +9,6 @@ from oxenclaw.security.command_gate import (
     detect_command_threats,
 )
 
-
 # ── HARDLINE detection ───────────────────────────────────────────────
 
 
@@ -154,9 +153,7 @@ async def test_shell_run_blocks_dangerous(tmp_path) -> None:
     from oxenclaw.tools_pkg.fs_tools import shell_run_tool
 
     tool = shell_run_tool()
-    out = await tool.execute(
-        {"command": "git reset --hard HEAD~1", "timeout_seconds": 1.0}
-    )
+    out = await tool.execute({"command": "git reset --hard HEAD~1", "timeout_seconds": 1.0})
     assert "BLOCKED" in out
     assert "dangerous" in out.lower()
 

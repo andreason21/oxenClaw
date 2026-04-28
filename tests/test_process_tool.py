@@ -17,8 +17,7 @@ pytestmark = pytest.mark.skipif(
     reason="needs bash",
 )
 
-from oxenclaw.tools_pkg.process_tool import process_tool  # noqa: E402
-
+from oxenclaw.tools_pkg.process_tool import process_tool
 
 # ---------------------------------------------------------------------------
 # Helpers

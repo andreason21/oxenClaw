@@ -363,7 +363,7 @@ def sessions_yield_tool(sm: SessionManager) -> Tool:
 def build_session_tools(
     sm: SessionManager,
     *,
-    approval_manager: "ApprovalManager | None" = None,
+    approval_manager: ApprovalManager | None = None,
 ) -> list[Tool]:
     """Build all six session tools.
 

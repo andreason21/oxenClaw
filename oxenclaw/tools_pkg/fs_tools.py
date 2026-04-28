@@ -14,7 +14,6 @@ import os
 import re
 import tempfile
 from pathlib import Path
-from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -63,7 +62,7 @@ class _ReadFileArgs(BaseModel):
         description="First line to return (1-indexed, inclusive).",
         ge=1,
     )
-    end_line: Optional[int] = Field(
+    end_line: int | None = Field(
         None,
         description="Last line to return (1-indexed, inclusive). None means read to EOF.",
         ge=1,
@@ -130,9 +129,7 @@ def read_file_tool() -> Tool:
         # editor) modified the file in between.
         try:
             partial = (start > 1) or (end < total_lines)
-            _file_state_registry().register_read(
-                _current_task_id(), p, partial=partial
-            )
+            _file_state_registry().register_read(_current_task_id(), p, partial=partial)
         except Exception:
             pass
         return text
@@ -177,10 +174,7 @@ def read_pdf_tool() -> Tool:
         try:
             import pypdf  # type: ignore[import-untyped]
         except ImportError:
-            return (
-                "read_pdf error: pypdf is not installed. "
-                "Install it with: pip install pypdf"
-            )
+            return "read_pdf error: pypdf is not installed. Install it with: pip install pypdf"
 
         p = Path(args.path)
         if not p.exists():
@@ -240,6 +234,7 @@ def write_file_tool() -> Tool:
             stale = _file_state_registry().check_stale(_current_task_id(), p)
             if stale is not None and stale.kind == "sibling_wrote":
                 import time as _t
+
                 ts = (
                     _t.strftime("%H:%M:%S", _t.localtime(stale.last_writer_at))
                     if stale.last_writer_at is not None
@@ -331,6 +326,7 @@ def edit_tool() -> Tool:
             stale = _file_state_registry().check_stale(_current_task_id(), p)
             if stale is not None and stale.kind == "sibling_wrote":
                 import time as _t
+
                 ts = (
                     _t.strftime("%H:%M:%S", _t.localtime(stale.last_writer_at))
                     if stale.last_writer_at is not None
@@ -453,7 +449,7 @@ class _GrepArgs(BaseModel):
 
     pattern: str = Field(..., description="Python regex pattern to search for.")
     path: str = Field(".", description="Directory (or file) to search under.")
-    glob: Optional[str] = Field(
+    glob: str | None = Field(
         None,
         description="Optional glob pattern to restrict which files are searched (e.g. '*.py').",
     )
@@ -485,9 +481,7 @@ def grep_tool() -> Tool:
             if args.glob:
                 file_list = sorted(root.rglob(args.glob))
             else:
-                file_list = sorted(
-                    f for f in root.rglob("*") if f.is_file()
-                )
+                file_list = sorted(f for f in root.rglob("*") if f.is_file())
         else:
             return f"grep error: {root} does not exist"
 
@@ -586,7 +580,7 @@ class _SearchFilesArgs(BaseModel):
 
     root: str = Field(".", description="Directory to search recursively.")
     pattern: str = Field(..., description="Glob pattern for filenames (e.g. '*.py').")
-    contains: Optional[str] = Field(
+    contains: str | None = Field(
         None,
         description="Optional literal substring; only files containing this string are returned.",
     )
@@ -669,7 +663,7 @@ class _ShellRunArgs(BaseModel):
         gt=0,
         le=300,
     )
-    cwd: Optional[str] = Field(None, description="Working directory; defaults to process cwd.")
+    cwd: str | None = Field(None, description="Working directory; defaults to process cwd.")
 
 
 def shell_run_tool() -> Tool:

@@ -124,9 +124,7 @@ async def test_fs_tools_edit_warns_on_sibling(tmp_path: Path) -> None:
     reg = get_registry()
     reg.register_write("sibling-X", p)
     tool = edit_tool()
-    out = await tool.execute(
-        {"path": str(p), "old_str": "foo", "new_str": "bar"}
-    )
+    out = await tool.execute({"path": str(p), "old_str": "foo", "new_str": "bar"})
     assert "WARN" in out
     assert "edited" in out
     assert p.read_text() == "bar\n"

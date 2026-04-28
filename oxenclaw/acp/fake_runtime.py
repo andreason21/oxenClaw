@@ -63,9 +63,7 @@ class InMemoryFakeRuntime:
 
     # ---- AcpRuntime required surface --------------------------------------
 
-    async def ensure_session(
-        self, input: AcpRuntimeEnsureInput
-    ) -> AcpRuntimeHandle:
+    async def ensure_session(self, input: AcpRuntimeEnsureInput) -> AcpRuntimeHandle:
         existing = self._sessions.get(input.session_key)
         if existing is not None and not existing.closed:
             return existing.handle
@@ -80,14 +78,10 @@ class InMemoryFakeRuntime:
         self._sessions[input.session_key] = _FakeSessionState(handle=handle)
         return handle
 
-    def run_turn(
-        self, input: AcpRuntimeTurnInput
-    ) -> AsyncIterator[AcpRuntimeEvent]:
+    def run_turn(self, input: AcpRuntimeTurnInput) -> AsyncIterator[AcpRuntimeEvent]:
         return self._run_turn(input)
 
-    async def _run_turn(
-        self, input: AcpRuntimeTurnInput
-    ) -> AsyncIterator[AcpRuntimeEvent]:
+    async def _run_turn(self, input: AcpRuntimeTurnInput) -> AsyncIterator[AcpRuntimeEvent]:
         state = self._sessions.get(input.handle.session_key)
         if state is None or state.closed:
             return
@@ -117,9 +111,7 @@ class InMemoryFakeRuntime:
             return
         yield AcpEventDone(stop_reason="stop")
 
-    async def cancel(
-        self, *, handle: AcpRuntimeHandle, reason: str | None = None
-    ) -> None:
+    async def cancel(self, *, handle: AcpRuntimeHandle, reason: str | None = None) -> None:
         state = self._sessions.get(handle.session_key)
         if state is None:
             return
@@ -138,9 +130,7 @@ class InMemoryFakeRuntime:
 
     # ---- test helpers (NOT part of AcpRuntime) ---------------------------
 
-    def script_session(
-        self, session_key: str, events: list[AcpRuntimeEvent]
-    ) -> None:
+    def script_session(self, session_key: str, events: list[AcpRuntimeEvent]) -> None:
         """Override the default echo behaviour for one session.
 
         Subsequent `run_turn` calls will yield `events` in order.
@@ -148,9 +138,7 @@ class InMemoryFakeRuntime:
         """
         state = self._sessions.get(session_key)
         if state is None:
-            raise KeyError(
-                f"session {session_key!r} must be ensured before scripting"
-            )
+            raise KeyError(f"session {session_key!r} must be ensured before scripting")
         state.scripted_events = list(events)
 
 

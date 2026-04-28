@@ -339,9 +339,7 @@ class SearXNGSearch(WebSearchProvider):
 # ─── Search dispatcher with provider fallback ────────────────────────
 
 
-def build_default_search_chain(
-    *, searxng_url: str | None = None
-) -> list[WebSearchProvider]:
+def build_default_search_chain(*, searxng_url: str | None = None) -> list[WebSearchProvider]:
     """Build a search-provider chain from environment variables alone.
 
     Tries `BRAVE_API_KEY`, `TAVILY_API_KEY`, `EXA_API_KEY`, optional
@@ -352,12 +350,13 @@ def build_default_search_chain(
     last-resort when constructing the tool standalone).
     """
     import os
+
     providers: list[WebSearchProvider] = []
-    if (k := os.environ.get("BRAVE_API_KEY")):
+    if k := os.environ.get("BRAVE_API_KEY"):
         providers.append(BraveSearch(api_key=k))
-    if (k := os.environ.get("TAVILY_API_KEY")):
+    if k := os.environ.get("TAVILY_API_KEY"):
         providers.append(TavilySearch(api_key=k))
-    if (k := os.environ.get("EXA_API_KEY")):
+    if k := os.environ.get("EXA_API_KEY"):
         providers.append(ExaSearch(api_key=k))
     url = searxng_url or os.environ.get("SEARXNG_URL")
     if url:
@@ -494,7 +493,6 @@ def web_search_tool(*, providers: list[WebSearchProvider] | None = None) -> Tool
 
 
 __all__ = [
-    "build_default_search_chain",
     "BraveSearch",
     "DuckDuckGoSearch",
     "ExaSearch",
@@ -506,6 +504,7 @@ __all__ = [
     "WebSearchProvider",
     "assert_public_url",
     "build_default_providers",
+    "build_default_search_chain",
     "extract_readable_text",
     "search_with_fallback",
     "web_fetch_tool",

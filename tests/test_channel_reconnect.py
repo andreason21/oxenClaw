@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import time
 
 import pytest
@@ -104,9 +103,11 @@ async def test_tick_skips_auth_error() -> None:
 
     async def _spy_probe(self, channel_id, account_id):
         calls.append((channel_id, account_id))
+
         class R:
             ok = True
             error = ""
+
         return R()
 
     ChannelRouter.probe_orig = ChannelRouter.probe

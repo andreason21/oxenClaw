@@ -25,9 +25,17 @@ def test_build_anthropic_agent_with_default_tools() -> None:
     assert agent.id == "assistant"
     names = set(agent._tools.names())
     for required in (
-        "echo", "get_time",
-        "read_file", "list_dir", "grep", "glob", "read_pdf",
-        "write_file", "edit", "shell", "process",
+        "echo",
+        "get_time",
+        "read_file",
+        "list_dir",
+        "grep",
+        "glob",
+        "read_pdf",
+        "write_file",
+        "edit",
+        "shell",
+        "process",
         "update_plan",
     ):
         assert required in names, f"missing {required!r}: {sorted(names)}"

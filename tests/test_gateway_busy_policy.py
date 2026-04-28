@@ -84,9 +84,6 @@ async def test_lanes_stats_reports_busy_policy() -> None:
 async def test_dispatcher_interrupt_policy_signals_abort() -> None:
     """When busy_policy=interrupt and a turn is in flight, the dispatcher
     should signal `abort_event` on the lane before queueing the next."""
-    from oxenclaw.agents.dispatch import Dispatcher
-    from oxenclaw.agents.registry import AgentRegistry
-    from oxenclaw.plugin_sdk.config_schema import RootConfig
 
     reg = LaneRegistry(busy_policy="interrupt")
     state = reg.lane("agent-x", "k")

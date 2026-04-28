@@ -127,8 +127,8 @@ class CodingAgent(PiAgent):
         agent_id: str = "coding",
         system_prompt: str = CODING_SYSTEM_PROMPT,
         tools: ToolRegistry | None = None,
-        approval_manager: "ApprovalManager | None" = None,
-        session_manager: "SessionManager | None" = None,
+        approval_manager: ApprovalManager | None = None,
+        session_manager: SessionManager | None = None,
         paths: OxenclawPaths | None = None,
         **kwargs,
     ) -> None:
@@ -151,10 +151,10 @@ class CodingAgent(PiAgent):
 
 
 def _build_coding_registry(
-    approval_manager: "ApprovalManager | None" = None,
+    approval_manager: ApprovalManager | None = None,
     *,
     paths: OxenclawPaths | None = None,
-    session_manager: "SessionManager | None" = None,
+    session_manager: SessionManager | None = None,
 ) -> ToolRegistry:
     """Build the curated ToolRegistry for CodingAgent.
 

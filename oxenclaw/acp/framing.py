@@ -60,18 +60,14 @@ async def read_messages(
             # EOF — clean stream close.
             return
         if len(line) > max_line_bytes:
-            raise AcpFramingError(
-                f"line exceeds max_line_bytes ({len(line)} > {max_line_bytes})"
-            )
+            raise AcpFramingError(f"line exceeds max_line_bytes ({len(line)} > {max_line_bytes})")
         stripped = line.strip()
         if not stripped:
             continue
         try:
             value = json.loads(stripped)
         except json.JSONDecodeError as exc:
-            raise AcpFramingError(
-                f"malformed JSON on wire: {exc.msg} at pos {exc.pos}"
-            ) from exc
+            raise AcpFramingError(f"malformed JSON on wire: {exc.msg} at pos {exc.pos}") from exc
         if not isinstance(value, dict):
             raise AcpFramingError(
                 f"top-level value must be a JSON object, got {type(value).__name__}"

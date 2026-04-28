@@ -21,10 +21,16 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from oxenclaw.gateway.router import Router
-from oxenclaw.wiki.claims import add_claim as _claims_add_claim, verify_claim as _claims_verify_claim
-from oxenclaw.wiki.models import WikiClaim, WikiEvidence, WikiPage, WikiPageKind, parse_wiki_page_kind
+from oxenclaw.wiki.claims import add_claim as _claims_add_claim
+from oxenclaw.wiki.claims import verify_claim as _claims_verify_claim
+from oxenclaw.wiki.models import (
+    WikiClaim,
+    WikiEvidence,
+    WikiPage,
+    WikiPageKind,
+    parse_wiki_page_kind,
+)
 from oxenclaw.wiki.store import SlugConflict, WikiVaultStore
-
 
 # ─── param models ───────────────────────────────────────────────────
 
@@ -111,13 +117,17 @@ def _serialise_claim(c: WikiClaim) -> dict[str, Any]:
     if c.last_verified_at is not None:
         out["last_verified_at"] = c.last_verified_at
     out["evidence"] = [
-        {k: v for k, v in {
-            "source_id": e.source_id,
-            "path": e.path,
-            "lines": e.lines,
-            "note": e.note,
-            "weight": e.weight,
-        }.items() if v is not None}
+        {
+            k: v
+            for k, v in {
+                "source_id": e.source_id,
+                "path": e.path,
+                "lines": e.lines,
+                "note": e.note,
+                "weight": e.weight,
+            }.items()
+            if v is not None
+        }
         for e in c.evidence
     ]
     return out
@@ -231,9 +241,7 @@ def register_wiki_methods(router: Router, vault: WikiVaultStore) -> None:
             existing,
             name=p.title if p.title is not None else existing.name,
             body=p.body if p.body is not None else existing.body,
-            claims=(
-                _build_claims(p.claims) if p.claims is not None else existing.claims
-            ),
+            claims=(_build_claims(p.claims) if p.claims is not None else existing.claims),
         )
         saved = vault.update(p.slug, updated)
         return {"ok": True, "page": _serialise_page(saved)}
@@ -251,8 +259,7 @@ def register_wiki_methods(router: Router, vault: WikiVaultStore) -> None:
         pages = vault.search(p.query, k=p.k)
         hits = [
             {
-                "score": pg.name.lower().count(q) * 3
-                + (pg.body or "").lower().count(q),
+                "score": pg.name.lower().count(q) * 3 + (pg.body or "").lower().count(q),
                 "page": _serialise_summary(pg),
             }
             for pg in pages

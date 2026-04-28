@@ -79,7 +79,7 @@ def _canonicalise_tool_name(name: str) -> str:
 # new hallucinated names — `tool 'X' is not registered` is the signal.
 _TOOL_NAME_ALIASES: dict[str, str] = {
     # memory_save variants
-    "memory_set_fact": "memory_save",      # openclaw-style colon namespace
+    "memory_set_fact": "memory_save",  # openclaw-style colon namespace
     "set_fact": "memory_save",
     "remember": "memory_save",
     "remember_fact": "memory_save",
@@ -133,8 +133,8 @@ _TOOL_NAME_ALIASES: dict[str, str] = {
     "websearch": "web_search",
     "google_search": "web_search",
     "google_search_search": "web_search",  # double-canon from `google:search:search`
-    "google": "web_search",                # bare provider name → web_search
-    "google_search_": "web_search",        # `google:search:` trailing colon
+    "google": "web_search",  # bare provider name → web_search
+    "google_search_": "web_search",  # `google:search:` trailing colon
     "ddg_search": "web_search",
     "duckduckgo": "web_search",
     "duckduckgo_search": "web_search",

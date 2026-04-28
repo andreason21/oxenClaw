@@ -32,7 +32,6 @@ from oxenclaw.acp.protocol import (
     response_envelope,
 )
 
-
 # --- framing ---------------------------------------------------------------
 
 

@@ -161,16 +161,18 @@ def configure_logging(
     if resolved_file is None:
         home = os.environ.get("OXENCLAW_HOME")
         base = (
-            os.path.expanduser(home) if home
-            else os.path.join(os.path.expanduser("~"), ".oxenclaw")
+            os.path.expanduser(home) if home else os.path.join(os.path.expanduser("~"), ".oxenclaw")
         )
         resolved_file = os.path.join(base, "logs", "gateway.log")
     if resolved_file:
         try:
             from logging.handlers import RotatingFileHandler
+
             os.makedirs(os.path.dirname(resolved_file), exist_ok=True)
             file_handler = RotatingFileHandler(
-                resolved_file, maxBytes=5 * 1024 * 1024, backupCount=3,
+                resolved_file,
+                maxBytes=5 * 1024 * 1024,
+                backupCount=3,
                 encoding="utf-8",
             )
             file_handler.setFormatter(JsonFormatter())

@@ -34,7 +34,7 @@ import os
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -137,9 +137,7 @@ class AcpParentStreamRelay:
             return
         self._last_progress_at = self.clock()
         self._stall_notified = False
-        self._pending_text = (self._pending_text + cleaned)[
-            -STREAM_BUFFER_MAX_CHARS:
-        ]
+        self._pending_text = (self._pending_text + cleaned)[-STREAM_BUFFER_MAX_CHARS:]
         if self._flush_task is None or self._flush_task.done():
             self._flush_task = asyncio.create_task(self._flush_after_delay())
 
@@ -166,9 +164,7 @@ class AcpParentStreamRelay:
     async def _flush_pending(self) -> None:
         if not self._pending_text:
             return
-        snippet = _truncate(
-            _compact_whitespace(self._pending_text), STREAM_SNIPPET_MAX_CHARS
-        )
+        snippet = _truncate(_compact_whitespace(self._pending_text), STREAM_SNIPPET_MAX_CHARS)
         self._pending_text = ""
         if not snippet:
             return
@@ -214,9 +210,7 @@ class AcpParentStreamRelay:
         cleaned = text.strip()
         if not cleaned:
             return
-        await self._log_event(
-            "system_event", {"context_key": context_key, "text": cleaned}
-        )
+        await self._log_event("system_event", {"context_key": context_key, "text": cleaned})
         if self.surface is None:
             return
         try:
@@ -228,7 +222,7 @@ class AcpParentStreamRelay:
         if self.log_path is None:
             return
         entry: dict[str, Any] = {
-            "ts": datetime.now(timezone.utc).isoformat(),
+            "ts": datetime.now(UTC).isoformat(),
             "epoch_ms": int(self.clock() * 1000),
             "run_id": self.run_id,
             "parent_session_key": self.parent_session_key,
@@ -248,14 +242,10 @@ class AcpParentStreamRelay:
                 if not self._log_dir_ready:
                     self.log_path.parent.mkdir(parents=True, exist_ok=True)
                     self._log_dir_ready = True
-                await asyncio.to_thread(
-                    self._append_log_bytes, self.log_path, line
-                )
+                await asyncio.to_thread(self._append_log_bytes, self.log_path, line)
             except OSError:
                 # Best-effort diagnostics — never break relay flow.
-                logger.warning(
-                    "acp_parent_stream log write failed at %s", self.log_path
-                )
+                logger.warning("acp_parent_stream log write failed at %s", self.log_path)
 
     @staticmethod
     def _append_log_bytes(path: Path, line: bytes) -> None:

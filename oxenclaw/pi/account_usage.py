@@ -65,7 +65,9 @@ class AccountUsageSnapshot:
 # ---------------------------------------------------------------------------
 
 # (method, url, headers, json_body) → response_dict | None.
-RequestFn = Callable[[str, str, dict[str, str], dict[str, Any] | None], Awaitable[dict[str, Any] | None]]
+RequestFn = Callable[
+    [str, str, dict[str, str], dict[str, Any] | None], Awaitable[dict[str, Any] | None]
+]
 
 
 async def _default_make_request(
@@ -96,7 +98,7 @@ async def _default_make_request(
             resp.raise_for_status()
             data = resp.json()
             return data if isinstance(data, dict) else None
-    except Exception as exc:  # noqa: BLE001 — best-effort surface
+    except Exception as exc:
         logger.debug("account_usage request to %s failed: %s", url, exc)
         return None
 
@@ -142,6 +144,7 @@ def _parse_iso_to_epoch(value: Any) -> float | None:
         text = text[:-1] + "+00:00"
     try:
         from datetime import datetime
+
         dt = datetime.fromisoformat(text)
     except ValueError:
         return None

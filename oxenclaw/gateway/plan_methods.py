@@ -26,7 +26,6 @@ from pydantic import BaseModel, ConfigDict
 from oxenclaw.config.paths import OxenclawPaths, default_paths
 from oxenclaw.gateway.router import Router
 
-
 # ---------------------------------------------------------------------------
 # Param models
 # ---------------------------------------------------------------------------
@@ -71,7 +70,13 @@ def _summarise(path: Path) -> dict[str, Any] | None:
     if not data.get("steps") and not data.get("session_key"):
         return None
 
-    counts: dict[str, int] = {"completed": 0, "in_progress": 0, "pending": 0, "blocked": 0, "cancelled": 0}
+    counts: dict[str, int] = {
+        "completed": 0,
+        "in_progress": 0,
+        "pending": 0,
+        "blocked": 0,
+        "cancelled": 0,
+    }
     for step in data.get("steps", []):
         status = step.get("status", "pending")
         if status in counts:

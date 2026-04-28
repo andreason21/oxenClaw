@@ -25,24 +25,27 @@ from oxenclaw.agents.tools import FunctionTool, Tool
 class _AcpSpawnArgs(BaseModel):
     model_config = {"extra": "forbid"}
     runtime: Literal["claude", "codex", "gemini"] = Field(
-        ..., description=(
+        ...,
+        description=(
             "External AI CLI runtime: 'claude' (Claude Code), "
             "'codex' (OpenAI Codex CLI), or 'gemini' (Gemini CLI)."
         ),
     )
     prompt: str = Field(
-        ..., min_length=1,
+        ...,
+        min_length=1,
         description="Task prompt forwarded to the CLI as a positional arg.",
     )
     timeout_seconds: float = Field(
-        120.0, gt=0, le=600,
+        120.0,
+        gt=0,
+        le=600,
         description="Hard cap on the CLI invocation. Default 120s.",
     )
     cwd: str | None = Field(
         None,
         description=(
-            "Optional working directory for the spawned CLI. Defaults "
-            "to the gateway's CWD."
+            "Optional working directory for the spawned CLI. Defaults to the gateway's CWD."
         ),
     )
 
@@ -63,8 +66,10 @@ def acp_spawn_tool() -> Tool:
             f"[{result.runtime}/{result.cli} exit={result.exit_code} "
             f"dur={result.duration_seconds:.1f}s]\n"
         )
-        body = result.stdout if result.exit_code == 0 else (
-            f"{result.stdout}\n[stderr]\n{result.stderr}"
+        body = (
+            result.stdout
+            if result.exit_code == 0
+            else (f"{result.stdout}\n[stderr]\n{result.stderr}")
         )
         return head + body
 

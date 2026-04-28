@@ -112,13 +112,9 @@ class Dispatcher:
                 # Best-effort: queue the message text into pending so a
                 # `steer(text)`-aware agent can consume it. Falls back
                 # to queue-on-lane for agents that don't support it.
-                self._lanes.queue_message(
-                    agent_id_preview, session_key_preview, envelope.text
-                )
+                self._lanes.queue_message(agent_id_preview, session_key_preview, envelope.text)
             elif policy == "queue":
-                self._lanes.queue_message(
-                    agent_id_preview, session_key_preview, envelope.text
-                )
+                self._lanes.queue_message(agent_id_preview, session_key_preview, envelope.text)
             # `block` falls through silently — the lock provides the
             # blocking behaviour.
         return await self._lanes.run(
@@ -156,6 +152,7 @@ class Dispatcher:
         # the model itself fired. The matching "turn done" log lives
         # at the bottom of this function with a duration measurement.
         import time as _time_mod
+
         _turn_started_at = _time_mod.monotonic()
         text_preview = (envelope.text or "").strip().replace("\n", " ")[:120]
         logger.info(

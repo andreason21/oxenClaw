@@ -520,6 +520,7 @@ class MemoryStore:
         new short_term entry id (8 hex). Caller assigns no id."""
         import secrets
         import time as _time
+
         new_id = secrets.token_hex(4)
         joined_tags = ",".join(t.strip() for t in (tags or []) if t.strip())
         self._conn.execute(
@@ -572,6 +573,7 @@ class MemoryStore:
         """Mark a curated entry as reviewed (bumps review_count +
         last_reviewed_at). Returns False if no such id."""
         import time as _time
+
         cur = self._conn.execute(
             "UPDATE short_term SET last_reviewed_at = ?, review_count = review_count + 1 WHERE id = ?",
             (_time.time(), entry_id),
@@ -583,6 +585,7 @@ class MemoryStore:
         """Soft-delete: hides the entry from default `list()` calls but
         keeps the row for audit. Returns False if no such id."""
         import time as _time
+
         cur = self._conn.execute(
             "UPDATE short_term SET archived_at = ? WHERE id = ? AND archived_at IS NULL",
             (_time.time(), entry_id),

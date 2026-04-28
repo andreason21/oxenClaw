@@ -10,15 +10,11 @@ Covers:
 
 from __future__ import annotations
 
-import asyncio
 from pathlib import Path
-
-import pytest
 
 from oxenclaw.agents.coding_agent import CODING_SYSTEM_PROMPT, CodingAgent
 from oxenclaw.agents.factory import build_agent
 from oxenclaw.agents.pi_agent import DEFAULT_SYSTEM_PROMPT as PI_DEFAULT_SYSTEM_PROMPT
-from oxenclaw.agents.tools import ToolRegistry
 from oxenclaw.tools_pkg.fs_tools import (
     list_dir_tool,
     read_file_tool,
@@ -26,7 +22,6 @@ from oxenclaw.tools_pkg.fs_tools import (
     shell_run_tool,
     write_file_tool,
 )
-
 
 # ── Factory routing ──────────────────────────────────────────────────────────
 
@@ -43,7 +38,7 @@ def test_factory_builds_pi_agent_by_default() -> None:
 
     agent = build_agent(agent_id="p", provider="anthropic")
     # CodingAgent is a subclass of PiAgent; verify it's the base class.
-    assert type(agent) is PiAgent  # noqa: E721
+    assert type(agent) is PiAgent
 
 
 # ── Curated tool registry ────────────────────────────────────────────────────
@@ -188,9 +183,7 @@ async def test_search_files_contains_filter(tmp_path: Path) -> None:
     (tmp_path / "a.py").write_text("needle here")
     (tmp_path / "b.py").write_text("nothing useful")
     tool = search_files_tool()
-    result = await tool.execute(
-        {"root": str(tmp_path), "pattern": "*.py", "contains": "needle"}
-    )
+    result = await tool.execute({"root": str(tmp_path), "pattern": "*.py", "contains": "needle"})
     assert "a.py" in result
     assert "b.py" not in result
 

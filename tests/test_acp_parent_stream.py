@@ -6,19 +6,15 @@ import asyncio
 import json
 from pathlib import Path
 
-import pytest
-
 from oxenclaw.agents.acp_parent_stream import (
-    AcpParentStreamRelay,
     STREAM_SNIPPET_MAX_CHARS,
+    AcpParentStreamRelay,
 )
 
 
 def _read_jsonl(path: Path) -> list[dict[str, object]]:
     return [
-        json.loads(line)
-        for line in path.read_text(encoding="utf-8").splitlines()
-        if line.strip()
+        json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()
     ]
 
 

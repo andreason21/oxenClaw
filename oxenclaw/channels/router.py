@@ -18,7 +18,7 @@ from __future__ import annotations
 import asyncio
 import time
 from collections.abc import Iterator
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from oxenclaw.plugin_sdk.channel_contract import (
@@ -155,7 +155,10 @@ class ChannelRouter:
         self._failed_channels[key] = state
         logger.info(
             "channel %s:%s marked failed (attempt=%d auth=%s next_retry=%.0fs)",
-            channel_id, account_id, state.attempts, state.auth_error,
+            channel_id,
+            account_id,
+            state.attempts,
+            state.auth_error,
             max(0.0, state.next_retry - time.time()),
         )
         return state
@@ -177,7 +180,9 @@ class ChannelRouter:
                     "attempts": state.attempts,
                     "last_error": state.last_error,
                     "auth_error": state.auth_error,
-                    "next_retry_in_s": max(0.0, state.next_retry - now) if state.next_retry > 0 else None,
+                    "next_retry_in_s": max(0.0, state.next_retry - now)
+                    if state.next_retry > 0
+                    else None,
                 }
             )
         return {
@@ -200,7 +205,7 @@ class ChannelRouter:
         if task is not None and not task.done():
             try:
                 await asyncio.wait_for(task, timeout=2.0)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 task.cancel()
             except Exception:
                 pass
@@ -215,7 +220,7 @@ class ChannelRouter:
                 await asyncio.wait_for(self._watcher_stop.wait(), timeout=5.0)
                 # If we get here, stop was signalled.
                 return
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
 
     async def _tick_reconnect_watcher(self) -> None:
@@ -230,10 +235,10 @@ class ChannelRouter:
             if state.next_retry <= now:
                 due.append((key, state))
 
-        for (cid, aid), state in due:
+        for (cid, aid), _state in due:
             try:
                 result = await self.probe(cid, aid)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 self.mark_failed(cid, aid, error=str(exc))
                 continue
             if getattr(result, "ok", False):

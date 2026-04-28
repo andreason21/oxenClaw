@@ -12,7 +12,6 @@ from oxenclaw.tools_pkg.fs_tools import (
     read_pdf_tool,
 )
 
-
 # ── helpers ──────────────────────────────────────────────────────────────────
 
 
@@ -31,9 +30,7 @@ async def test_edit_replaces_unique_match(tmp_path: Path) -> None:
         "line one\nline two\nline three\nline four\nline five\n",
     )
     tool = edit_tool()
-    result = await tool.execute(
-        {"path": str(p), "old_str": "line two", "new_str": "line TWO"}
-    )
+    result = await tool.execute({"path": str(p), "old_str": "line two", "new_str": "line TWO"})
     assert "edited" in result
     assert "1 replacement(s)" in result
     content = p.read_text(encoding="utf-8")
@@ -48,9 +45,7 @@ async def test_edit_rejects_count_mismatch(tmp_path: Path) -> None:
     _write(p, original)
     tool = edit_tool()
     # Default count=1 but there are 3 occurrences.
-    result = await tool.execute(
-        {"path": str(p), "old_str": "foo", "new_str": "bar", "count": 1}
-    )
+    result = await tool.execute({"path": str(p), "old_str": "foo", "new_str": "bar", "count": 1})
     assert "error" in result.lower()
     assert "expected 1" in result
     assert "found 3" in result
@@ -62,9 +57,7 @@ async def test_edit_atomic_write_no_partial_on_error(tmp_path: Path) -> None:
     """Failure path (missing file) leaves no partial write."""
     missing = tmp_path / "nonexistent.py"
     tool = edit_tool()
-    result = await tool.execute(
-        {"path": str(missing), "old_str": "x", "new_str": "y"}
-    )
+    result = await tool.execute({"path": str(missing), "old_str": "x", "new_str": "y"})
     assert "error" in result.lower()
     assert not missing.exists()
 
@@ -100,9 +93,7 @@ async def test_edit_multiple_count(tmp_path: Path) -> None:
     p = tmp_path / "multi.txt"
     _write(p, "x\nx\nx\n")
     tool = edit_tool()
-    result = await tool.execute(
-        {"path": str(p), "old_str": "x", "new_str": "z", "count": 3}
-    )
+    result = await tool.execute({"path": str(p), "old_str": "x", "new_str": "z", "count": 3})
     assert "3 replacement(s)" in result
     assert p.read_text(encoding="utf-8") == "z\nz\nz\n"
 
@@ -236,7 +227,7 @@ async def test_glob_returns_capped_list(tmp_path: Path) -> None:
         (sub / f"file_{i:04d}.txt").write_text("")
     tool = glob_tool()
     result = await tool.execute({"pattern": "*.txt", "path": str(sub)})
-    lines = [l for l in result.splitlines() if l and not l.startswith("[")]
+    lines = [ln for ln in result.splitlines() if ln and not ln.startswith("[")]
     assert len(lines) == 1000
     assert "capped at 1000" in result
 
@@ -279,6 +270,7 @@ async def test_read_pdf_pypdf_availability(tmp_path: Path) -> None:
     fake.write_bytes(b"not a real pdf")
     try:
         import pypdf  # noqa: F401
+
         pypdf_available = True
     except ImportError:
         pypdf_available = False

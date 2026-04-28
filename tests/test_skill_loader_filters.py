@@ -8,12 +8,12 @@ from pathlib import Path
 
 import pytest
 
+from oxenclaw.clawhub.frontmatter import SkillManifest
 from oxenclaw.clawhub.loader import (
     _host_platform,
     _platforms_from_manifest,
     load_installed_skills,
 )
-from oxenclaw.clawhub.frontmatter import SkillManifest
 from oxenclaw.config.paths import OxenclawPaths
 
 

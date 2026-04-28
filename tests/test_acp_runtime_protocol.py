@@ -35,27 +35,21 @@ class _MinimalFakeRuntime:
     structural sanity check.
     """
 
-    async def ensure_session(
-        self, input: AcpRuntimeEnsureInput
-    ) -> AcpRuntimeHandle:
+    async def ensure_session(self, input: AcpRuntimeEnsureInput) -> AcpRuntimeHandle:
         return AcpRuntimeHandle(
             session_key=input.session_key,
             backend="fake",
             runtime_session_name="fake-session",
         )
 
-    def run_turn(
-        self, input: AcpRuntimeTurnInput
-    ) -> AsyncIterator[AcpRuntimeEvent]:
+    def run_turn(self, input: AcpRuntimeTurnInput) -> AsyncIterator[AcpRuntimeEvent]:
         async def _gen() -> AsyncIterator[AcpRuntimeEvent]:
             yield AcpEventTextDelta(text=input.text, stream="output")
             yield AcpEventDone(stop_reason="stop")
 
         return _gen()
 
-    async def cancel(
-        self, *, handle: AcpRuntimeHandle, reason: str | None = None
-    ) -> None:
+    async def cancel(self, *, handle: AcpRuntimeHandle, reason: str | None = None) -> None:
         return None
 
     async def close(
@@ -92,9 +86,7 @@ async def test_fake_run_turn_emits_text_delta_then_done() -> None:
     )
     events: list[AcpRuntimeEvent] = []
     async for ev in fake.run_turn(
-        AcpRuntimeTurnInput(
-            handle=handle, text="hi", mode="prompt", request_id="r1"
-        )
+        AcpRuntimeTurnInput(handle=handle, text="hi", mode="prompt", request_id="r1")
     ):
         events.append(ev)
     assert len(events) == 2

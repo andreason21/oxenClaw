@@ -157,9 +157,7 @@ class PoolBackedAuthStorage:
     def last_key_id_for(self, provider: ProviderId) -> str | None:
         return self._last.get(provider)
 
-    async def report_failure(
-        self, provider: ProviderId, *, status: int | None = None
-    ) -> None:
+    async def report_failure(self, provider: ProviderId, *, status: int | None = None) -> None:
         key_id = self._last.get(provider)
         if key_id is not None:
             await self._pool.report_failure(provider, key_id, status=status)
@@ -287,7 +285,7 @@ class RemoteModelRegistry(InMemoryModelRegistry):
 
         try:
             data = _mdev.fetch_models_dev()
-        except Exception:  # noqa: BLE001
+        except Exception:
             data = {}
         caps = _mdev.get_model_capabilities(model_id, data) if data else {}
 

@@ -34,7 +34,7 @@ async def _seed_messages(sm: InMemorySessionManager, n: int) -> str:
         )
     # If n is odd, add one more user message
     if n % 2 != 0:
-        msgs.append(UserMessage(content=f"user turn extra"))
+        msgs.append(UserMessage(content="user turn extra"))
     s.messages = msgs
     await sm.save(s)
     return s.id

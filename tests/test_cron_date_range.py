@@ -102,18 +102,29 @@ async def test_update_can_set_and_clear_dates(tmp_path) -> None:  # type: ignore
     register_cron_methods(router, scheduler)
 
     create_res = await router.dispatch(
-        {"jsonrpc": "2.0", "id": 1, "method": "cron.create",
-         "params": dict(
-             schedule="0 9 * * *",
-             agent_id="assistant", channel="dashboard",
-             account_id="main", chat_id="42", prompt="x",
-         )}
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "cron.create",
+            "params": dict(
+                schedule="0 9 * * *",
+                agent_id="assistant",
+                channel="dashboard",
+                account_id="main",
+                chat_id="42",
+                prompt="x",
+            ),
+        }
     )
     job_id = create_res.result["id"]
 
     set_res = await router.dispatch(
-        {"jsonrpc": "2.0", "id": 2, "method": "cron.update",
-         "params": {"id": job_id, "start_date": "2026-06-01", "end_date": "2026-06-30"}}
+        {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "cron.update",
+            "params": {"id": job_id, "start_date": "2026-06-01", "end_date": "2026-06-30"},
+        }
     )
     assert set_res.result["updated"] is True
     assert scheduler.get(job_id).start_date == "2026-06-01"
@@ -121,8 +132,12 @@ async def test_update_can_set_and_clear_dates(tmp_path) -> None:  # type: ignore
 
     # Empty string clears the field.
     clr_res = await router.dispatch(
-        {"jsonrpc": "2.0", "id": 3, "method": "cron.update",
-         "params": {"id": job_id, "start_date": "", "end_date": ""}}
+        {
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "cron.update",
+            "params": {"id": job_id, "start_date": "", "end_date": ""},
+        }
     )
     assert clr_res.result["updated"] is True
     assert scheduler.get(job_id).start_date is None
@@ -136,18 +151,29 @@ async def test_update_rejects_invalid_date(tmp_path) -> None:  # type: ignore[no
     register_cron_methods(router, scheduler)
 
     create_res = await router.dispatch(
-        {"jsonrpc": "2.0", "id": 1, "method": "cron.create",
-         "params": dict(
-             schedule="0 9 * * *",
-             agent_id="assistant", channel="dashboard",
-             account_id="main", chat_id="42", prompt="x",
-         )}
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "cron.create",
+            "params": dict(
+                schedule="0 9 * * *",
+                agent_id="assistant",
+                channel="dashboard",
+                account_id="main",
+                chat_id="42",
+                prompt="x",
+            ),
+        }
     )
     job_id = create_res.result["id"]
 
     res = await router.dispatch(
-        {"jsonrpc": "2.0", "id": 2, "method": "cron.update",
-         "params": {"id": job_id, "start_date": "not-a-date"}}
+        {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "cron.update",
+            "params": {"id": job_id, "start_date": "not-a-date"},
+        }
     )
     assert res.result["updated"] is False
     assert "invalid start_date" in res.result["error"]

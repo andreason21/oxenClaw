@@ -35,8 +35,8 @@ import asyncio
 import json
 import os
 import secrets
-from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Literal, Optional
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -100,14 +100,14 @@ class _Process:
         """Spawn the asyncio task that drains stdout into the ring buffer."""
 
         async def _read_loop() -> None:
-            assert self.proc.stdout is not None  # noqa: S101
+            assert self.proc.stdout is not None
             try:
                 while True:
                     chunk = await self.proc.stdout.read(4096)
                     if not chunk:
                         break
                     self._append(chunk)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 pass
 
         self._reader_task = asyncio.ensure_future(_read_loop())
@@ -137,13 +137,23 @@ class _Args(BaseModel):
     model_config = {"extra": "forbid"}
 
     action: Literal["start", "send_keys", "read_output", "stop", "list"]
-    pid: Optional[str] = Field(None, description="Process id; required for send_keys / read_output / stop.")
-    command: Optional[str] = Field(None, description="Shell command to run; required for start.")
-    cwd: Optional[str] = Field(None, description="Working directory for start (optional).")
-    env: Optional[dict[str, str]] = Field(None, description="Extra environment variables for start (optional).")
-    keys: Optional[str] = Field(None, description="Literal text to write to stdin; required for send_keys.")
-    timeout_s: float = Field(1.0, description="Max seconds to drain stdout (send_keys / read_output).", gt=0)
-    tail_chars: int = Field(4_000, description="Maximum characters to return from the output buffer.", gt=0)
+    pid: str | None = Field(
+        None, description="Process id; required for send_keys / read_output / stop."
+    )
+    command: str | None = Field(None, description="Shell command to run; required for start.")
+    cwd: str | None = Field(None, description="Working directory for start (optional).")
+    env: dict[str, str] | None = Field(
+        None, description="Extra environment variables for start (optional)."
+    )
+    keys: str | None = Field(
+        None, description="Literal text to write to stdin; required for send_keys."
+    )
+    timeout_s: float = Field(
+        1.0, description="Max seconds to drain stdout (send_keys / read_output).", gt=0
+    )
+    tail_chars: int = Field(
+        4_000, description="Maximum characters to return from the output buffer.", gt=0
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -156,7 +166,7 @@ async def _action_start(args: _Args) -> dict[str, Any]:
         return {"error": "action=start requires 'command'"}
 
     pid = secrets.token_hex(4)
-    started_at = datetime.now(tz=timezone.utc).isoformat()
+    started_at = datetime.now(tz=UTC).isoformat()
 
     merged_env: dict[str, str] | None = None
     if args.env:
@@ -264,7 +274,7 @@ async def _action_stop(args: _Args) -> dict[str, Any]:
 
 
 def _action_list() -> dict[str, Any]:
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
     processes: list[dict[str, Any]] = []
     for pid, record in _REGISTRY.items():
         try:
@@ -297,7 +307,7 @@ def process_tool() -> Tool:
     """
     # Late import to avoid circular dependency when process_tool is imported
     # before oxenclaw.agents package is fully initialized.
-    from oxenclaw.agents.tools import FunctionTool  # noqa: PLC0415
+    from oxenclaw.agents.tools import FunctionTool
 
     async def _h(args: _Args) -> str:
         if args.action == "start":

@@ -9,12 +9,16 @@ from __future__ import annotations
 
 import time
 
-import pytest
-
 from oxenclaw.cron.run_log import CronRunEntry, CronRunStore
 
 
-def _entry(job_id: str = "job1", status: str = "ok", summary: str = "", error: str | None = None, output_preview: str = "") -> CronRunEntry:
+def _entry(
+    job_id: str = "job1",
+    status: str = "ok",
+    summary: str = "",
+    error: str | None = None,
+    output_preview: str = "",
+) -> CronRunEntry:
     return CronRunEntry(
         job_id=job_id,
         started_at=time.time(),
@@ -30,6 +34,7 @@ def _entry(job_id: str = "job1", status: str = "ok", summary: str = "", error: s
 # 1. append → list returns it
 # ──────────────────────────────────────────────────────────
 
+
 def test_append_list_round_trip(tmp_path) -> None:
     store = CronRunStore(tmp_path / "runs.json")
     entry = _entry(summary="hello")
@@ -43,6 +48,7 @@ def test_append_list_round_trip(tmp_path) -> None:
 # ──────────────────────────────────────────────────────────
 # 2. running → update to ok with output_preview
 # ──────────────────────────────────────────────────────────
+
 
 def test_update_running_to_ok(tmp_path) -> None:
     store = CronRunStore(tmp_path / "runs.json")
@@ -65,6 +71,7 @@ def test_update_running_to_ok(tmp_path) -> None:
 # ──────────────────────────────────────────────────────────
 # 3. prune caps per-job at max_per_job
 # ──────────────────────────────────────────────────────────
+
 
 def test_prune_caps_per_job(tmp_path) -> None:
     store = CronRunStore(tmp_path / "runs.json")
@@ -100,6 +107,7 @@ def test_prune_multiple_jobs_independent(tmp_path) -> None:
 # 4. query substring filter against summary / output_preview / error
 # ──────────────────────────────────────────────────────────
 
+
 def test_query_filter_summary(tmp_path) -> None:
     store = CronRunStore(tmp_path / "runs.json")
     store.append(_entry(summary="morning report generated"))
@@ -119,6 +127,7 @@ def test_query_filter_summary(tmp_path) -> None:
 # 5. status multi-filter
 # ──────────────────────────────────────────────────────────
 
+
 def test_status_multi_filter(tmp_path) -> None:
     store = CronRunStore(tmp_path / "runs.json")
     store.append(_entry(status="ok"))
@@ -135,6 +144,7 @@ def test_status_multi_filter(tmp_path) -> None:
 # ──────────────────────────────────────────────────────────
 # 6. offset/limit pagination
 # ──────────────────────────────────────────────────────────
+
 
 def test_offset_limit(tmp_path) -> None:
     store = CronRunStore(tmp_path / "runs.json")
@@ -157,6 +167,7 @@ def test_offset_limit(tmp_path) -> None:
 # 7. total() counts correctly
 # ──────────────────────────────────────────────────────────
 
+
 def test_total_counts(tmp_path) -> None:
     store = CronRunStore(tmp_path / "runs.json")
     store.append(_entry(job_id="j1", status="ok"))
@@ -173,6 +184,7 @@ def test_total_counts(tmp_path) -> None:
 # ──────────────────────────────────────────────────────────
 # 8. delivery_status filter
 # ──────────────────────────────────────────────────────────
+
 
 def test_delivery_status_filter(tmp_path) -> None:
     store = CronRunStore(tmp_path / "runs.json")
@@ -194,6 +206,7 @@ def test_delivery_status_filter(tmp_path) -> None:
 # 9. atomic write leaves no tmp file behind
 # ──────────────────────────────────────────────────────────
 
+
 def test_atomic_write_no_tmp(tmp_path) -> None:
     store = CronRunStore(tmp_path / "runs.json")
     store.append(_entry())
@@ -204,6 +217,7 @@ def test_atomic_write_no_tmp(tmp_path) -> None:
 # ──────────────────────────────────────────────────────────
 # 10. update unknown run_id returns None
 # ──────────────────────────────────────────────────────────
+
 
 def test_update_unknown_run_id_returns_none(tmp_path) -> None:
     store = CronRunStore(tmp_path / "runs.json")

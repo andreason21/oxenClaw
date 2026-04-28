@@ -49,16 +49,17 @@ class ClawHubSource(SkillSource):
         except RuntimeError:
             # Already inside a loop — schedule on a fresh loop in a thread.
             import concurrent.futures
+
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
                 fut = pool.submit(asyncio.run, coro)
                 return fut.result()
 
     def search(self, query: str, limit: int = 10) -> list[SkillRef]:
         try:
-            results: list[dict[str, Any]] = self._run(
-                self._client().search_skills(query, limit=limit)
-            ) or []
-        except Exception as exc:  # noqa: BLE001
+            results: list[dict[str, Any]] = (
+                self._run(self._client().search_skills(query, limit=limit)) or []
+            )
+        except Exception as exc:
             logger.debug("clawhub search failed: %s", exc)
             return []
         out: list[SkillRef] = []
@@ -88,7 +89,7 @@ class ClawHubSource(SkillSource):
     def inspect(self, skill_id: str) -> SkillManifest:
         try:
             detail = self._run(self._client().fetch_skill_detail(skill_id)) or {}
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise SkillManifestError(f"clawhub detail fetch failed: {exc}") from exc
         try:
             return SkillManifest.model_validate(
@@ -97,7 +98,7 @@ class ClawHubSource(SkillSource):
                     "description": detail.get("description") or "",
                 }
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise SkillManifestError(f"could not parse clawhub manifest: {exc}") from exc
 
 

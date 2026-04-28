@@ -53,7 +53,7 @@ def test_guard_resets_on_big_save() -> None:
     again and the next pass should NOT be skipped."""
     g = CompactionGuard()
     g.record(10_000, 9_900)  # 1% — flat
-    g.record(9_900, 5_000)   # 49% — big save
+    g.record(9_900, 5_000)  # 49% — big save
     assert should_skip_compaction(g, current_size=5_000, threshold_pct=10.0) is False
 
 

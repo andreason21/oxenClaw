@@ -25,6 +25,7 @@ async def test_tool_registry_resolves_namespaced_drift(tmp_path: Path) -> None:
     namespaced) — we register the tool as `memory_save`. The registry's
     canonicalise + semantic-alias table should fold it."""
     from oxenclaw.agents.tools import ToolRegistry
+
     r = _retriever(tmp_path)
     try:
         reg = ToolRegistry()
@@ -32,14 +33,14 @@ async def test_tool_registry_resolves_namespaced_drift(tmp_path: Path) -> None:
         # Each of these is a real LLM emission seen in the wild OR a
         # plausible drift the alias table guards against.
         for variant in (
-            "memory:set_fact",   # openclaw namespaced colon
-            "memory.save",       # RPC dot notation
-            "Memory_Save",       # case drift
-            "memory-save",       # hyphen drift
-            "remember",          # plain English
-            "set_fact",          # bare verb
-            "save_memory",       # noun-verb swap
-            "memory_set",        # set/save confusion
+            "memory:set_fact",  # openclaw namespaced colon
+            "memory.save",  # RPC dot notation
+            "Memory_Save",  # case drift
+            "memory-save",  # hyphen drift
+            "remember",  # plain English
+            "set_fact",  # bare verb
+            "save_memory",  # noun-verb swap
+            "memory_set",  # set/save confusion
         ):
             tool = reg.get(variant)
             assert tool is not None, f"registry should have folded {variant!r}"
@@ -52,6 +53,7 @@ async def test_tool_registry_returns_none_for_truly_unknown(tmp_path: Path) -> N
     """Sanity: bogus names that don't match any alias still return None
     so the run loop's 'tool X is not registered' path stays reachable."""
     from oxenclaw.agents.tools import ToolRegistry
+
     r = _retriever(tmp_path)
     try:
         reg = ToolRegistry()
@@ -70,9 +72,7 @@ async def test_memory_save_accepts_content_alias(tmp_path: Path) -> None:
     r = _retriever(tmp_path)
     try:
         tool = memory_save_tool(r)
-        out = await tool.execute(
-            {"content": "사용자는 수원에 거주한다.", "key": "거주지"}
-        )
+        out = await tool.execute({"content": "사용자는 수원에 거주한다.", "key": "거주지"})
         assert "saved" in out
         # Tag carried through.
         body = (r.memory_dir / "inbox.md").read_text(encoding="utf-8")
@@ -86,9 +86,7 @@ async def test_memory_save_accepts_body_and_tag_aliases(tmp_path: Path) -> None:
     r = _retriever(tmp_path)
     try:
         tool = memory_save_tool(r)
-        out = await tool.execute(
-            {"body": "User prefers Korean replies.", "tag": "preference"}
-        )
+        out = await tool.execute({"body": "User prefers Korean replies.", "tag": "preference"})
         assert "saved" in out
     finally:
         await r.aclose()
@@ -104,7 +102,7 @@ async def test_memory_save_dedupes_tag_aliases(tmp_path: Path) -> None:
             {
                 "text": "x",
                 "tags": ["fact"],
-                "tag": "fact",       # dup → dropped
+                "tag": "fact",  # dup → dropped
                 "category": "user",  # new → appended
             }
         )
@@ -125,12 +123,14 @@ async def test_memory_save_drops_unknown_metadata_keys(tmp_path: Path) -> None:
     try:
         tool = memory_save_tool(r)
         # Real-world payload that crashed in production.
-        out = await tool.execute({
-            "text": "사용자는 수원에 거주한다.",
-            "source": "사용자 발화",
-            "metadata": {"turn": 3},
-            "confidence": 0.9,
-        })
+        out = await tool.execute(
+            {
+                "text": "사용자는 수원에 거주한다.",
+                "source": "사용자 발화",
+                "metadata": {"turn": 3},
+                "confidence": 0.9,
+            }
+        )
         assert "saved" in out
         body = (r.memory_dir / "inbox.md").read_text(encoding="utf-8")
         assert "수원에 거주" in body

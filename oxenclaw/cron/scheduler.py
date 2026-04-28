@@ -35,7 +35,8 @@ def _coerce_dt(value: str, tz):  # type: ignore[no-untyped-def]
 
     `tz` may be a tzinfo instance or an IANA name (or None).
     """
-    from datetime import date, datetime, tzinfo as _tzinfo
+    from datetime import date, datetime
+    from datetime import tzinfo as _tzinfo
 
     if "T" in value or " " in value:
         dt = datetime.fromisoformat(value)

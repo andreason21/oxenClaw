@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import pytest
@@ -192,7 +191,9 @@ def test_search_matches_title(tmp_path: Path) -> None:
 
 def test_search_matches_body(tmp_path: Path) -> None:
     v = _vault(tmp_path)
-    v.create(WikiPage(kind=WikiPageKind.CONCEPT, name="Alpha", slug="alpha", body="contains kraken text"))
+    v.create(
+        WikiPage(kind=WikiPageKind.CONCEPT, name="Alpha", slug="alpha", body="contains kraken text")
+    )
     v.create(WikiPage(kind=WikiPageKind.CONCEPT, name="Beta", slug="beta", body="unrelated"))
     hits = v.search("kraken")
     assert any(p.slug == "alpha" for p in hits)

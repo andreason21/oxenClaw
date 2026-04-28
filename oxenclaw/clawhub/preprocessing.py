@@ -35,9 +35,9 @@ def _allow_inline_shell() -> bool:
 
 def _run_inline_shell(cmd: str) -> str:
     try:
-        proc = subprocess.run(  # noqa: S603 — operator-opt-in
+        proc = subprocess.run(
             cmd,
-            shell=True,  # noqa: S602
+            shell=True,
             capture_output=True,
             text=True,
             timeout=_SHELL_TIMEOUT_S,
@@ -45,7 +45,7 @@ def _run_inline_shell(cmd: str) -> str:
         out = proc.stdout or proc.stderr or ""
     except subprocess.TimeoutExpired:
         return f"[inline shell timeout after {_SHELL_TIMEOUT_S:.0f}s: {cmd}]"
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.debug("inline shell %s raised: %s", cmd, exc)
         return f"[inline shell failed: {exc}]"
     if len(out) > _MAX_OUTPUT_CHARS:
@@ -73,6 +73,7 @@ def preprocess_skill_body(
     out = out.replace("${OXENCLAW_SESSION_ID}", session_id or "")
 
     if _allow_inline_shell():
+
         def _sub(match: re.Match[str]) -> str:
             cmd = match.group(1).strip()
             if not cmd:

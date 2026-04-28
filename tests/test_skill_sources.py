@@ -2,16 +2,12 @@
 
 from __future__ import annotations
 
-import time
-from pathlib import Path
 from unittest.mock import patch
-
-import pytest
 
 from oxenclaw.clawhub.parallel_search import parallel_search_sources
 from oxenclaw.clawhub.sources.base import SkillRef, SkillSource
 from oxenclaw.clawhub.sources.github import GitHubSource, _TapSpec
-from oxenclaw.clawhub.sources.index import INDEX_CACHE_DIR, IndexSource
+from oxenclaw.clawhub.sources.index import IndexSource
 
 
 class _StubSource(SkillSource):
@@ -93,6 +89,7 @@ def test_index_source_falls_back_to_stale_cache(tmp_path, monkeypatch) -> None:
     cache_path = src._url
     # Pre-populate stale cache.
     from oxenclaw.clawhub.sources.index import _write_cache
+
     _write_cache(url, {"skills": [{"slug": "stale-skill", "description": "x"}]})
     # Force network failure.
     with patch("oxenclaw.clawhub.sources.index._fetch_index", return_value=None):
@@ -132,6 +129,7 @@ def test_parallel_search_prefers_fresh_index(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr("oxenclaw.clawhub.sources.index.INDEX_CACHE_DIR", tmp_path / "idx")
     url = "https://example.com/idx.json"
     from oxenclaw.clawhub.sources.index import _write_cache
+
     _write_cache(url, {"skills": [{"slug": "from-index", "description": ""}]})
     src = IndexSource(url=url)
     # Make sure cache is "fresh".

@@ -113,9 +113,7 @@ class CronRunStore:
         delivery: list[str] | None = None,
     ) -> list[CronRunEntry]:
         """Return a paginated, optionally filtered slice of run entries."""
-        entries = self._filtered(
-            job_id=job_id, statuses=statuses, query=query, delivery=delivery
-        )
+        entries = self._filtered(job_id=job_id, statuses=statuses, query=query, delivery=delivery)
         if sort_dir == "asc":
             entries = sorted(entries, key=lambda e: e.started_at)
         else:
@@ -131,9 +129,7 @@ class CronRunStore:
         delivery: list[str] | None = None,
     ) -> int:
         """Count entries matching the given filters (no pagination)."""
-        return len(
-            self._filtered(job_id=job_id, statuses=statuses, query=query, delivery=delivery)
-        )
+        return len(self._filtered(job_id=job_id, statuses=statuses, query=query, delivery=delivery))
 
     def prune(self, max_per_job: int = 100) -> int:
         """Drop oldest entries so each job keeps at most *max_per_job* runs.

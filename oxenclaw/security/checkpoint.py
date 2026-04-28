@@ -201,7 +201,9 @@ class CheckpointManager:
         if not ok and res.returncode not in allowed:
             logger.debug(
                 "git command failed: %s (rc=%d) stderr=%s",
-                " ".join(cmd), res.returncode, stderr,
+                " ".join(cmd),
+                res.returncode,
+                stderr,
             )
         return ok, stdout, stderr
 
@@ -231,9 +233,7 @@ class CheckpointManager:
         # Default excludes so transient junk doesn't pollute snapshots.
         info_dir = shadow / "info"
         info_dir.mkdir(exist_ok=True)
-        (info_dir / "exclude").write_text(
-            "\n".join(DEFAULT_EXCLUDES) + "\n", encoding="utf-8"
-        )
+        (info_dir / "exclude").write_text("\n".join(DEFAULT_EXCLUDES) + "\n", encoding="utf-8")
         # Initial empty commit so list_snapshots() always has at least
         # one anchor.
         self._run_git(["add", "-A"], timeout=_GIT_TIMEOUT_SECONDS * 2)
@@ -346,9 +346,7 @@ class CheckpointManager:
             raise RuntimeError(f"checkpoint {commit_hash!r} not found: {cat_err}")
         # Stage current state into the shadow index for the comparison.
         self._run_git(["add", "-A"], timeout=_GIT_TIMEOUT_SECONDS * 2)
-        ok, out, derr = self._run_git(
-            ["diff", commit_hash, "--cached", "--no-color"]
-        )
+        ok, out, derr = self._run_git(["diff", commit_hash, "--cached", "--no-color"])
         # Don't pollute the shadow index after the diff.
         self._run_git(["reset", "HEAD", "--quiet"])
         if not ok:

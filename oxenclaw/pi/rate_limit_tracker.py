@@ -88,8 +88,7 @@ def parse_rate_limit_headers(headers: Mapping[str, str]) -> RateLimitState | Non
 
     # Quick reject: nothing here looks like a rate-limit header.
     if not any(
-        k.startswith("x-ratelimit-") or k.startswith("anthropic-ratelimit-")
-        for k in lowered
+        k.startswith("x-ratelimit-") or k.startswith("anthropic-ratelimit-") for k in lowered
     ):
         return None
 
@@ -122,24 +121,16 @@ def parse_rate_limit_headers(headers: Mapping[str, str]) -> RateLimitState | Non
         # I retry"; that's the window the provider will check next.
         return min(vals) if vals else None
 
-    o_req_limit = _pick_limit(
-        "x-ratelimit-limit-requests", "x-ratelimit-limit-requests-1h"
-    )
+    o_req_limit = _pick_limit("x-ratelimit-limit-requests", "x-ratelimit-limit-requests-1h")
     o_req_remaining = _pick_remaining(
         "x-ratelimit-remaining-requests", "x-ratelimit-remaining-requests-1h"
     )
-    o_req_reset = _pick_reset(
-        "x-ratelimit-reset-requests", "x-ratelimit-reset-requests-1h"
-    )
-    o_tok_limit = _pick_limit(
-        "x-ratelimit-limit-tokens", "x-ratelimit-limit-tokens-1h"
-    )
+    o_req_reset = _pick_reset("x-ratelimit-reset-requests", "x-ratelimit-reset-requests-1h")
+    o_tok_limit = _pick_limit("x-ratelimit-limit-tokens", "x-ratelimit-limit-tokens-1h")
     o_tok_remaining = _pick_remaining(
         "x-ratelimit-remaining-tokens", "x-ratelimit-remaining-tokens-1h"
     )
-    o_tok_reset = _pick_reset(
-        "x-ratelimit-reset-tokens", "x-ratelimit-reset-tokens-1h"
-    )
+    o_tok_reset = _pick_reset("x-ratelimit-reset-tokens", "x-ratelimit-reset-tokens-1h")
 
     # Merge: prefer the smallest remaining / earliest reset across providers
     # (so we err on the side of treating the key as exhausted earlier).

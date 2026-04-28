@@ -271,7 +271,9 @@ async def test_pi_agent_records_tool_call_timing(tmp_path: Path) -> None:
 
     tools = ToolRegistry()
     tools.register(
-        FunctionTool(name="slow_tool", description="a slow tool", input_model=_In, handler=_slow_handler)
+        FunctionTool(
+            name="slow_tool", description="a slow tool", input_model=_In, handler=_slow_handler
+        )
     )
 
     reg = _registry_with("test-model", "piagent_timing")
@@ -459,6 +461,7 @@ def test_pi_agent_set_model_id_rejects_unknown_model(tmp_path: Path) -> None:
         paths=_paths(tmp_path),
     )
     import pytest
+
     with pytest.raises(KeyError):
         agent.set_model_id("ghost-model")
 
@@ -475,7 +478,7 @@ def test_default_system_prompt_routes_weather_to_dedicated_tool() -> None:
     assert "Weather playbook" in DEFAULT_SYSTEM_PROMPT
     assert "`weather` tool" in DEFAULT_SYSTEM_PROMPT
     assert "do NOT use web_search" in DEFAULT_SYSTEM_PROMPT
-    assert 'weather(city=' in DEFAULT_SYSTEM_PROMPT
+    assert "weather(city=" in DEFAULT_SYSTEM_PROMPT
     assert "recalled-memories" in DEFAULT_SYSTEM_PROMPT
     # Web research playbook now also has a "specialised tool first" rule.
     assert "weather → `weather`" in DEFAULT_SYSTEM_PROMPT
@@ -591,9 +594,7 @@ async def test_pi_agent_user_side_recall_can_be_disabled(tmp_path: Path) -> None
         ctx = AgentContext(agent_id="t", session_key="user-inj-off-session")
         async for _ in agent.handle(_inbound("내가 어디 살지?"), ctx):
             pass
-        assert seen == ["내가 어디 살지?"], (
-            f"expected raw user text only, got {seen!r}"
-        )
+        assert seen == ["내가 어디 살지?"], f"expected raw user text only, got {seen!r}"
     finally:
         await retriever.aclose()
 
@@ -617,6 +618,7 @@ async def test_pi_agent_rehydrates_session_from_disk_on_fresh_start(tmp_path: Pa
     # Simulate a prior session: dashboard history exists from a
     # previous gateway PID.
     from oxenclaw.agents.history import ConversationHistory
+
     hist_path = paths.session_file("t", "rehydrate-key")
     hist = ConversationHistory(hist_path)
     hist.append({"role": "user", "content": "내 이름은 윤기야"})
@@ -640,14 +642,11 @@ async def test_pi_agent_rehydrates_session_from_disk_on_fresh_start(tmp_path: Pa
     # The pi-runtime should have seen the rehydrated 4 prior messages
     # PLUS the new user turn = 5. Without rehydration, it was 1.
     assert seen[0] >= 5, (
-        f"expected pi runtime to see >=5 messages (4 rehydrated + new "
-        f"user turn), got {seen[0]}"
+        f"expected pi runtime to see >=5 messages (4 rehydrated + new user turn), got {seen[0]}"
     )
 
 
-async def test_pi_agent_emits_placeholder_when_model_returns_empty(
-    tmp_path: Path, caplog
-) -> None:
+async def test_pi_agent_emits_placeholder_when_model_returns_empty(tmp_path: Path, caplog) -> None:
     """Regression: a model that streams `StopEvent(end_turn)` with no
     text deltas (small local models sometimes do this when a
     restrictive system prompt confuses them) used to result in

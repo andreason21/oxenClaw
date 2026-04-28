@@ -53,7 +53,7 @@ class _SaveArgs(BaseModel):
         # alias key is then dropped so `extra=forbid` doesn't trip.
         if "text" not in out or not out.get("text"):
             for alias in _SAVE_TEXT_ALIASES:
-                if alias in out and out[alias]:
+                if out.get(alias):
                     out["text"] = out[alias]
                     break
         for alias in _SAVE_TEXT_ALIASES:
@@ -61,7 +61,7 @@ class _SaveArgs(BaseModel):
         # Map tag-aliases. Single-value aliases lift into the list.
         existing = list(out.get("tags") or [])
         for alias in _SAVE_TAG_ALIASES:
-            if alias in out and out[alias]:
+            if out.get(alias):
                 v = out[alias]
                 if isinstance(v, list):
                     existing.extend(str(x) for x in v if x)
@@ -104,7 +104,7 @@ class _SearchArgs(BaseModel):
         out = dict(data)
         if "query" not in out or not out.get("query"):
             for alias in _SEARCH_QUERY_ALIASES:
-                if alias in out and out[alias]:
+                if out.get(alias):
                     out["query"] = out[alias]
                     break
         for alias in _SEARCH_QUERY_ALIASES:
@@ -146,7 +146,8 @@ def memory_save_tool(retriever: MemoryRetriever) -> Tool:
             kinds = sorted({t.kind for t in threats})
             logger.warning(
                 "memory_save: refused write — threats=%s preview=%r",
-                kinds, preview,
+                kinds,
+                preview,
             )
             return (
                 "memory_save refused: text matches a memory-write threat "
@@ -168,8 +169,8 @@ def memory_save_tool(retriever: MemoryRetriever) -> Tool:
         description=(
             "Persist a fact about the user or task to long-term memory. "
             "`text` MUST be a complete natural-language sentence, not a "
-            "`key:value` line — \"User lives in Suwon, South Korea.\" "
-            "beats \"user_location:Suwon\" because the embedding store "
+            '`key:value` line — "User lives in Suwon, South Korea." '
+            'beats "user_location:Suwon" because the embedding store '
             "scores conversational queries against it. When the user "
             "wrote in a non-English language, include BOTH their "
             "phrasing and an English paraphrase in `text` so cross-"

@@ -100,9 +100,7 @@ def test_turn_budget_persists_largest(tmp_path: Path) -> None:
         {"id": "b", "name": "grep", "output": "b" * 150_000},
         {"id": "c", "name": "grep", "output": "c" * 30_000},
     ]
-    persisted_chars = enforce_turn_budget(
-        results, cfg, tmp_path, turn_budget=100_000
-    )
+    persisted_chars = enforce_turn_budget(results, cfg, tmp_path, turn_budget=100_000)
     # Largest entry (b) should have been spilled.
     assert persisted_chars >= 150_000
     assert (tmp_path / "b.txt").exists()
@@ -132,9 +130,7 @@ def test_turn_budget_under_budget_no_op(tmp_path: Path) -> None:
         {"id": "x", "name": "grep", "output": "small"},
         {"id": "y", "name": "grep", "output": "tiny"},
     ]
-    persisted_chars = enforce_turn_budget(
-        results, cfg, tmp_path, turn_budget=100_000
-    )
+    persisted_chars = enforce_turn_budget(results, cfg, tmp_path, turn_budget=100_000)
     assert persisted_chars == 0
     assert results[0]["output"] == "small"
     assert list(tmp_path.iterdir()) == []

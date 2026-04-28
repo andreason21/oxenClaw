@@ -136,10 +136,7 @@ def register_agents_methods(router: Router, registry: AgentRegistry) -> None:
         if setter is None:
             return {
                 "ok": False,
-                "error": (
-                    f"agent {p.id!r} ({type(agent).__name__}) does not "
-                    "expose set_model_id"
-                ),
+                "error": (f"agent {p.id!r} ({type(agent).__name__}) does not expose set_model_id"),
             }
         try:
             new_id = setter(p.model)

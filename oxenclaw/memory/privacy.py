@@ -39,11 +39,12 @@ class Redaction:
     """One PII match that was replaced."""
 
     span: tuple[int, int]  # (start, end) in the *original* string
-    kind: str              # e.g. "email", "api_key", "phone", …
-    replacement: str       # the text that was substituted
+    kind: str  # e.g. "email", "api_key", "phone", …
+    replacement: str  # the text that was substituted
 
 
 # ── Luhn helper ──────────────────────────────────────────────────────────────
+
 
 def _luhn_check(digits: str) -> bool:
     """Return True if the digit string passes the Luhn algorithm."""
@@ -75,27 +76,27 @@ def _r(kind: str, pattern: str, *, levels: set[str]) -> None:
 # ── API / token patterns (light + strict) ────────────────────────────────────
 
 # OpenAI / Anthropic sk- keys (≥20 chars after the prefix)
-_r("api_key", r'\bsk-[A-Za-z0-9_\-]{20,}\b', levels={"light", "strict"})
+_r("api_key", r"\bsk-[A-Za-z0-9_\-]{20,}\b", levels={"light", "strict"})
 
 # Slack tokens: xoxb- / xoxp- / xoxa- / xoxr-
-_r("api_key", r'\bxox[bpar]-[A-Za-z0-9\-]{10,}\b', levels={"light", "strict"})
+_r("api_key", r"\bxox[bpar]-[A-Za-z0-9\-]{10,}\b", levels={"light", "strict"})
 
 # GitHub personal-access-tokens: ghp_  ghs_
-_r("api_key", r'\bgh[ps]_[A-Za-z0-9]{20,}\b', levels={"light", "strict"})
+_r("api_key", r"\bgh[ps]_[A-Za-z0-9]{20,}\b", levels={"light", "strict"})
 
 # AWS access key IDs
-_r("api_key", r'\bAKIA[A-Z0-9]{16}\b', levels={"light", "strict"})
+_r("api_key", r"\bAKIA[A-Z0-9]{16}\b", levels={"light", "strict"})
 
 # Google OAuth tokens ya29.
-_r("api_key", r'\bya29\.[A-Za-z0-9_\-]{20,}\b', levels={"light", "strict"})
+_r("api_key", r"\bya29\.[A-Za-z0-9_\-]{20,}\b", levels={"light", "strict"})
 
 # SSH public key prefix (whole line or inline)
-_r("api_key", r'\bssh-rsa\s+AAAA[A-Za-z0-9+/=]{20,}\b', levels={"light", "strict"})
+_r("api_key", r"\bssh-rsa\s+AAAA[A-Za-z0-9+/=]{20,}\b", levels={"light", "strict"})
 
 # Bearer tokens in Authorization: headers
 _r(
     "bearer_token",
-    r'(?i)Authorization\s*:\s*Bearer\s+([A-Za-z0-9\-._~+/=]{10,})',
+    r"(?i)Authorization\s*:\s*Bearer\s+([A-Za-z0-9\-._~+/=]{10,})",
     levels={"light", "strict"},
 )
 
@@ -112,7 +113,7 @@ _r(
 # Email addresses (light + strict)
 _r(
     "email",
-    r'\b[A-Za-z0-9._%+\-]{1,64}@[A-Za-z0-9.\-]{1,253}\.[A-Za-z]{2,}\b',
+    r"\b[A-Za-z0-9._%+\-]{1,64}@[A-Za-z0-9.\-]{1,253}\.[A-Za-z]{2,}\b",
     levels={"light", "strict"},
 )
 
@@ -124,29 +125,29 @@ _r(
 #   - Generic 10-digit US: (NXX) NXX-XXXX / NXX-NXX-XXXX
 _r(
     "phone",
-    r'(?:'
+    r"(?:"
     # Korean mobile 010/011/016/017/018/019
-    r'\b01[016789]-\d{3,4}-\d{4}\b'
-    r'|'
+    r"\b01[016789]-\d{3,4}-\d{4}\b"
+    r"|"
     # Korean landline 02-xxx-xxxx or 02-xxxx-xxxx
-    r'\b0[2-9]\d?-\d{3,4}-\d{4}\b'
-    r'|'
+    r"\b0[2-9]\d?-\d{3,4}-\d{4}\b"
+    r"|"
     # International with + prefix
-    r'\+\d{1,3}[\s\-.]?\(?\d{1,4}\)?[\s\-.]?\d{2,4}[\s\-.]?\d{2,4}[\s\-.]?\d{0,4}\b'
-    r'|'
+    r"\+\d{1,3}[\s\-.]?\(?\d{1,4}\)?[\s\-.]?\d{2,4}[\s\-.]?\d{2,4}[\s\-.]?\d{0,4}\b"
+    r"|"
     # US 10-digit: (NXX) NXX-XXXX
-    r'\(\d{3}\)\s*\d{3}[\s\-]\d{4}'
-    r'|'
+    r"\(\d{3}\)\s*\d{3}[\s\-]\d{4}"
+    r"|"
     # US plain: NXX-NXX-XXXX or NXX.NXX.XXXX
-    r'\b\d{3}[\-\.]\d{3}[\-\.]\d{4}\b'
-    r')',
+    r"\b\d{3}[\-\.]\d{3}[\-\.]\d{4}\b"
+    r")",
     levels={"strict"},
 )
 
 # IPv4 addresses (strict only — too many false positives in light mode)
 _r(
     "ipv4",
-    r'\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b',
+    r"\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b",
     levels={"strict"},
 )
 
@@ -154,12 +155,13 @@ _r(
 # We do NOT add this directly — the CC handler below iterates manually so
 # we can apply the Luhn filter.  It is defined here for documentation.
 _CC_PATTERN = re.compile(
-    r'\b(?:\d[ \-]?){12,18}\d\b'   # 13–19 digits, optional spaces/dashes between groups
+    r"\b(?:\d[ \-]?){12,18}\d\b"  # 13–19 digits, optional spaces/dashes between groups
 )
 _CC_LEVELS: set[str] = {"strict"}
 
 
 # ── Core redact function ──────────────────────────────────────────────────────
+
 
 def redact(
     text: str,
@@ -180,7 +182,7 @@ def redact(
     # --- CC (with Luhn, strict only) ---
     if level in _CC_LEVELS:
         for m in _CC_PATTERN.finditer(text):
-            digits = re.sub(r'[ \-]', '', m.group())
+            digits = re.sub(r"[ \-]", "", m.group())
             if 13 <= len(digits) <= 19 and _luhn_check(digits):
                 candidates.append((m.start(), m.end(), "credit_card"))
 
@@ -256,6 +258,7 @@ def sanitize_recall_fence(text: str) -> str:
 # prompt-injection, role-hijack, exfil-via-shell, ssh-backdoor, and
 # invisible-unicode payloads from being stored verbatim.
 
+
 @dataclass
 class MemoryThreat:
     """One threat-pattern hit at memory_save time."""
@@ -268,38 +271,57 @@ _INVISIBLE_UNICODE_RE = re.compile(
     "["
     "​‌‍⁠﻿"  # zero-width joiners / BOM
     "‪‫‬‭‮"  # bidi overrides incl. RLO
-    "⁦⁧⁨⁩"        # isolate controls
+    "⁦⁧⁨⁩"  # isolate controls
     "]"
 )
 
 _THREAT_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     # Prompt-injection meta-commands.
-    ("prompt_injection",
-     re.compile(r"(?i)\b(ignore|disregard|forget)\b[^.\n]{0,40}\b(previous|prior|above|system)\b[^.\n]{0,40}\b(instruction|prompt|rule)s?\b")),
+    (
+        "prompt_injection",
+        re.compile(
+            r"(?i)\b(ignore|disregard|forget)\b[^.\n]{0,40}\b(previous|prior|above|system)\b[^.\n]{0,40}\b(instruction|prompt|rule)s?\b"
+        ),
+    ),
     # Role-hijack: "you are now …" / "from now on you are …".
-    ("role_hijack",
-     re.compile(r"(?i)\b(you\s+are\s+(now|henceforth)|from\s+now\s+on\s+you\s+(are|will|must))\b")),
+    (
+        "role_hijack",
+        re.compile(
+            r"(?i)\b(you\s+are\s+(now|henceforth)|from\s+now\s+on\s+you\s+(are|will|must))\b"
+        ),
+    ),
     # Tool-bypass directives.
-    ("tool_bypass",
-     re.compile(r"(?i)\b(do\s+not|don'?t|never)\b[^.\n]{0,40}\b(call|use|invoke)\b[^.\n]{0,40}\b(tool|approval|guard|memory)\b")),
+    (
+        "tool_bypass",
+        re.compile(
+            r"(?i)\b(do\s+not|don'?t|never)\b[^.\n]{0,40}\b(call|use|invoke)\b[^.\n]{0,40}\b(tool|approval|guard|memory)\b"
+        ),
+    ),
     # Shell-exfil: curl/wget piping secrets to a remote.
-    ("shell_exfil",
-     re.compile(r"(?i)\b(curl|wget|nc|netcat)\b[^|\n]{0,200}\|\s*(sh|bash|zsh|python)\b")),
+    (
+        "shell_exfil",
+        re.compile(r"(?i)\b(curl|wget|nc|netcat)\b[^|\n]{0,200}\|\s*(sh|bash|zsh|python)\b"),
+    ),
     # `curl` posting to a URL.
-    ("network_exfil",
-     re.compile(r"(?i)\b(curl|wget)\b[^.\n]{0,200}\b(--data|-d|-X\s+POST)\b[^.\n]{0,200}https?://")),
+    (
+        "network_exfil",
+        re.compile(
+            r"(?i)\b(curl|wget)\b[^.\n]{0,200}\b(--data|-d|-X\s+POST)\b[^.\n]{0,200}https?://"
+        ),
+    ),
     # SSH authorized_keys backdoor.
-    ("ssh_backdoor",
-     re.compile(r"(?i)(authorized_keys|~/\.ssh/authorized_keys)")),
+    ("ssh_backdoor", re.compile(r"(?i)(authorized_keys|~/\.ssh/authorized_keys)")),
     # Reading the host's environment / credential files.
-    ("cred_read",
-     re.compile(r"(?i)(?:/\.aws/credentials|/\.config/gh/hosts\.yml|/\.netrc|/\.ssh/id_rsa|HERMES_ENV|OXENCLAW_ENV)")),
+    (
+        "cred_read",
+        re.compile(
+            r"(?i)(?:/\.aws/credentials|/\.config/gh/hosts\.yml|/\.netrc|/\.ssh/id_rsa|HERMES_ENV|OXENCLAW_ENV)"
+        ),
+    ),
     # Self-replicating instruction: tell the agent to memorise something.
-    ("memory_self_write",
-     re.compile(r"(?i)\b(call|invoke|use)\s+memory_save\b")),
+    ("memory_self_write", re.compile(r"(?i)\b(call|invoke|use)\s+memory_save\b")),
     # `<system>` / `<assistant>` impersonation.
-    ("role_tag_inject",
-     re.compile(r"(?i)<\s*(system|assistant|tool_use|tool_result)\b")),
+    ("role_tag_inject", re.compile(r"(?i)<\s*(system|assistant|tool_use|tool_result)\b")),
 ]
 
 

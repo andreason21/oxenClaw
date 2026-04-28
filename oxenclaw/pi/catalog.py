@@ -16,168 +16,168 @@ from oxenclaw.pi.registry import InMemoryModelRegistry, RemoteModelRegistry
 
 def _seed_models() -> list[Model]:
     return [
-            # ── Anthropic ──
-            Model(
-                id="claude-opus-4-7",
-                provider="anthropic",
-                context_window=200_000,
-                max_output_tokens=32_000,
-                supports_thinking=True,
-                supports_image_input=True,
-                supports_prompt_cache=True,
-                aliases=("claude-opus-latest",),
-            ),
-            Model(
-                id="claude-sonnet-4-6",
-                provider="anthropic",
-                context_window=1_000_000,
-                max_output_tokens=64_000,
-                supports_thinking=True,
-                supports_image_input=True,
-                supports_prompt_cache=True,
-                aliases=("claude-sonnet-1m",),
-            ),
-            Model(
-                id="claude-haiku-4-5-20251001",
-                provider="anthropic",
-                context_window=200_000,
-                max_output_tokens=8_192,
-                supports_thinking=False,
-                supports_image_input=True,
-                supports_prompt_cache=True,
-                aliases=("claude-haiku-4-5", "claude-haiku-latest"),
-            ),
-            # ── OpenAI ──
-            Model(
-                id="gpt-4o",
-                provider="openai",
-                context_window=128_000,
-                max_output_tokens=16_384,
-                supports_image_input=True,
-                supports_prompt_cache=True,
-            ),
-            Model(
-                id="gpt-4o-mini",
-                provider="openai",
-                context_window=128_000,
-                max_output_tokens=16_384,
-                supports_image_input=True,
-                supports_prompt_cache=True,
-            ),
-            Model(
-                id="o3",
-                provider="openai",
-                context_window=200_000,
-                max_output_tokens=100_000,
-                supports_thinking=True,
-            ),
-            # ── Google ──
-            Model(
-                id="gemini-2.5-pro",
-                provider="google",
-                context_window=2_000_000,
-                max_output_tokens=64_000,
-                supports_thinking=True,
-                supports_image_input=True,
-                supports_prompt_cache=True,
-            ),
-            Model(
-                id="gemini-2.0-flash",
-                provider="google",
-                context_window=1_000_000,
-                max_output_tokens=8_192,
-                supports_image_input=True,
-            ),
-            # ── Local / Ollama ──
-            # Default. qwen3.5:9b — multimodal (vision), native function
-            # calling, native thinking, 256K ctx, ~6.6 GB Q4_K_M. Picked
-            # over gemma4:latest as the recommended local default after
-            # the 2026-04-28 live e2e gate (18/18 PASS on PiAgent multi-
-            # turn + memory-driven tool-call flow at /tmp/qwen_live_e2e.py).
-            Model(
-                id="qwen3.5:9b",
-                provider="ollama",
-                context_window=262_144,  # 256K native via rope
-                max_output_tokens=8_192,
-                supports_tools=True,
-                supports_image_input=True,
-                supports_thinking=True,
-            ),
-            # gemma4 family — multimodal, native function calling, 128K
-            # ctx on E-class (2B/4B effective) and 256K on the 26B/31B
-            # MoE variants. `gemma4:latest` aliases to e4b (~9.6 GB).
-            # NOTE: there is NO `gemma4:9b` — the closest size is e4b
-            # (effective 4B parameters) or 26b/31b for higher quality.
-            Model(
-                id="gemma4:latest",
-                provider="ollama",
-                context_window=131_072,  # 128K
-                max_output_tokens=8_192,
-                supports_tools=True,
-                supports_image_input=True,
-                aliases=("gemma4:e4b",),
-            ),
-            Model(
-                id="gemma4:e2b",
-                provider="ollama",
-                context_window=131_072,
-                max_output_tokens=8_192,
-                supports_tools=True,
-                supports_image_input=True,
-            ),
-            Model(
-                id="gemma4:e4b",
-                provider="ollama",
-                context_window=131_072,
-                max_output_tokens=8_192,
-                supports_tools=True,
-                supports_image_input=True,
-            ),
-            Model(
-                id="gemma4:26b",
-                provider="ollama",
-                context_window=262_144,  # 256K
-                max_output_tokens=8_192,
-                supports_tools=True,
-                supports_image_input=True,
-            ),
-            Model(
-                id="gemma4:31b",
-                provider="ollama",
-                context_window=262_144,
-                max_output_tokens=8_192,
-                supports_tools=True,
-                supports_image_input=True,
-            ),
-            Model(
-                id="qwen2.5:7b-instruct",
-                provider="ollama",
-                context_window=32_768,
-                max_output_tokens=4_096,
-                supports_tools=True,
-            ),
-            Model(
-                id="llama3.1:8b",
-                provider="ollama",
-                context_window=128_000,
-                max_output_tokens=4_096,
-                supports_tools=True,
-            ),
-            Model(
-                id="mistral-nemo:12b",
-                provider="ollama",
-                context_window=128_000,
-                max_output_tokens=4_096,
-                supports_tools=True,
-            ),
-            Model(
-                id="gemma3:4b",
-                provider="ollama",
-                context_window=8_192,
-                max_output_tokens=2_048,
-                supports_tools=False,
-            ),
-        ]
+        # ── Anthropic ──
+        Model(
+            id="claude-opus-4-7",
+            provider="anthropic",
+            context_window=200_000,
+            max_output_tokens=32_000,
+            supports_thinking=True,
+            supports_image_input=True,
+            supports_prompt_cache=True,
+            aliases=("claude-opus-latest",),
+        ),
+        Model(
+            id="claude-sonnet-4-6",
+            provider="anthropic",
+            context_window=1_000_000,
+            max_output_tokens=64_000,
+            supports_thinking=True,
+            supports_image_input=True,
+            supports_prompt_cache=True,
+            aliases=("claude-sonnet-1m",),
+        ),
+        Model(
+            id="claude-haiku-4-5-20251001",
+            provider="anthropic",
+            context_window=200_000,
+            max_output_tokens=8_192,
+            supports_thinking=False,
+            supports_image_input=True,
+            supports_prompt_cache=True,
+            aliases=("claude-haiku-4-5", "claude-haiku-latest"),
+        ),
+        # ── OpenAI ──
+        Model(
+            id="gpt-4o",
+            provider="openai",
+            context_window=128_000,
+            max_output_tokens=16_384,
+            supports_image_input=True,
+            supports_prompt_cache=True,
+        ),
+        Model(
+            id="gpt-4o-mini",
+            provider="openai",
+            context_window=128_000,
+            max_output_tokens=16_384,
+            supports_image_input=True,
+            supports_prompt_cache=True,
+        ),
+        Model(
+            id="o3",
+            provider="openai",
+            context_window=200_000,
+            max_output_tokens=100_000,
+            supports_thinking=True,
+        ),
+        # ── Google ──
+        Model(
+            id="gemini-2.5-pro",
+            provider="google",
+            context_window=2_000_000,
+            max_output_tokens=64_000,
+            supports_thinking=True,
+            supports_image_input=True,
+            supports_prompt_cache=True,
+        ),
+        Model(
+            id="gemini-2.0-flash",
+            provider="google",
+            context_window=1_000_000,
+            max_output_tokens=8_192,
+            supports_image_input=True,
+        ),
+        # ── Local / Ollama ──
+        # Default. qwen3.5:9b — multimodal (vision), native function
+        # calling, native thinking, 256K ctx, ~6.6 GB Q4_K_M. Picked
+        # over gemma4:latest as the recommended local default after
+        # the 2026-04-28 live e2e gate (18/18 PASS on PiAgent multi-
+        # turn + memory-driven tool-call flow at /tmp/qwen_live_e2e.py).
+        Model(
+            id="qwen3.5:9b",
+            provider="ollama",
+            context_window=262_144,  # 256K native via rope
+            max_output_tokens=8_192,
+            supports_tools=True,
+            supports_image_input=True,
+            supports_thinking=True,
+        ),
+        # gemma4 family — multimodal, native function calling, 128K
+        # ctx on E-class (2B/4B effective) and 256K on the 26B/31B
+        # MoE variants. `gemma4:latest` aliases to e4b (~9.6 GB).
+        # NOTE: there is NO `gemma4:9b` — the closest size is e4b
+        # (effective 4B parameters) or 26b/31b for higher quality.
+        Model(
+            id="gemma4:latest",
+            provider="ollama",
+            context_window=131_072,  # 128K
+            max_output_tokens=8_192,
+            supports_tools=True,
+            supports_image_input=True,
+            aliases=("gemma4:e4b",),
+        ),
+        Model(
+            id="gemma4:e2b",
+            provider="ollama",
+            context_window=131_072,
+            max_output_tokens=8_192,
+            supports_tools=True,
+            supports_image_input=True,
+        ),
+        Model(
+            id="gemma4:e4b",
+            provider="ollama",
+            context_window=131_072,
+            max_output_tokens=8_192,
+            supports_tools=True,
+            supports_image_input=True,
+        ),
+        Model(
+            id="gemma4:26b",
+            provider="ollama",
+            context_window=262_144,  # 256K
+            max_output_tokens=8_192,
+            supports_tools=True,
+            supports_image_input=True,
+        ),
+        Model(
+            id="gemma4:31b",
+            provider="ollama",
+            context_window=262_144,
+            max_output_tokens=8_192,
+            supports_tools=True,
+            supports_image_input=True,
+        ),
+        Model(
+            id="qwen2.5:7b-instruct",
+            provider="ollama",
+            context_window=32_768,
+            max_output_tokens=4_096,
+            supports_tools=True,
+        ),
+        Model(
+            id="llama3.1:8b",
+            provider="ollama",
+            context_window=128_000,
+            max_output_tokens=4_096,
+            supports_tools=True,
+        ),
+        Model(
+            id="mistral-nemo:12b",
+            provider="ollama",
+            context_window=128_000,
+            max_output_tokens=4_096,
+            supports_tools=True,
+        ),
+        Model(
+            id="gemma3:4b",
+            provider="ollama",
+            context_window=8_192,
+            max_output_tokens=2_048,
+            supports_tools=False,
+        ),
+    ]
 
 
 def default_registry() -> InMemoryModelRegistry:

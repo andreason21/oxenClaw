@@ -122,7 +122,7 @@ def _fetch_network(timeout: float = 5.0) -> dict[str, Any] | None:
             return data
     except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
         logger.debug("models_dev network fetch failed: %s", exc)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.debug("models_dev network fetch raised: %s", exc)
     return None
 
@@ -192,7 +192,9 @@ def _provider_for_model(model_id: str, data: dict[str, Any]) -> str | None:
     return None
 
 
-def _get_model_entry(model_id: str, data: dict[str, Any]) -> tuple[str | None, dict[str, Any] | None]:
+def _get_model_entry(
+    model_id: str, data: dict[str, Any]
+) -> tuple[str | None, dict[str, Any] | None]:
     provider_id = _provider_for_model(model_id, data)
     if provider_id is None:
         return None, None

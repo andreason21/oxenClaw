@@ -94,9 +94,7 @@ def _paths(tmp_path: Path) -> OxenclawPaths:
     return p
 
 
-def _make_pi_agent(
-    *, tmp_path: Path, provider: str, tools: ToolRegistry
-) -> PiAgent:
+def _make_pi_agent(*, tmp_path: Path, provider: str, tools: ToolRegistry) -> PiAgent:
     reg = InMemoryModelRegistry(
         models=[
             Model(
@@ -137,9 +135,7 @@ class _ReadArgs(BaseModel):
     path: str
 
 
-def _build_tool_registry(
-    *, edit_log: list[str], read_log: list[str]
-) -> ToolRegistry:
+def _build_tool_registry(*, edit_log: list[str], read_log: list[str]) -> ToolRegistry:
     async def _edit(args: _EditArgs) -> str:
         edit_log.append(args.path)
         return f"edited {args.path}"
@@ -147,11 +143,7 @@ def _build_tool_registry(
     async def _read(args: _ReadArgs) -> str:
         read_log.append(args.path)
         # Pretend the openclaw guide says "do X then Y".
-        return (
-            "OPENCLAW IMPROVEMENT GUIDE\n"
-            "1. Update agents/foo.py\n"
-            "2. Update tests/test_foo.py\n"
-        )
+        return "OPENCLAW IMPROVEMENT GUIDE\n1. Update agents/foo.py\n2. Update tests/test_foo.py\n"
 
     tools = ToolRegistry()
     tools.register(
@@ -195,10 +187,7 @@ async def test_change_set_memory_drives_three_edit_tool_calls(
             # First model invocation: the model "recalled" the memory
             # and explains its plan, then issues the first tool call.
             yield TextDeltaEvent(
-                delta=(
-                    'Per your memory "code/test/doc are one set" '
-                    "I'll update all three.\n"
-                )
+                delta=('Per your memory "code/test/doc are one set" I\'ll update all three.\n')
             )
             yield ToolUseStartEvent(id="t1", name="edit")
             yield ToolUseInputDeltaEvent(
@@ -228,13 +217,9 @@ async def test_change_set_memory_drives_three_edit_tool_calls(
             yield StopEvent(reason="end_turn")
 
     register_provider_stream("memory_change_set", fake_stream)
-    agent = _make_pi_agent(
-        tmp_path=tmp_path, provider="memory_change_set", tools=tools
-    )
+    agent = _make_pi_agent(tmp_path=tmp_path, provider="memory_change_set", tools=tools)
     runtime = PiAgentAcpRuntime(agent=agent, backend_id="pi")
-    register_acp_runtime_backend(
-        AcpRuntimeBackend(id="pi", runtime=runtime)
-    )
+    register_acp_runtime_backend(AcpRuntimeBackend(id="pi", runtime=runtime))
     mgr = get_acp_session_manager()
 
     await mgr.initialize_session(
@@ -282,10 +267,7 @@ async def test_change_set_memory_drives_three_edit_tool_calls(
     # Final assistant text delta arrives after the tool chain.
     text_deltas = [e for e in events if isinstance(e, AcpEventTextDelta)]
     final_text = "".join(t.text for t in text_deltas)
-    assert (
-        "code/test/doc are one set" in final_text
-        or "All three updated" in final_text
-    )
+    assert "code/test/doc are one set" in final_text or "All three updated" in final_text
 
     # Last event is done(stop).
     assert isinstance(events[-1], AcpEventDone)
@@ -318,15 +300,11 @@ async def test_apply_openclaw_guide_memory_drives_read_then_edit(
                 )
             )
             yield ToolUseStartEvent(id="r1", name="read_file")
-            yield ToolUseInputDeltaEvent(
-                id="r1", input_delta='{"path":"docs/openclaw-guide.md"}'
-            )
+            yield ToolUseInputDeltaEvent(id="r1", input_delta='{"path":"docs/openclaw-guide.md"}')
             yield ToolUseEndEvent(id="r1")
             yield StopEvent(reason="tool_use")
         elif state["calls"] == 2:
-            yield TextDeltaEvent(
-                delta="Got the guide. Applying step 1 (agents/foo.py).\n"
-            )
+            yield TextDeltaEvent(delta="Got the guide. Applying step 1 (agents/foo.py).\n")
             yield ToolUseStartEvent(id="e1", name="edit")
             yield ToolUseInputDeltaEvent(
                 id="e1",
@@ -339,13 +317,9 @@ async def test_apply_openclaw_guide_memory_drives_read_then_edit(
             yield StopEvent(reason="end_turn")
 
     register_provider_stream("memory_openclaw_guide", fake_stream)
-    agent = _make_pi_agent(
-        tmp_path=tmp_path, provider="memory_openclaw_guide", tools=tools
-    )
+    agent = _make_pi_agent(tmp_path=tmp_path, provider="memory_openclaw_guide", tools=tools)
     runtime = PiAgentAcpRuntime(agent=agent, backend_id="pi")
-    register_acp_runtime_backend(
-        AcpRuntimeBackend(id="pi", runtime=runtime)
-    )
+    register_acp_runtime_backend(AcpRuntimeBackend(id="pi", runtime=runtime))
     mgr = get_acp_session_manager()
     await mgr.initialize_session(
         AcpInitializeSessionInput(
@@ -421,16 +395,12 @@ async def test_acp_event_order_matches_underlying_tool_execution(
         state["calls"] += 1
         if state["calls"] == 1:
             yield ToolUseStartEvent(id="x1", name="edit")
-            yield ToolUseInputDeltaEvent(
-                id="x1", input_delta='{"path":"a.py"}'
-            )
+            yield ToolUseInputDeltaEvent(id="x1", input_delta='{"path":"a.py"}')
             yield ToolUseEndEvent(id="x1")
             yield StopEvent(reason="tool_use")
         elif state["calls"] == 2:
             yield ToolUseStartEvent(id="x2", name="edit")
-            yield ToolUseInputDeltaEvent(
-                id="x2", input_delta='{"path":"b.py"}'
-            )
+            yield ToolUseInputDeltaEvent(id="x2", input_delta='{"path":"b.py"}')
             yield ToolUseEndEvent(id="x2")
             yield StopEvent(reason="tool_use")
         else:
@@ -438,9 +408,7 @@ async def test_acp_event_order_matches_underlying_tool_execution(
             yield StopEvent(reason="end_turn")
 
     register_provider_stream("memory_fifo", fake_stream)
-    agent = _make_pi_agent(
-        tmp_path=tmp_path, provider="memory_fifo", tools=tools
-    )
+    agent = _make_pi_agent(tmp_path=tmp_path, provider="memory_fifo", tools=tools)
     runtime = PiAgentAcpRuntime(agent=agent)
     handle = await runtime.ensure_session(
         type(
@@ -463,15 +431,11 @@ async def test_acp_event_order_matches_underlying_tool_execution(
     )
 
     handle = await runtime.ensure_session(
-        AcpRuntimeEnsureInput(
-            session_key="fifo", agent="a", mode="oneshot"
-        )
+        AcpRuntimeEnsureInput(session_key="fifo", agent="a", mode="oneshot")
     )
     events = await _drain(
         runtime.run_turn(
-            AcpRuntimeTurnInput(
-                handle=handle, text="x", mode="prompt", request_id="r"
-            )
+            AcpRuntimeTurnInput(handle=handle, text="x", mode="prompt", request_id="r")
         )
     )
 

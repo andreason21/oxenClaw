@@ -25,20 +25,20 @@ import logging
 import os
 from dataclasses import replace
 
-from oxenclaw.agents.base import Agent
-from oxenclaw.agents.builtin_tools import default_tools
-from oxenclaw.agents.echo import EchoAgent
-from oxenclaw.agents.pi_agent import PiAgent
-from oxenclaw.agents.tools import Tool, ToolRegistry
-
 # CodingAgent imports tools_pkg.update_plan_tool which (transitively, via
 # `oxenclaw.agents.tools` evaluation) re-enters this module. Defer the
 # import to use-site to break the cycle. The TYPE_CHECKING shim keeps
 # annotations happy without triggering the actual import at import time.
 from typing import TYPE_CHECKING
 
+from oxenclaw.agents.base import Agent
+from oxenclaw.agents.builtin_tools import default_tools
+from oxenclaw.agents.echo import EchoAgent
+from oxenclaw.agents.pi_agent import PiAgent
+from oxenclaw.agents.tools import Tool, ToolRegistry
+
 if TYPE_CHECKING:
-    from oxenclaw.agents.coding_agent import CodingAgent
+    pass
 from oxenclaw.pi.catalog import default_registry
 from oxenclaw.pi.models import Model
 from oxenclaw.pi.registry import InMemoryAuthStorage
@@ -325,6 +325,7 @@ def build_agent(
         if approval_manager is not None:
             kwargs["approval_manager"] = approval_manager
         from oxenclaw.agents.coding_agent import CodingAgent  # lazy: see top
+
         return CodingAgent(**kwargs)
 
     resolved_tools = (

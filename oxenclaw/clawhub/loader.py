@@ -77,9 +77,10 @@ def _read_skills_config(paths: OxenclawPaths) -> dict[str, Any]:
     if yaml_path.exists():
         try:
             import yaml  # local import — yaml may not be on every install
+
             data = yaml.safe_load(yaml_path.read_text(encoding="utf-8")) or {}
             return data if isinstance(data, dict) else {}
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning("skills_config.yaml unreadable: %s", exc)
             return {}
     return {}

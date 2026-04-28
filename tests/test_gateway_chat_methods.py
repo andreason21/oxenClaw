@@ -203,6 +203,7 @@ async def test_debug_prompt_agent_without_debug_method(tmp_path) -> None:  # typ
     error so the dashboard renders 'unsupported' rather than crashing."""
     agents = AgentRegistry()
     from oxenclaw.agents import build_agent
+
     agents.register(build_agent(agent_id="echoer", provider="echo"))
     router, _ = _setup(tmp_path, agents=agents)
     resp = await router.dispatch(

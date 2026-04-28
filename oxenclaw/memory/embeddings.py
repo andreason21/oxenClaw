@@ -264,10 +264,7 @@ class AnthropicEmbeddings:
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout
         self._api_key = (
-            api_key
-            or os.environ.get("ANTHROPIC_API_KEY")
-            or os.environ.get("VOYAGE_API_KEY")
-            or ""
+            api_key or os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("VOYAGE_API_KEY") or ""
         )
         self._client: httpx.AsyncClient | None = None
         self._dimensions: int | None = None

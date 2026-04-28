@@ -128,9 +128,7 @@ class SkillCommand(BaseModel):
         if not v or not v.strip():
             raise ValueError("command name is required")
         if not VALID_SLUG_RE.match(v.replace("_", "-")):
-            raise ValueError(
-                f"command name {v!r} must be alphanumeric + underscores/hyphens"
-            )
+            raise ValueError(f"command name {v!r} must be alphanumeric + underscores/hyphens")
         return v
 
 

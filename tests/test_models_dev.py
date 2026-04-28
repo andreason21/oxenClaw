@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import json
-import os
 import time
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -96,7 +94,9 @@ def test_disk_cache_used_on_network_failure(tmp_path) -> None:
     # Pre-populate disk cache.
     cache_path = models_dev.DISK_CACHE_PATH
     cache_path.parent.mkdir(parents=True, exist_ok=True)
-    cache_path.write_text(json.dumps({"_fetched_at": time.time(), "data": {"openai": {"models": {}}}}))
+    cache_path.write_text(
+        json.dumps({"_fetched_at": time.time(), "data": {"openai": {"models": {}}}})
+    )
     with patch.object(models_dev, "_fetch_network", return_value=None):
         data = models_dev.fetch_models_dev()
     assert "openai" in data
@@ -107,9 +107,7 @@ def test_stale_disk_cache_then_snapshot_when_network_down(tmp_path) -> None:
     cache_path = models_dev.DISK_CACHE_PATH
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     stale_data = {"only-here": {"models": {}}}
-    cache_path.write_text(
-        json.dumps({"_fetched_at": time.time() - 10 * 3600, "data": stale_data})
-    )
+    cache_path.write_text(json.dumps({"_fetched_at": time.time() - 10 * 3600, "data": stale_data}))
     with patch.object(models_dev, "_fetch_network", return_value=None):
         data = models_dev.fetch_models_dev()
     # Stale disk cache takes precedence over snapshot (data is non-empty).
@@ -190,11 +188,7 @@ def test_guess_provider_from_id() -> None:
 
 
 def test_lookup_models_dev_context_uses_cascade() -> None:
-    fake = {
-        "openai": {
-            "models": {"gpt-5": {"limit": {"context": 400000, "output": 128000}}}
-        }
-    }
+    fake = {"openai": {"models": {"gpt-5": {"limit": {"context": 400000, "output": 128000}}}}}
     with patch.object(models_dev, "_fetch_network", return_value=fake):
         ctx = models_dev.lookup_models_dev_context("gpt-5")
     assert ctx == 400000

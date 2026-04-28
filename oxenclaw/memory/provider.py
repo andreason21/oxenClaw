@@ -88,9 +88,7 @@ class MemoryProvider(ABC):
     async def handle_tool_call(self, name: str, args: dict[str, Any]) -> str:
         """Dispatch a tool call. Default raises if called for a name
         the provider doesn't actually own."""
-        raise NotImplementedError(
-            f"provider {self.name!r} does not handle tool {name!r}"
-        )
+        raise NotImplementedError(f"provider {self.name!r} does not handle tool {name!r}")
 
     async def shutdown(self) -> None:
         """Clean shutdown — flush queues, close connections."""
@@ -219,9 +217,7 @@ class BuiltinMemoryProvider(MemoryProvider):
         # PiAgent run loop dispatches them through ToolRegistry.
         # handle_tool_call is reserved for providers that route tool
         # calls themselves.
-        raise NotImplementedError(
-            "BuiltinMemoryProvider tools are dispatched via ToolRegistry"
-        )
+        raise NotImplementedError("BuiltinMemoryProvider tools are dispatched via ToolRegistry")
 
     async def on_memory_write(self, text: str, tags: list[str] | None = None) -> None:
         # Built-in writes go directly through MemoryRetriever.save —
@@ -304,9 +300,7 @@ class MemoryProviderRegistry:
                     all_insights.extend(ins)
         return {"insights": all_insights} if all_insights else {}
 
-    async def on_memory_write(
-        self, text: str, tags: list[str] | None = None
-    ) -> None:
+    async def on_memory_write(self, text: str, tags: list[str] | None = None) -> None:
         """Notify all providers (excluding the built-in originator)."""
         for p in self._providers:
             if p.name == "builtin":
@@ -314,9 +308,7 @@ class MemoryProviderRegistry:
             try:
                 await p.on_memory_write(text, tags)
             except Exception:
-                logger.exception(
-                    "on_memory_write raised for provider %r", p.name
-                )
+                logger.exception("on_memory_write raised for provider %r", p.name)
 
 
 __all__ = [

@@ -144,7 +144,9 @@ async def spawn_acp(
         elapsed = asyncio.get_event_loop().time() - started
         logger.warning(
             "acp_subprocess timeout: runtime=%s cli=%s timeout_s=%.1f",
-            runtime, binary, timeout_seconds,
+            runtime,
+            binary,
+            timeout_seconds,
         )
         return AcpSpawnResult(
             runtime=runtime,

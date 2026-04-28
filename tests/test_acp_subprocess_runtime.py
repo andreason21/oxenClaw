@@ -17,7 +17,6 @@ import asyncio
 import sys
 import textwrap
 from collections.abc import AsyncIterator
-from pathlib import Path
 
 import pytest
 
@@ -37,7 +36,6 @@ from oxenclaw.acp.subprocess_runtime import AcpWireError, SubprocessAcpRuntime
 from oxenclaw.agents.acp_runtime import (
     AcpEventDone,
     AcpEventError,
-    AcpEventStatus,
     AcpEventTextDelta,
     AcpEventToolCall,
     AcpRuntimeEvent,
@@ -207,9 +205,7 @@ async def test_initialize_run_turn_close_over_real_subprocess() -> None:
             "AcpEventDone",
         ]
         # Concatenated text equals the echoed prompt.
-        text_chunks = [
-            ev.text for ev in events if isinstance(ev, AcpEventTextDelta)
-        ]
+        text_chunks = [ev.text for ev in events if isinstance(ev, AcpEventTextDelta)]
         assert "".join(text_chunks) == "hello (echoed)"
         tool_call = next(ev for ev in events if isinstance(ev, AcpEventToolCall))
         assert tool_call.tool_call_id == "tc-1"
@@ -219,9 +215,7 @@ async def test_initialize_run_turn_close_over_real_subprocess() -> None:
         assert isinstance(done, AcpEventDone)
         assert done.stop_reason == "stop"
 
-        await mgr.close_session(
-            AcpCloseSessionInput(session_key="agent:1:echo:1")
-        )
+        await mgr.close_session(AcpCloseSessionInput(session_key="agent:1:echo:1"))
     finally:
         await rt.aclose()
 
@@ -232,17 +226,13 @@ async def test_cancel_propagates_to_next_turn() -> None:
     mgr = get_acp_session_manager()
     try:
         handle = await mgr.initialize_session(
-            AcpInitializeSessionInput(
-                session_key="s", agent="a", backend_id="echo"
-            )
+            AcpInitializeSessionInput(session_key="s", agent="a", backend_id="echo")
         )
         # Pre-cancel the session — server flips its `cancelled` flag,
         # then on the next prompt returns stopReason="cancel".
         await rt.cancel(handle=handle)
         events = await _drain(
-            mgr.run_turn(
-                AcpRunTurnInput(session_key="s", text="x", request_id="r")
-            )
+            mgr.run_turn(AcpRunTurnInput(session_key="s", text="x", request_id="r"))
         )
         done = events[-1]
         assert isinstance(done, AcpEventDone)
@@ -276,7 +266,7 @@ async def test_aclose_terminates_child_and_pending_requests() -> None:
     # is "aclose() returns and the request future is no longer pending".
     try:
         await asyncio.wait_for(fut, timeout=2.0)
-    except (AcpWireError, asyncio.TimeoutError):
+    except (TimeoutError, AcpWireError):
         pass
 
 
@@ -293,6 +283,7 @@ async def test_run_turn_on_uninitialised_session_yields_error_event() -> None:
         await rt._ensure_spawned()
         events: list[AcpRuntimeEvent] = []
         from oxenclaw.agents.acp_runtime import AcpRuntimeHandle, AcpRuntimeTurnInput
+
         bogus_handle = AcpRuntimeHandle(
             session_key="never-opened",
             backend="echo",

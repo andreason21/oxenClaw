@@ -28,7 +28,6 @@ from websockets.asyncio.server import ServerConnection, serve
 from websockets.http11 import Request, Response
 
 from oxenclaw.gateway.protocol import EventFrame
-from oxenclaw.gateway.restart import GATEWAY_SERVICE_RESTART_EXIT_CODE
 from oxenclaw.gateway.router import Router
 from oxenclaw.plugin_sdk.runtime_env import get_logger
 from oxenclaw.static import app_css, app_html, app_js
@@ -363,10 +362,7 @@ class GatewayServer:
         # ERR_CONNECTION_REFUSED while curl/PowerShell (which fall back
         # to IPv4) succeed — confusing failure mode worth pre-empting.
         bind_host: str | list[str]
-        if host == "127.0.0.1":
-            bind_host = ["127.0.0.1", "::1"]
-        else:
-            bind_host = host
+        bind_host = ["127.0.0.1", "::1"] if host == "127.0.0.1" else host
         async with serve(
             self._on_connect,
             bind_host,

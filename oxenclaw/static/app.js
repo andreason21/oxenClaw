@@ -767,7 +767,9 @@ const ChatView = {
       // chat.send returns (renderStream rebuilds the whole stream from
       // chat.history). On error we keep them and append an inline error
       // bubble so failure is visible without the user chasing a toast.
-      if (text) appendOptimistic("user", Markdown.render(text), { attachments: media.length });
+      const pendingUserBubble = text
+        ? appendOptimistic("user", Markdown.render(text), { attachments: media.length })
+        : null;
       const pendingBubble = appendOptimistic("assistant", "Thinking…", { muted: true });
       try {
         const result = await safeRpc("chat.send", {
@@ -795,6 +797,15 @@ const ChatView = {
           // wire delivery failed — informational only.
           Toast.info("delivery note", result.reason);
         }
+        // chat.send succeeded → server has the user message + assistant
+        // reply persisted. Drop the optimistic placeholders BEFORE refresh
+        // so renderStream's carry-forward (which keeps unmatched
+        // .pending-optimistic nodes through innerHTML="") doesn't leave
+        // an orphaned "Thinking…" bubble — those would otherwise
+        // accumulate one per turn and surface as the duplicate-thinking
+        // bug operators see.
+        if (pendingUserBubble) pendingUserBubble.remove();
+        pendingBubble.remove();
         await refresh();
         startPolling();
       } catch (e) {

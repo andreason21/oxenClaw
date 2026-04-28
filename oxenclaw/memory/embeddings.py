@@ -157,9 +157,14 @@ class OpenAIEmbeddings:
 
     @property
     def dimensions(self) -> int:
-        if self._dimensions is None:
-            raise RuntimeError("embedding dimensions not yet known — call embed() at least once")
-        return self._dimensions
+        # Returns 0 until the first embed() probes the live model. We
+        # used to raise here, but `runtime_checkable` Protocol isinstance
+        # checks on Python 3.11 call `hasattr` on every protocol attr —
+        # for a property that means evaluating the getter, and a
+        # RuntimeError propagates out of the isinstance() call. Callers
+        # that need the real dimensions should `await dim()` (which
+        # probes if needed) or treat 0 as "unknown".
+        return self._dimensions or 0
 
     async def _ensure_session(self) -> aiohttp.ClientSession:
         if self._http is None:
@@ -275,9 +280,9 @@ class AnthropicEmbeddings:
 
     @property
     def dimensions(self) -> int:
-        if self._dimensions is None:
-            raise RuntimeError("embedding dimensions not yet known — call embed() at least once")
-        return self._dimensions
+        # See OpenAIEmbeddings.dimensions for why we return 0 instead of
+        # raising when not yet probed.
+        return self._dimensions or 0
 
     def _get_client(self) -> httpx.AsyncClient:
         if self._client is None:
@@ -374,9 +379,9 @@ class CohereEmbeddings:
 
     @property
     def dimensions(self) -> int:
-        if self._dimensions is None:
-            raise RuntimeError("embedding dimensions not yet known — call embed() at least once")
-        return self._dimensions
+        # See OpenAIEmbeddings.dimensions for why we return 0 instead of
+        # raising when not yet probed.
+        return self._dimensions or 0
 
     def _get_client(self) -> httpx.AsyncClient:
         if self._client is None:

@@ -180,6 +180,166 @@ async def test_web_search_zero_hits_returns_recovery_hint() -> None:
     assert "BRAVE_API_KEY" in out or "TAVILY_API_KEY" in out
 
 
+async def test_web_search_zero_hits_routes_weather_to_dedicated_tool() -> None:
+    """A weather query that DDG can't answer must route the model to
+    the `weather` tool — production hit: gemma4 called web_search for
+    "날씨 알려줘", got 0 hits from DDG, then gave up entirely. The
+    recovery hint now names the right tool so the model retries."""
+    empty = _FakeProvider("ddg", [])
+    t = web_search_tool(providers=[empty])
+    out_ko = await t.execute({"query": "날씨 알려줘", "k": 5})
+    out_en = await t.execute({"query": "weather in Seoul", "k": 5})
+    for out in (out_ko, out_en):
+        assert "weather query detected" in out
+        assert "weather(city=" in out
+        assert "wrong tool for weather" in out
+
+
+async def test_web_search_zero_hits_routes_time_query_to_get_time() -> None:
+    empty = _FakeProvider("ddg", [])
+    t = web_search_tool(providers=[empty])
+    out = await t.execute({"query": "what time is it 지금", "k": 5})
+    assert "time query detected" in out
+    assert "get_time" in out
+
+
+async def test_web_search_accepts_queries_array_alias() -> None:
+    """Production hit: gemma4 emitted `{queries: ['현재 위치의 날씨']}`
+    against `web_search`. The pre-validator must lift the array's
+    first element onto the `query` field."""
+    provider = _FakeProvider("inj", [SearchHit(title="t", url="https://x", snippet="s")])
+    t = web_search_tool(providers=[provider])
+    out = await t.execute({"queries": ["현재 위치의 날씨"]})
+    assert "[via inj]" in out
+    assert provider.calls == 1
+
+
+async def test_web_search_accepts_q_question_text_aliases() -> None:
+    """Other common drift forms: `q`, `question`, `text`, `prompt`, `topic`."""
+    provider = _FakeProvider("inj", [SearchHit(title="t", url="https://x", snippet="s")])
+    t = web_search_tool(providers=[provider])
+    for variant in ({"q": "x"}, {"question": "x"}, {"text": "x"}, {"prompt": "x"}, {"topic": "x"}):
+        out = await t.execute(variant)
+        assert "via inj" in out
+
+
+async def test_web_search_accepts_limit_and_top_k_for_k() -> None:
+    """The validator must accept `limit` / `top_k` aliases for `k`.
+    We verify by capturing the k value the underlying provider sees."""
+    seen_k: list[int] = []
+
+    class _CapturingProvider:
+        name = "cap"
+
+        async def search(self, query: str, *, k: int) -> list[SearchHit]:
+            seen_k.append(k)
+            return [SearchHit(title="t", url="https://x", snippet="s")]
+
+    t = web_search_tool(providers=[_CapturingProvider()])
+    await t.execute({"query": "x", "limit": 3})
+    await t.execute({"query": "x", "top_k": 7})
+    await t.execute({"query": "x", "max_results": 11})
+    assert seen_k == [3, 7, 11]
+
+
+async def test_web_search_drops_unknown_keys_silently() -> None:
+    provider = _FakeProvider("inj", [SearchHit(title="t", url="https://x", snippet="s")])
+    t = web_search_tool(providers=[provider])
+    out = await t.execute({"query": "x", "scope": "global", "agent_id": "a"})
+    assert "via inj" in out
+
+
+async def test_web_search_redirect_handler_fires_on_zero_hits() -> None:
+    """Production hit: gemma4 emits `web_search` for "날씨 알려줘",
+    DDG returns 0 hits, model ignores recovery hint and replies
+    "Hello!". Fix: registered redirect handler runs the right tool
+    inline so the model sees a successful answer."""
+    empty = _FakeProvider("ddg", [])
+    seen: list[str] = []
+
+    async def weather_redirect(query: str) -> str:
+        seen.append(query)
+        return "Suwon: 🌦 +18°C"
+
+    handlers = [
+        ("weather", lambda q: "날씨" in q or "weather" in q, weather_redirect),
+    ]
+    t = web_search_tool(providers=[empty], redirect_handlers=handlers)
+    out = await t.execute({"query": "수원 날씨"})
+    assert "auto-redirected from web_search → weather" in out
+    assert "Suwon: 🌦 +18°C" in out
+    assert seen == ["수원 날씨"]
+
+
+async def test_web_search_redirect_handler_skipped_when_predicate_false() -> None:
+    """Non-matching topic falls through to the recovery-hint path."""
+    empty = _FakeProvider("ddg", [])
+    fired = False
+
+    async def never(query: str) -> str:
+        nonlocal fired
+        fired = True
+        return "should not appear"
+
+    handlers = [("weather", lambda q: "날씨" in q, never)]
+    t = web_search_tool(providers=[empty], redirect_handlers=handlers)
+    out = await t.execute({"query": "rust ownership rules"})
+    assert "no results" in out
+    assert "auto-redirected" not in out
+    assert fired is False
+
+
+async def test_web_search_redirect_handler_failure_falls_through() -> None:
+    """Buggy redirect handler must not crash the tool — fall through
+    to the recovery hint."""
+    empty = _FakeProvider("ddg", [])
+
+    async def broken(query: str) -> str:
+        raise RuntimeError("oops")
+
+    handlers = [("weather", lambda q: True, broken)]
+    t = web_search_tool(providers=[empty], redirect_handlers=handlers)
+    out = await t.execute({"query": "x"})
+    assert "no results" in out
+    assert "auto-redirected" not in out
+
+
+async def test_web_search_redirect_first_handler_wins() -> None:
+    """Multiple handlers — first matching one wins, rest don't run."""
+    empty = _FakeProvider("ddg", [])
+    fired: list[str] = []
+
+    async def first(q: str) -> str:
+        fired.append("first")
+        return "first answer"
+
+    async def second(q: str) -> str:
+        fired.append("second")
+        return "second answer"
+
+    handlers = [
+        ("first", lambda q: True, first),
+        ("second", lambda q: True, second),
+    ]
+    t = web_search_tool(providers=[empty], redirect_handlers=handlers)
+    out = await t.execute({"query": "x"})
+    assert "first answer" in out
+    assert fired == ["first"]
+
+
+async def test_web_search_zero_hits_no_topic_match_keeps_generic_hint() -> None:
+    """A non-topical query must still get the generic recovery hint
+    (no topic-specific line) so the model has fallback guidance."""
+    empty = _FakeProvider("ddg", [])
+    t = web_search_tool(providers=[empty])
+    out = await t.execute({"query": "completely off-topic random thing", "k": 5})
+    assert "no results" in out
+    assert "weather query detected" not in out
+    assert "time query detected" not in out
+    assert "github query detected" not in out
+    assert "rephras" in out.lower() or "phrasing" in out.lower()
+
+
 def test_build_default_search_chain_picks_up_env_keys(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     """Setting BRAVE/TAVILY/EXA env vars adds the corresponding
     providers to the chain, with DuckDuckGo always last as the

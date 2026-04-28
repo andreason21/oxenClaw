@@ -238,9 +238,8 @@ async def test_tool_call_hooks_emit_pending_then_completed_events(
     """Drive PiAgent's HookRunner manually — simulate the run loop
     invoking before_tool_use → after_tool_use during a turn — and
     confirm the runtime projects them to AcpEventToolCall events."""
-    from oxenclaw.pi.hooks import HookContext
-
     from oxenclaw.acp.pi_agent_runtime import _ToolTelemetry
+    from oxenclaw.pi.hooks import HookContext
 
     agent = _make_pi_agent(tmp_path, provider="acp_pi_text")
     runtime = PiAgentAcpRuntime(agent=agent)
@@ -274,9 +273,8 @@ async def test_tool_call_hooks_filter_by_session_key(
 ) -> None:
     """A telemetry tap installed for session A must NOT capture tool
     events from session B firing on the same agent."""
-    from oxenclaw.pi.hooks import HookContext
-
     from oxenclaw.acp.pi_agent_runtime import _ToolTelemetry
+    from oxenclaw.pi.hooks import HookContext
 
     agent = _make_pi_agent(tmp_path, provider="acp_pi_text")
     runtime = PiAgentAcpRuntime(agent=agent)
@@ -327,9 +325,8 @@ async def test_tool_call_hooks_uninstalled_after_run_turn(
 async def test_tool_call_failed_status_when_is_error_true(
     tmp_path: Path,
 ) -> None:
-    from oxenclaw.pi.hooks import HookContext
-
     from oxenclaw.acp.pi_agent_runtime import _ToolTelemetry
+    from oxenclaw.pi.hooks import HookContext
 
     agent = _make_pi_agent(tmp_path, provider="acp_pi_text")
     runtime = PiAgentAcpRuntime(agent=agent)
@@ -356,7 +353,6 @@ async def test_run_turn_yields_tool_event_inline_with_text(
     test pins the runtime's drain-between-yields behaviour, not
     PiAgent's internal tool dispatch."""
     from oxenclaw.pi.hooks import HookContext, HookRunner
-
     from oxenclaw.plugin_sdk.channel_contract import SendParams
 
     class _FakeAgentWithHooks:

@@ -1,5 +1,12 @@
 """web_fetch + web_search tools with SSRF guard + provider fallback.
 
+`web_search` also supports **auto-redirect handlers**: small models often
+emit `web_search` for weather/time/github queries and then ignore any
+recovery hint we return. The redirect-handler list lets the gateway
+register synchronous callables that fire INSTEAD of the recovery hint
+when the topic predicate matches AND the search returned 0 hits. The
+model sees what looks like a successful `web_search` reply.
+
 The SSRF guard + DNS pinning + audit are now provided by
 `oxenclaw.security.net` (see `guarded_session`). This module wires the
 shared net layer into the LLM-callable tools.
@@ -14,13 +21,14 @@ shared net layer into the LLM-callable tools.
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable
+from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
 from html.parser import HTMLParser
+from typing import Any
 from urllib.parse import urlparse
 
 import aiohttp
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from oxenclaw.agents.tools import FunctionTool, Tool
 from oxenclaw.pi.registry import AuthStorage
@@ -417,8 +425,61 @@ class _FetchArgs(BaseModel):
 
 
 class _SearchArgs(BaseModel):
+    """LLM tool-call drift absorption.
+
+    Production hits we've seen: `q`, `question`, `text`, `prompt`,
+    `topic`, and `queries` (plural array). Many small models emit
+    `{queries: ["..."]}` for a single search rather than `{query: "..."}`.
+    A model-level `before` validator folds every variant onto `query`
+    BEFORE pydantic validation runs."""
+
+    model_config = {"extra": "forbid"}
     query: str = Field(..., description="Search query string.")
     k: int = Field(5, description="Max number of results to return.", gt=0, le=20)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _absorb_aliases(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        out = dict(data)
+        # Pluralised array form: `{queries: ["..."]}` from gemma/qwen.
+        if "query" not in out or not out.get("query"):
+            queries = out.pop("queries", None)
+            if isinstance(queries, list) and queries:
+                out["query"] = str(queries[0])
+            elif isinstance(queries, str) and queries:
+                out["query"] = queries
+        # Single-value text aliases.
+        if "query" not in out or not out.get("query"):
+            for alias in ("q", "question", "text", "prompt", "topic", "search", "search_query"):
+                if out.get(alias):
+                    out["query"] = out[alias]
+                    break
+        for alias in (
+            "queries",
+            "q",
+            "question",
+            "text",
+            "prompt",
+            "topic",
+            "search",
+            "search_query",
+        ):
+            out.pop(alias, None)
+        # `limit` / `top_k` / `n` for the result count.
+        if "k" not in out:
+            for alias in ("limit", "top_k", "topK", "n", "max_results", "maxResults"):
+                if out.get(alias):
+                    try:
+                        out["k"] = int(out[alias])
+                    except (TypeError, ValueError):
+                        pass
+                    break
+        for alias in ("limit", "top_k", "topK", "n", "max_results", "maxResults"):
+            out.pop(alias, None)
+        # Drop unknown keys silently — same rationale as memory_save.
+        return {k: v for k, v in out.items() if k in {"query", "k"}}
 
 
 def web_fetch_tool() -> Tool:
@@ -451,28 +512,100 @@ def web_fetch_tool() -> Tool:
     )
 
 
-def web_search_tool(*, providers: list[WebSearchProvider] | None = None) -> Tool:
+RedirectPredicate = Callable[[str], bool]
+RedirectHandler = Callable[[str], Awaitable[str]]
+
+
+def web_search_tool(
+    *,
+    providers: list[WebSearchProvider] | None = None,
+    redirect_handlers: list[tuple[str, RedirectPredicate, RedirectHandler]] | None = None,
+) -> Tool:
     """Build a `web_search` tool. Pass `providers` to inject; otherwise
-    the tool falls back to DuckDuckGo (no-key) at call time."""
+    the tool falls back to DuckDuckGo (no-key) at call time.
+
+    `redirect_handlers` is an optional list of `(label, predicate, handler)`
+    tuples. When the search returns 0 hits, the first handler whose
+    predicate matches the lowered query string runs and its result is
+    returned in place of the recovery hint. Solves the small-model
+    failure mode where gemma/qwen call `web_search` for a weather/time
+    query, get the recovery hint, then ignore it and emit "Hello!"
+    instead of retrying. With a redirect handler the model sees a
+    successful answer on the first try.
+    """
 
     async def _h(args: _SearchArgs) -> str:
         chain = providers or build_default_search_chain()
         used, hits = await search_with_fallback(args.query, chain, k=args.k)
+        if not hits and redirect_handlers:
+            ql = args.query.lower()
+            for label, predicate, handler in redirect_handlers:
+                try:
+                    if not predicate(ql):
+                        continue
+                except Exception:
+                    logger.exception("web_search redirect predicate raised")
+                    continue
+                try:
+                    out = await handler(args.query)
+                except Exception:
+                    logger.exception("web_search redirect handler raised: %s", label)
+                    continue
+                if out:
+                    logger.info(
+                        "web_search → auto-redirected to %s for query=%r",
+                        label,
+                        args.query[:80],
+                    )
+                    return f"[auto-redirected from web_search → {label}]\n{out}"
         if not hits:
             # Help the LLM recover instead of giving up. Mirrors the openclaw
             # chaining guide: "0 hits is data, try web_fetch on a known URL
-            # or rephrase the query."
-            return (
-                f"no results (tried providers: {[p.name for p in chain]}).\n"
-                "Recovery suggestions for the model:\n"
+            # or rephrase the query." Topic detection nudges the model to
+            # the right specialised tool — small local models routinely
+            # call `web_search` for queries that have a dedicated tool
+            # (weather, current time, github) and then give up when DDG
+            # returns nothing.
+            ql = args.query.lower()
+            topic_hints: list[str] = []
+            if any(
+                k in ql
+                for k in (
+                    "날씨",
+                    "weather",
+                    "기온",
+                    "temperature",
+                    "forecast",
+                    "비 와",
+                    "rain",
+                    "snow",
+                    "눈 와",
+                )
+            ):
+                topic_hints.append(
+                    "  - weather query detected: call the `weather` tool "
+                    'instead (`weather(city="<city>")`). web_search is '
+                    "the wrong tool for weather."
+                )
+            if any(k in ql for k in ("github", "repo", "issue", "pull request")):
+                topic_hints.append(
+                    "  - github query detected: call the `github` tool instead of web_search."
+                )
+            if any(k in ql for k in ("today", "오늘", "지금", "current time", "what time")):
+                topic_hints.append("  - time query detected: call the `get_time` tool.")
+            recovery_lines = [
+                f"no results (tried providers: {[p.name for p in chain]}).",
+                "Recovery suggestions for the model:",
+                *topic_hints,
                 "  - try a different phrasing (translate Korean ↔ English, "
-                "drop adjectives, add `site:` for a known authority).\n"
+                "drop adjectives, add `site:` for a known authority).",
                 "  - call `web_fetch` directly on a likely URL "
-                "(e.g. an industry blog, official report) and read the body.\n"
+                "(e.g. an industry blog, official report) and read the body.",
                 "  - if multiple search backends are available "
                 "(BRAVE_API_KEY / TAVILY_API_KEY / EXA_API_KEY env vars), "
-                "set them in the gateway environment and reload."
-            )
+                "set them in the gateway environment and reload.",
+            ]
+            return "\n".join(recovery_lines)
         lines = [f"[via {used}]"]
         for i, h in enumerate(hits, start=1):
             lines.append(f"{i}. {h.title}")

@@ -37,7 +37,13 @@ class _RecordingAgent:
         yield SendParams(target=inbound.target, text=f"reply to {inbound.text}")
 
 
-def _envelope(*, channel: str = "dashboard", sender_id: str = "cli", text: str = "hi"):
+def _envelope(
+    *,
+    channel: str = "dashboard",
+    sender_id: str = "cli",
+    text: str = "hi",
+    agent_id: str | None = None,
+):
     return InboundEnvelope(
         channel=channel,
         account_id="main",
@@ -45,6 +51,7 @@ def _envelope(*, channel: str = "dashboard", sender_id: str = "cli", text: str =
         sender_id=sender_id,
         text=text,
         received_at=0.0,
+        agent_id=agent_id,
     )
 
 
@@ -185,6 +192,57 @@ async def test_routing_to_unregistered_agent_drops_with_diagnostic_reason():
     outcome = await dispatcher.dispatch_with_outcome(_envelope())
     assert outcome.agent_id == "ghost"
     assert outcome.drop_reason and "not registered" in outcome.drop_reason
+
+
+# ─── caller-pinned agent ─────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_pinned_agent_id_routes_directly_without_channel_config():
+    """The dashboard dropdown sets envelope.agent_id; that wins over channel
+    routing so multiple agents can share the dashboard channel without each
+    needing its own `channels.dashboard` block."""
+    a = _RecordingAgent("a")
+    b = _RecordingAgent("b")
+    cfg = RootConfig()  # no routing declared at all
+    dispatcher = Dispatcher(agents=_registry_with(a, b), config=cfg, send=_send_ok)
+
+    outcome = await dispatcher.dispatch_with_outcome(_envelope(agent_id="b"))
+    assert outcome.agent_id == "b"
+    assert b.received and not a.received
+
+
+@pytest.mark.asyncio
+async def test_pinned_agent_id_overrides_channel_routing():
+    """Even when config.yaml routes 'dashboard' → main, a caller that pins
+    a different agent gets that agent."""
+    main = _RecordingAgent("main")
+    other = _RecordingAgent("other")
+    cfg = RootConfig(
+        agents={
+            "main": AgentConfig(
+                id="main",
+                channels={"dashboard": AgentChannelRouting()},
+            )
+        }
+    )
+    dispatcher = Dispatcher(agents=_registry_with(main, other), config=cfg, send=_send_ok)
+
+    outcome = await dispatcher.dispatch_with_outcome(_envelope(agent_id="other"))
+    assert outcome.agent_id == "other"
+    assert other.received and not main.received
+
+
+@pytest.mark.asyncio
+async def test_pinned_unknown_agent_id_drops_with_diagnostic_reason():
+    a = _RecordingAgent("a")
+    cfg = RootConfig()
+    dispatcher = Dispatcher(agents=_registry_with(a), config=cfg, send=_send_ok)
+
+    outcome = await dispatcher.dispatch_with_outcome(_envelope(agent_id="ghost"))
+    assert outcome.agent_id is None
+    assert outcome.drop_reason and "ghost" in outcome.drop_reason
+    assert not a.received
 
 
 # ─── back-compat: dispatch() still returns list[SendResult] ──────────

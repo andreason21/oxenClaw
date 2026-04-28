@@ -89,6 +89,11 @@ class InboundEnvelope(BaseModel):
     media: list[MediaItem] = Field(default_factory=list)
     received_at: float
     raw: dict[str, Any] | None = None
+    # Caller-pinned agent. When the inbound source already knows which
+    # agent should handle the turn (dashboard dropdown, RPC clients), it
+    # sets this and the dispatcher honours it instead of consulting the
+    # per-channel routing table.
+    agent_id: str | None = None
 
 
 InboundHandler = Callable[[InboundEnvelope], Awaitable[None]]

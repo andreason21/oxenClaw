@@ -120,3 +120,59 @@ async def test_echo_tool_returns_input_verbatim() -> None:
 async def test_echo_tool_rejects_missing_text() -> None:
     with pytest.raises(Exception):
         await echo_tool().execute({})
+
+
+# ─── Tool-name drift / alias resolution ──────────────────────────────
+
+
+def _stub(name: str) -> Tool:
+    return FunctionTool(
+        name=name,
+        description="d",
+        input_model=_Args,
+        handler=lambda _a: "ok",
+    )
+
+
+def test_alias_resolves_message_send_message_to_message() -> None:
+    """Production hit (loop-detection abort log): gemma4 emitted
+    `message:send_message` for our bare `message` tool. The alias
+    table must fold the openclaw-namespaced colon variant."""
+    reg = ToolRegistry()
+    reg.register(_stub("message"))
+    for variant in (
+        "message:send_message",
+        "message_send_message",
+        "send_message",
+        "send",
+        "Message:Send_Message",  # case drift
+        "message-send-message",  # hyphen drift
+    ):
+        assert reg.get(variant) is not None, f"alias {variant!r} did not resolve"
+        assert reg.get(variant).name == "message"
+
+
+def test_alias_resolves_other_common_drifts() -> None:
+    reg = ToolRegistry()
+    for canonical in ("weather", "web_search", "github", "cron", "get_time"):
+        reg.register(_stub(canonical))
+    pairs = [
+        ("weather_lookup", "weather"),
+        ("get_weather", "weather"),
+        ("search_web", "web_search"),
+        ("google_search", "web_search"),
+        ("gh", "github"),
+        ("cron_create", "cron"),
+        ("now", "get_time"),
+        ("current_time", "get_time"),
+    ]
+    for emitted, canonical in pairs:
+        tool = reg.get(emitted)
+        assert tool is not None, f"alias {emitted!r} did not resolve"
+        assert tool.name == canonical, f"{emitted!r} → {tool.name} (expected {canonical})"
+
+
+def test_truly_unknown_tool_returns_none() -> None:
+    reg = ToolRegistry()
+    reg.register(_stub("message"))
+    assert reg.get("totally_made_up_xyz") is None

@@ -2940,14 +2940,30 @@ const MemoryView = {
           viewerContent.textContent = `error: ${e.message}`;
           return;
         }
-        const text = (res && (res.text || res.content)) || "";
+        // Backend shape: {ok: true, read: {path, text, start_line,
+        // end_line, truncated, next_from}}. The legacy fallbacks
+        // (res.text / res.content) stayed in place from an earlier
+        // gateway version and silently produced empty viewers — the
+        // server hasn't returned content at the top level for a long
+        // time. Read from res.read first, then fall back.
+        const read = (res && res.read) || res || {};
+        const text = read.text || res.text || res.content || "";
         if (reset) {
-          viewerContent.textContent = text;
+          viewerContent.textContent = text || "(empty)";
         } else {
           viewerContent.textContent += text;
         }
-        viewerOffset += (text.match(/\n/g) || []).length + 1;
-        loadMoreBtn.style.display = text.length >= 200 * 1 ? "" : "none";
+        // Advance the offset using the backend's authoritative
+        // next_from when available; fall back to counting newlines for
+        // older gateways that don't include it.
+        if (typeof read.next_from === "number" && read.next_from > 0) {
+          viewerOffset = read.next_from;
+        } else {
+          viewerOffset += (text.match(/\n/g) || []).length + 1;
+        }
+        const hasMore = read.truncated === true
+          || (typeof read.next_from === "number" && read.next_from > 0);
+        loadMoreBtn.style.display = hasMore ? "" : "none";
       }
 
       loadMoreBtn.onclick = () => loadFile(viewerPath, viewerOffset, false);

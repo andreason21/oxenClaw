@@ -21,6 +21,107 @@ class _WeatherArgs(BaseModel):
     lon: float | None = Field(None, description="Longitude (-180..180).")
     units: str = Field("metric", description="'metric' or 'imperial'.")
 
+    @model_validator(mode="before")
+    @classmethod
+    def _absorb_aliases(cls, data: Any) -> Any:
+        # Small local models (gemma/qwen/llama-3.2) emit weather tool
+        # calls with drifted key names — `{location: "Seoul"}`,
+        # `{place: "Seoul"}`, `{query: "Seoul weather"}`. Without this
+        # absorber the strict `_one_of` validator below rejects with
+        # "provide either `city` or both `lat` and `lon`" and the model
+        # rarely retries with the right shape, so the tool effectively
+        # never fires. Mirror _SearchArgs in tools_pkg/web.py.
+        if not isinstance(data, dict):
+            return data
+        out = dict(data)
+        # Single-value city aliases. We only fold onto `city` when the
+        # caller didn't already set it (and didn't supply lat+lon), so
+        # genuine `{city: "X"}` calls pass through untouched.
+        has_city = bool(out.get("city"))
+        has_coords = out.get("lat") is not None and out.get("lon") is not None
+        if not has_city and not has_coords:
+            # Direct city aliases — copy as-is.
+            for alias in (
+                "location",
+                "place",
+                "name",
+                "city_name",
+                "cityName",
+                "where",
+                "region",
+                "area",
+            ):
+                v = out.get(alias)
+                if isinstance(v, str) and v.strip():
+                    out["city"] = v.strip()
+                    break
+        if not out.get("city") and not has_coords:
+            # Freetext aliases (`query`, `q`, `topic`) carry phrasings
+            # like "Suwon weather" / "서울 날씨" — strip the weather
+            # keywords so wttr.in receives the bare location.
+            for alias in ("query", "q", "topic"):
+                v = out.get(alias)
+                if not (isinstance(v, str) and v.strip()):
+                    continue
+                cleaned = v
+                for kw in (
+                    "의 날씨",
+                    "날씨",
+                    "weather in",
+                    "weather for",
+                    "weather",
+                    "기온",
+                    "temperature",
+                    "forecast",
+                ):
+                    cleaned = cleaned.replace(kw, "")
+                cleaned = cleaned.strip(" ,?!.")
+                if cleaned:
+                    out["city"] = cleaned
+                    break
+        # Latitude/longitude aliases.
+        if out.get("lat") is None and out.get("latitude") is not None:
+            out["lat"] = out["latitude"]
+        if out.get("lon") is None:
+            for alias in ("longitude", "lng", "long"):
+                if out.get(alias) is not None:
+                    out["lon"] = out[alias]
+                    break
+        # `coordinates: [lat, lon]` shape.
+        coords = out.get("coordinates") or out.get("coords")
+        if (
+            out.get("lat") is None
+            and out.get("lon") is None
+            and isinstance(coords, list | tuple)
+            and len(coords) == 2
+        ):
+            try:
+                out["lat"] = float(coords[0])
+                out["lon"] = float(coords[1])
+            except (TypeError, ValueError):
+                pass
+        for alias in (
+            "location",
+            "place",
+            "name",
+            "city_name",
+            "cityName",
+            "where",
+            "region",
+            "area",
+            "query",
+            "q",
+            "topic",
+            "latitude",
+            "longitude",
+            "lng",
+            "long",
+            "coordinates",
+            "coords",
+        ):
+            out.pop(alias, None)
+        return out
+
     @model_validator(mode="after")
     def _one_of(self) -> _WeatherArgs:
         has_city = bool(self.city and self.city.strip())

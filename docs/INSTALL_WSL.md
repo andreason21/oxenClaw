@@ -334,7 +334,7 @@ inherits it. Full ACP reference: [`docs/ACP.md`](ACP.md).
 | `gpgsign` errors on `git commit` | WSL2 doesn't have your Windows GPG agent. Either disable signing (`git config --local commit.gpgsign false`) or set up `gpg` inside Ubuntu. |
 | Power saving makes Ollama feel slow | Windows aggressive power throttling can starve WSL2. Set Windows power plan to "High performance" while running. |
 | `ollama serve` says "Address already in use" | Another Ollama instance (often the Windows-host one) is bound to 11434. Either stop it (Task Manager → Ollama) or change WSL Ollama port via `OLLAMA_HOST=127.0.0.1:11435 ollama serve`. |
-| Tool calls don't fire on Ollama (model writes `skill_run(...)` as plain text instead) | Long-fixed by the native `/api/chat` provider shipped 2026-04-29 — Ollama's OpenAI shim silently capped `num_ctx` at 4096 and dropped streamed `tool_calls`. If you need a bigger context window than 16384, set `OXENCLAW_OLLAMA_NUM_CTX=N`. |
+| Tool calls don't fire on Ollama (model writes `skill_run(...)` as plain text instead) | The native `/api/chat` provider (shipped 2026-04-29) defaults to `num_ctx=32768`, which fits virtually every prompt. If your memory + skills payload is bigger, set `OXENCLAW_OLLAMA_NUM_CTX=auto` (detect from `/api/show`, capped at 65536) or an explicit integer. Full sizing recipe and KV cache cost table: [`OLLAMA.md`](./OLLAMA.md). |
 
 ---
 

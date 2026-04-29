@@ -57,15 +57,18 @@ from oxenclaw.pi.streaming import (
 PayloadPatch = Callable[[dict[str, Any]], dict[str, Any]]
 RETRYABLE_STATUS = frozenset({408, 425, 429, 500, 502, 503, 504, 529})
 
-_DEFAULT_NUM_CTX = 16384
+# Default num_ctx the native provider sends. Picked to fit memory + skill
+# manifest blobs comfortably without exploding KV cache RAM on the typical
+# 16-24 GB GPU. Override via `OXENCLAW_OLLAMA_NUM_CTX=N` (raw int) or
+# `OXENCLAW_OLLAMA_NUM_CTX=auto` to detect from `/api/show` (capped at
+# `_NUM_CTX_AUTO_CAP` so a 262K-window model doesn't allocate 30+ GB of
+# KV cache by accident).
+_DEFAULT_NUM_CTX = 32768
+_NUM_CTX_AUTO_CAP = 65536
 
-
-def _resolve_num_ctx() -> int:
-    raw = os.environ.get("OXENCLAW_OLLAMA_NUM_CTX", "").strip()
-    try:
-        return int(raw) if raw else _DEFAULT_NUM_CTX
-    except ValueError:
-        return _DEFAULT_NUM_CTX
+# Per-process cache of the resolved num_ctx, keyed by model id. Avoids
+# hitting `/api/show` once per request when the user opts into auto mode.
+_resolved_ctx_cache: dict[str, int] = {}
 
 
 def _native_base_url(api_base: str) -> str:
@@ -75,6 +78,128 @@ def _native_base_url(api_base: str) -> str:
     if base.endswith("/v1"):
         base = base[:-3].rstrip("/")
     return base
+
+
+async def _detect_model_max_ctx(
+    base_url: str, model_id: str, *, timeout_s: float = 5.0
+) -> dict[str, Any] | None:
+    """Return the `model_info` block from `/api/show`, or None on failure.
+
+    Caller pulls `*.context_length` and the GQA shape fields from the
+    returned dict. Failures are swallowed: any HTTP / parse error means
+    we silently fall back to `_DEFAULT_NUM_CTX`.
+    """
+    url = base_url + "/api/show"
+    try:
+        timeout = aiohttp.ClientTimeout(total=timeout_s)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.post(url, json={"name": model_id}) as resp:
+                if resp.status >= 400:
+                    return None
+                data = await resp.json()
+        info = data.get("model_info")
+        return info if isinstance(info, dict) else None
+    except (aiohttp.ClientError, TimeoutError, ValueError):
+        return None
+
+
+def _is_text_model_key(k: str) -> bool:
+    """Filter out vision-encoder fields when reading multimodal model_info.
+
+    Multimodal models (e.g. qwen3.5:9b) expose both a language-model
+    block (`qwen35.context_length`) and a vision-encoder block
+    (`qwen35.vision.context_length`); the KV cache cost we care about
+    is the LM side, so anything segmented under `.vision.` is excluded.
+    """
+    return ".vision." not in k
+
+
+def _pick_field(info: dict[str, Any], suffix: str) -> int | None:
+    for k, v in info.items():
+        if (
+            isinstance(k, str)
+            and _is_text_model_key(k)
+            and k.endswith(suffix)
+            and isinstance(v, int)
+        ):
+            return v
+    return None
+
+
+def _pick_context_length(info: dict[str, Any]) -> int | None:
+    return _pick_field(info, ".context_length")
+
+
+def _estimate_kv_cache_gb(info: dict[str, Any], num_ctx: int) -> float | None:
+    """Best-effort KV cache size estimate, in GiB, for the given num_ctx.
+
+    Reads the LM-side model_info fields Ollama exposes. Returns None
+    when the architecture-specific fields aren't present so the caller
+    can skip the warning rather than print a wrong number.
+
+    Refinements over the textbook MHA formula:
+    - `attention.key_length` / `.value_length` override `embed / head`
+      when present — Qwen3 / Mamba-hybrid models advertise these.
+    - `full_attention_interval > 1` (SSM hybrids) means only every Nth
+      block stores KV; the rest are recurrent state.
+    - GQA (`head_count_kv < head_count`) is honoured.
+    """
+    block = _pick_field(info, ".block_count")
+    embed = _pick_field(info, ".embedding_length")
+    head = _pick_field(info, ".attention.head_count")
+    if not (block and embed and head):
+        return None
+    head_kv = _pick_field(info, ".attention.head_count_kv") or head
+    key_len = _pick_field(info, ".attention.key_length") or (embed // head)
+    val_len = _pick_field(info, ".attention.value_length") or key_len
+    interval = _pick_field(info, ".full_attention_interval") or 1
+    attn_blocks = max(1, block // max(1, interval))
+    bytes_per_value = 2  # assume FP16 KV cache
+    kv_bytes = num_ctx * attn_blocks * head_kv * (key_len + val_len) * bytes_per_value
+    return kv_bytes / (1024**3)
+
+
+async def _resolve_num_ctx(base_url: str, model_id: str) -> int:
+    """Resolve the num_ctx for the next request.
+
+    `OXENCLAW_OLLAMA_NUM_CTX` accepts:
+      - unset           → `_DEFAULT_NUM_CTX`
+      - integer         → that value (raw, no cap — operator's call)
+      - "auto"          → query `/api/show`, use min(model_max, _NUM_CTX_AUTO_CAP)
+    """
+    raw = os.environ.get("OXENCLAW_OLLAMA_NUM_CTX", "").strip()
+    if not raw:
+        return _DEFAULT_NUM_CTX
+    if raw.lower() == "auto":
+        cached = _resolved_ctx_cache.get(model_id)
+        if cached is not None:
+            return cached
+        info = await _detect_model_max_ctx(base_url, model_id)
+        if info is None:
+            _resolved_ctx_cache[model_id] = _DEFAULT_NUM_CTX
+            return _DEFAULT_NUM_CTX
+        detected = _pick_context_length(info)
+        if detected is None:
+            resolved = _DEFAULT_NUM_CTX
+        else:
+            resolved = min(detected, _NUM_CTX_AUTO_CAP)
+        _resolved_ctx_cache[model_id] = resolved
+        kv_gb = _estimate_kv_cache_gb(info, resolved)
+        kv_note = f" (~{kv_gb:.1f} GiB KV cache)" if kv_gb else ""
+        logger = __import__(
+            "oxenclaw.plugin_sdk.runtime_env", fromlist=["get_logger"]
+        ).get_logger("pi.ollama")
+        logger.info(
+            "ollama %s: num_ctx=auto resolved to %d%s",
+            model_id,
+            resolved,
+            kv_note,
+        )
+        return resolved
+    try:
+        return max(1024, int(raw))
+    except ValueError:
+        return _DEFAULT_NUM_CTX
 
 
 def _serialize_message(msg: Any) -> list[dict[str, Any]]:
@@ -159,12 +284,14 @@ def _serialize_tools(tools: list[Any]) -> list[dict[str, Any]]:
     return out
 
 
-def build_ollama_payload(ctx: Context, *, stream: bool) -> dict[str, Any]:
+def build_ollama_payload(
+    ctx: Context, *, stream: bool, num_ctx: int
+) -> dict[str, Any]:
     messages = _serialize_messages(ctx.messages)
     if ctx.system:
         if not messages or messages[0].get("role") != "system":
             messages.insert(0, {"role": "system", "content": ctx.system})
-    options: dict[str, Any] = {"num_ctx": _resolve_num_ctx()}
+    options: dict[str, Any] = {"num_ctx": num_ctx}
     if ctx.temperature is not None:
         options["temperature"] = ctx.temperature
     if ctx.max_tokens is not None:
@@ -208,7 +335,8 @@ async def _request_ollama_nonstream(
     payload_patch: PayloadPatch | None,
     base_url: str,
 ) -> AsyncIterator[AssistantMessageEvent]:
-    payload = build_ollama_payload(ctx, stream=False)
+    num_ctx = await _resolve_num_ctx(base_url, ctx.model.id)
+    payload = build_ollama_payload(ctx, stream=False, num_ctx=num_ctx)
     if opts.extra_params:
         payload.update(opts.extra_params)
     if payload_patch is not None:
@@ -335,7 +463,8 @@ async def stream_ollama_native(
             yield ev
         return
 
-    payload = build_ollama_payload(ctx, stream=True)
+    num_ctx = await _resolve_num_ctx(base_url, ctx.model.id)
+    payload = build_ollama_payload(ctx, stream=True, num_ctx=num_ctx)
     if opts.extra_params:
         payload.update(opts.extra_params)
     if payload_patch is not None:

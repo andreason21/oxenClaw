@@ -24,6 +24,7 @@ from oxenclaw.pi import (
 from oxenclaw.pi.auth import resolve_api
 from oxenclaw.pi.run import RuntimeConfig, run_agent_turn
 from oxenclaw.tools_pkg._arg_aliases import fold_aliases
+from oxenclaw.tools_pkg._desc import hermes_desc
 
 _LENGTH_INSTR = {
     "short": "Reply in 1-2 sentences.",
@@ -84,9 +85,18 @@ def summarize_tool(
 
     return FunctionTool(
         name="summarize",
-        description=(
-            "Summarise input_text at a target length (short / medium / long / "
-            "bullets). Optional focus aspect."
+        description=hermes_desc(
+            "Summarise input_text at a target length (short | medium | long "
+            "| bullets) via a sub-LLM call. Optional focus aspect.",
+            when_use=[
+                "input_text is large and the user wants a digest",
+                "you need a length-controlled summary as a building block",
+            ],
+            when_skip=[
+                "input_text is already short — answer inline",
+                "the user wants raw extraction rather than summary",
+            ],
+            alternatives={"subagents": "summarise + take action in one shot"},
         ),
         input_model=_SummariseArgs,
         handler=_h,

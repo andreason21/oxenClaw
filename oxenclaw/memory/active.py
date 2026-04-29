@@ -105,7 +105,13 @@ class ActiveMemoryConfig:
     """Operator knobs."""
 
     enabled: bool = True
-    timeout_seconds: float = 8.0
+    # Halved from the original 8s after production logs showed every
+    # chat turn paying ~8s of dead time when the local sub-model
+    # couldn't return a one-line summary in time. 4s is still enough
+    # for any model that can reasonably back this feature; slow models
+    # gracefully degrade to "no recall summary" instead of stalling
+    # the user-visible reply.
+    timeout_seconds: float = 4.0
     max_summary_chars: int = 220
     recent_user_turns: int = 2
     recent_assistant_turns: int = 1

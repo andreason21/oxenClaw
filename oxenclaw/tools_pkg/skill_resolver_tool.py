@@ -26,6 +26,7 @@ from oxenclaw.clawhub.parallel_search import parallel_search_sources
 from oxenclaw.clawhub.sources.base import SkillSource
 from oxenclaw.config.paths import OxenclawPaths, default_paths
 from oxenclaw.tools_pkg._arg_aliases import fold_aliases
+from oxenclaw.tools_pkg._desc import hermes_desc
 
 
 class _Args(BaseModel):
@@ -241,13 +242,24 @@ def skill_resolver_tool(
 
     return FunctionTool(
         name="skill_resolver",
-        description=(
-            "Detect the user's intent and find a matching skill from the local "
-            "skill library or remote ClawHub registries. Installs the skill "
-            "automatically when auto_install=true (default) and returns the "
-            "path to SKILL.md plus the first 600 characters of its usage "
-            "instructions so you can invoke the documented scripts via the "
-            "shell tool."
+        description=hermes_desc(
+            "Find (and optionally auto-install) a skill that matches the "
+            "user's intent — checks installed skills first, then ClawHub "
+            "registries. Returns the SKILL.md path + first 600 chars of "
+            "usage so the model can pick the right script.",
+            when_use=[
+                "no installed skill matches but the request sounds domain-specific",
+                "you want to discover whether ClawHub has a relevant skill",
+            ],
+            when_skip=[
+                "an installed skill in <available_skills> already matches "
+                "(call skill_run directly)",
+                "the request can be answered with built-in tools",
+            ],
+            alternatives={
+                "skill_run": "execute an already-installed skill",
+                "web_search": "free-form web research",
+            },
         ),
         input_model=_Args,
         handler=_handler,

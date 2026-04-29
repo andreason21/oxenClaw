@@ -219,6 +219,9 @@ class ToolRegistry:
     def names(self) -> list[str]:
         return sorted(self._tools)
 
+    def tools(self) -> list[Tool]:
+        return list(self._tools.values())
+
     def __len__(self) -> int:
         return len(self._tools)
 

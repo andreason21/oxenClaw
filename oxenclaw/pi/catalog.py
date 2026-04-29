@@ -16,78 +16,10 @@ from oxenclaw.pi.registry import InMemoryModelRegistry, RemoteModelRegistry
 
 def _seed_models() -> list[Model]:
     return [
-        # ── Anthropic ──
-        Model(
-            id="claude-opus-4-7",
-            provider="anthropic",
-            context_window=200_000,
-            max_output_tokens=32_000,
-            supports_thinking=True,
-            supports_image_input=True,
-            supports_prompt_cache=True,
-            aliases=("claude-opus-latest",),
-        ),
-        Model(
-            id="claude-sonnet-4-6",
-            provider="anthropic",
-            context_window=1_000_000,
-            max_output_tokens=64_000,
-            supports_thinking=True,
-            supports_image_input=True,
-            supports_prompt_cache=True,
-            aliases=("claude-sonnet-1m",),
-        ),
-        Model(
-            id="claude-haiku-4-5-20251001",
-            provider="anthropic",
-            context_window=200_000,
-            max_output_tokens=8_192,
-            supports_thinking=False,
-            supports_image_input=True,
-            supports_prompt_cache=True,
-            aliases=("claude-haiku-4-5", "claude-haiku-latest"),
-        ),
-        # ── OpenAI ──
-        Model(
-            id="gpt-4o",
-            provider="openai",
-            context_window=128_000,
-            max_output_tokens=16_384,
-            supports_image_input=True,
-            supports_prompt_cache=True,
-        ),
-        Model(
-            id="gpt-4o-mini",
-            provider="openai",
-            context_window=128_000,
-            max_output_tokens=16_384,
-            supports_image_input=True,
-            supports_prompt_cache=True,
-        ),
-        Model(
-            id="o3",
-            provider="openai",
-            context_window=200_000,
-            max_output_tokens=100_000,
-            supports_thinking=True,
-        ),
-        # ── Google ──
-        Model(
-            id="gemini-2.5-pro",
-            provider="google",
-            context_window=2_000_000,
-            max_output_tokens=64_000,
-            supports_thinking=True,
-            supports_image_input=True,
-            supports_prompt_cache=True,
-        ),
-        Model(
-            id="gemini-2.0-flash",
-            provider="google",
-            context_window=1_000_000,
-            max_output_tokens=8_192,
-            supports_image_input=True,
-        ),
+        # The catalog is on-host only. All seeded models are Ollama
+        # tags — for `llamacpp-direct` / `vllm` / `lmstudio` /
+        # `llamacpp` the model id is whatever string identifies the
+        # operator's GGUF / vLLM weights, so there's nothing to seed.
         # ── Local / Ollama ──
         # Default. qwen3.5:9b — multimodal (vision), native function
         # calling, native thinking, 256K ctx, ~6.6 GB Q4_K_M. Picked

@@ -14,8 +14,12 @@ the tree:
 
 Legacy provider names (`local`, `pi`, `vllm`) are accepted for
 back-compat with existing config.yaml files but emit a deprecation log
-and are mapped to their canonical catalog id (`ollama`, `ollama`, `vllm`
-respectively).
+and are mapped to their canonical catalog id. As of the
+`llamacpp-direct` rollout (2026-04-29), the canonical local default is
+`llamacpp-direct` (oxenclaw spawns its own `llama-server`); the
+resolver downgrades to `ollama` automatically when no GGUF/binary is
+configured, so the default keeps working out of the box for both
+kinds of installs.
 """
 
 from __future__ import annotations
@@ -53,29 +57,15 @@ logger = logging.getLogger(__name__)
 # `tests/test_agents_factory.py::test_catalog_providers_match_pi_registrations`
 # enforces the invariant.
 CATALOG_PROVIDERS: tuple[str, ...] = (
-    "anthropic",
-    "anthropic-vertex",
-    "bedrock",
-    "deepseek",
-    "fireworks",
-    "google",
-    "groq",
-    "kilocode",
-    "litellm",
-    "llamacpp",
-    "lmstudio",
-    "minimax",
-    "mistral",
-    "moonshot",
+    # On-host-only catalog. Cloud / aggregator providers were removed
+    # 2026-04-29; oxenClaw is local-first by design. Plugins can still
+    # add their own provider id at install time by registering a stream
+    # wrapper + extending this tuple.
     "ollama",
-    "openai",
-    "openai-compatible",
-    "openrouter",
-    "proxy",
-    "together",
-    "vertex-ai",
+    "llamacpp-direct",
+    "llamacpp",
     "vllm",
-    "zai",
+    "lmstudio",
 )
 
 # `echo` is a hidden test backend — not a real provider, but exposed
@@ -85,28 +75,61 @@ SUPPORTED_PROVIDERS: tuple[str, ...] = (*CATALOG_PROVIDERS, "echo")
 # Legacy aliases — accepted with a deprecation warning, mapped to the
 # canonical catalog id. Mirrors openclaw's `normalizeProviderId`.
 LEGACY_ALIASES: dict[str, str] = {
-    "local": "ollama",  # pre-pi LocalAgent was always Ollama-shaped
-    "pi": "ollama",  # pi default model is qwen3.5:9b (Ollama)
-    "aws-bedrock": "bedrock",  # openclaw's normalizeProviderId mapping
-    "z.ai": "zai",
-    "z-ai": "zai",
+    # `local` and `pi` route through `auto` so existing config.yaml
+    # files automatically pick up the faster `llamacpp-direct` path
+    # when a GGUF is configured, and silently fall back to `ollama`
+    # when it isn't — no breakage on Ollama-only installs.
+    "local": "auto",
+    "pi": "auto",
 }
+
+
+def _llamacpp_direct_feasible() -> bool:
+    """True iff `llamacpp-direct` can spawn without user intervention.
+
+    Both a GGUF path *and* a discoverable `llama-server` binary must
+    be reachable. We don't probe disk for the GGUF here (the provider
+    will surface that error later with a clearer message); we only
+    check that the env var is set, which is the operator signal of
+    intent.
+    """
+    if not os.environ.get("OXENCLAW_LLAMACPP_GGUF", "").strip():
+        return False
+    try:
+        # Lazy import: avoids loading the manager (and its ~kBs of
+        # subprocess plumbing) when the caller is just resolving a
+        # provider id on a hosted-only deployment.
+        from oxenclaw.pi.llamacpp_server.manager import (
+            find_llama_server_binary,
+        )
+
+        find_llama_server_binary()
+        return True
+    except Exception:
+        return False
+
+
+def resolve_default_local_provider() -> str:
+    """Pick the recommended local-inference provider for this host.
+
+    Returns `"llamacpp-direct"` when both `$OXENCLAW_LLAMACPP_GGUF`
+    is set and a `llama-server` binary is discoverable; otherwise
+    falls back to `"ollama"`. Used by the CLI's `--provider` default
+    and by the `local`/`pi` legacy aliases so the same machine-aware
+    decision powers every entry point.
+    """
+    return "llamacpp-direct" if _llamacpp_direct_feasible() else "ollama"
 
 # Default model when `--model` is omitted. Picked to be cheap + first-run
 # friendly; users can always override with `--model <id>`.
 PROVIDER_DEFAULT_MODELS: dict[str, str] = {
-    "anthropic": "claude-sonnet-4-6",
-    "anthropic-vertex": "claude-sonnet-4-6",
-    "openai": "gpt-4o-mini",
-    "google": "gemini-2.0-flash",
-    "vertex-ai": "gemini-2.0-flash",
     "ollama": "qwen3.5:9b",
+    # llamacpp-direct: a model id is just a label here — the actual
+    # weights are picked by `model.extra['gguf_path']` / $OXENCLAW_LLAMACPP_GGUF.
+    "llamacpp-direct": "local-gguf",
+    "llamacpp": "qwen3.5:9b",
     "vllm": "qwen3.5:9b",
     "lmstudio": "qwen3.5:9b",
-    "llamacpp": "qwen3.5:9b",
-    "openai-compatible": "qwen3.5:9b",
-    "proxy": "qwen3.5:9b",
-    "litellm": "qwen3.5:9b",
 }
 
 # Reasonable default context windows for synthesised (non-catalog) models.
@@ -121,9 +144,18 @@ class UnknownProvider(ValueError):
 
 
 def _resolve_provider(provider: str) -> str:
-    """Map legacy aliases to canonical catalog ids."""
+    """Map legacy aliases + the `auto` sentinel to canonical catalog ids.
+
+    `auto` resolves at call time via `resolve_default_local_provider()`,
+    which prefers `llamacpp-direct` when configured and silently falls
+    back to `ollama` otherwise.
+    """
+    if provider == "auto":
+        return resolve_default_local_provider()
     if provider in LEGACY_ALIASES:
         canonical = LEGACY_ALIASES[provider]
+        if canonical == "auto":
+            canonical = resolve_default_local_provider()
         logger.warning(
             "provider %r is a legacy alias for %r; update your config to use the canonical name",
             provider,
@@ -406,4 +438,5 @@ __all__ = [
     "build_agent",
     "load_mcp_tools",
     "load_mcp_tools_sync",
+    "resolve_default_local_provider",
 ]

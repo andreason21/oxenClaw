@@ -285,7 +285,7 @@ bash scripts/build-windows-exe.sh
 
 # Run the gateway (production-style)
 OXENCLAW_GATEWAY_TOKEN=$(openssl rand -hex 32) \
-    oxenclaw/.venv/bin/oxenclaw gateway start --provider ollama
+    oxenclaw/.venv/bin/oxenclaw gateway start --provider ollama   # or omit --provider for 'auto'
 # Dashboard: http://127.0.0.1:7331/?token=<TOKEN>
 # Token from: ~/.oxenclaw/gateway-token (rc.16+)
 

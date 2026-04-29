@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 from oxenclaw.agents.tools import FunctionTool, Tool
 from oxenclaw.clawhub.frontmatter import is_valid_slug, parse_skill_text
 from oxenclaw.config.paths import OxenclawPaths, default_paths
+from oxenclaw.tools_pkg._desc import hermes_desc
 
 _SLUG_RE = re.compile(r"[^a-z0-9-]+")
 
@@ -149,9 +150,21 @@ def skill_creator_tool(*, paths: OxenclawPaths | None = None) -> Tool:
 
     return FunctionTool(
         name="skill_creator",
-        description=(
-            "Scaffold a new skill into ~/.oxenclaw/skills/<slug>/. "
-            "Writes a valid SKILL.md and (optionally) a Python tool stub."
+        description=hermes_desc(
+            "Scaffold a new skill at ~/.oxenclaw/skills/<slug>/ with a "
+            "valid SKILL.md frontmatter and (optionally) a Python tool stub.",
+            when_use=[
+                "the user asks to author / generate a new local skill",
+                "you need a starting frontmatter you'll edit by hand later",
+            ],
+            when_skip=[
+                "the skill already exists on ClawHub (use skill_resolver)",
+                "you want to run an existing skill (use skill_run)",
+            ],
+            alternatives={
+                "skill_resolver": "find an existing ClawHub skill",
+                "skill_run": "execute an installed skill",
+            },
         ),
         input_model=_CreateArgs,
         handler=_h,

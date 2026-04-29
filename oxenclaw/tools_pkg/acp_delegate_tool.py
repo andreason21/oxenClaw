@@ -51,6 +51,7 @@ from oxenclaw.agents.acp_runtime import (
 from oxenclaw.agents.tools import FunctionTool, Tool
 from oxenclaw.plugin_sdk.runtime_env import get_logger
 from oxenclaw.tools_pkg._arg_aliases import fold_aliases
+from oxenclaw.tools_pkg._desc import hermes_desc
 
 logger = get_logger("tools.delegate_to_acp")
 
@@ -204,17 +205,27 @@ def acp_delegate_tool() -> Tool:
 
     return FunctionTool(
         name="delegate_to_acp",
-        description=(
-            "Hand a sub-task to a stronger external agent over ACP "
-            "(Agent Client Protocol) when the local model is the wrong "
-            "tool — e.g. complex multi-file refactors, careful "
-            "long-horizon planning, or anything where the operator "
-            "explicitly asks for Claude Code / Codex / Gemini. The "
-            "frontier agent runs as a child stdio process; we collect "
-            "its assistant text, the final stopReason, and a count of "
-            "the tool calls it made along the way. The frontier "
-            "doesn't see this side's history — restate the goal in "
-            "the `prompt`."
+        description=hermes_desc(
+            "Delegate a sub-task to a stronger frontier agent over ACP "
+            "(stdio child). Returns the assistant text + stopReason + "
+            "tool-call count.",
+            when_use=[
+                "the local model is too weak for this sub-task",
+                "user explicitly asks for Claude Code / Codex / Gemini",
+                "complex multi-file refactor / long-horizon plan",
+            ],
+            when_skip=[
+                "you can do the task locally (avoid subprocess hop cost)",
+                "single-shot text-only call would suffice (use sessions_spawn)",
+            ],
+            alternatives={
+                "sessions_spawn": "simpler one-shot CLI invocation",
+                "subagents": "local isolated child agent",
+            },
+            notes=(
+                "The frontier agent has zero context from this side — "
+                "restate the goal fully in `prompt`."
+            ),
         ),
         input_model=_DelegateArgs,
         handler=_run_delegation,

@@ -16,11 +16,10 @@ def test_build_echo_agent() -> None:
     assert agent.id == "assistant"
 
 
-def test_build_anthropic_agent_with_default_tools() -> None:
-    """`--provider anthropic` is a pi alias now; default tools still wire.
-    Default registry now includes the openclaw-style fs/shell/process/
-    plan bundle alongside echo/get_time."""
-    agent = build_agent(agent_id="assistant", provider="anthropic")
+def test_build_pi_agent_with_default_tools() -> None:
+    """`--provider ollama` (or any catalog provider) wires the default tool
+    bundle: openclaw-style fs/shell/process/plan plus echo/get_time."""
+    agent = build_agent(agent_id="assistant", provider="ollama")
     assert isinstance(agent, PiAgent)
     assert agent.id == "assistant"
     names = set(agent._tools.names())

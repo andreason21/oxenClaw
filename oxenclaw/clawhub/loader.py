@@ -31,6 +31,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from oxenclaw.clawhub.desc_enricher import load_cached, render_for_prompt
 from oxenclaw.clawhub.frontmatter import (
     SkillManifest,
     SkillManifestError,
@@ -244,42 +245,86 @@ def load_installed_skills(
     return merged
 
 
-def format_skills_for_prompt(skills: list[InstalledSkill]) -> str:
+# Per-skill body excerpt cap. Big enough to surface the typical
+# "Quick Commands" section (script names + sample arg shapes) that
+# skill authors put near the top of SKILL.md, small enough that
+# 5+ installed skills don't blow the context window.
+_SKILL_BODY_EXCERPT_CHARS = 1500
+
+
+def format_skills_for_prompt(
+    skills: list[InstalledSkill],
+    *,
+    body_chars: int = _SKILL_BODY_EXCERPT_CHARS,
+) -> str:
     """Render the openclaw-shaped XML block agents append to system prompts.
 
-    Empty-list returns "" so callers can blindly concatenate.
+    Each `<skill>` now carries a `<usage>` excerpt (first
+    ``body_chars`` of the SKILL.md body) so the model can pick the
+    right script + args inline without making a separate `read_file`
+    call first. Pre-fix the model only saw `<location>` and either
+    (a) cargo-culted the skill name into a non-existent tool, or
+    (b) gave up because it didn't know what scripts existed.
 
-    The leading `<usage>` note is critical: skills are reference
-    material, not function-calling tools. Without this hint LLMs
-    cargo-cult the skill `<name>` into a `tool_use` block and the
-    pi-runtime returns `tool {name!r} is not registered` (e.g. the
-    clawhub `stock-analysis` skill ships a `commands:` list in its
-    frontmatter that looks tool-shaped to the model). Steer the model
-    toward reading SKILL.md and invoking the documented scripts via
-    the shell tool instead.
+    Empty-list returns "" so callers can blindly concatenate.
     """
     if not skills:
         return ""
     lines = [
         "<available_skills>",
-        "  <usage>Skills are documentation, NOT callable tools. Do not emit a "
-        "tool_use block named after a skill — there is no function with "
-        "that name registered. To use a skill: read SKILL.md at its "
-        "&lt;location&gt;, then run the scripts it documents via the "
-        "shell tool (most skills ship under &lt;location&gt;/scripts/). "
-        "If the user's request implies a domain not covered by the skills "
-        "listed below, call skill_resolver(query=&quot;...&quot;) — it is a "
-        "real callable tool that searches ClawHub, installs the best match, "
-        "and returns the SKILL.md path + usage instructions.</usage>",
+        "  <usage>Each skill below ships runnable scripts under "
+        "&lt;location&gt;/scripts/. To USE a skill, call the real "
+        "`skill_run` tool (NOT a tool with the skill's name) — e.g. "
+        '`skill_run(skill=&quot;stock-analysis&quot;, '
+        'script=&quot;analyze_stock.py&quot;, args=[&quot;AAPL&quot;])`. '
+        "The `<usage>` excerpt inside each &lt;skill&gt; block is the "
+        "first part of SKILL.md and shows the available scripts + "
+        "sample arg shapes — pick from there. If the request matches "
+        "no installed skill, call `skill_resolver(query=...)` to find "
+        "and install one from ClawHub.</usage>",
     ]
     for s in skills:
         lines.append("  <skill>")
+        lines.append(f"    <slug>{_xml_escape(s.slug)}</slug>")
         lines.append(f"    <name>{_xml_escape(s.name)}</name>")
-        lines.append(f"    <description>{_xml_escape(s.description)}</description>")
+        # Merge the cached LLM enrichment (WHEN TO USE / WHEN NOT TO
+        # USE / ALTERNATIVES) into the description block. When no
+        # cache exists the renderer returns the raw description, so
+        # offline / fresh-install cases still work.
+        cached = load_cached(s.skill_md_path.parent)
+        rendered_desc = render_for_prompt(
+            s.description,
+            cached.enriched if cached is not None else None,
+        )
+        lines.append(f"    <description>{_xml_escape(rendered_desc)}</description>")
         lines.append(f"    <location>{_xml_escape(str(s.skill_md_path))}</location>")
+        body_excerpt = _excerpt_skill_body(s.body, max_chars=body_chars)
+        if body_excerpt:
+            lines.append(f"    <usage>{_xml_escape(body_excerpt)}</usage>")
         lines.append("  </skill>")
     lines.append("</available_skills>")
     return "\n".join(lines)
+
+
+def _excerpt_skill_body(body: str, *, max_chars: int) -> str:
+    """First N chars of the body, trimmed so we don't cut a code
+    block in half. Strips repeated blank-line runs to keep the
+    excerpt dense."""
+    if not body or not body.strip():
+        return ""
+    text = body.strip()
+    if len(text) <= max_chars:
+        return text
+    cut = text[:max_chars]
+    # If we sliced inside a fenced code block, walk back to before the
+    # last opening fence so the model doesn't get confused by an
+    # unterminated ```.
+    last_open = cut.rfind("```")
+    last_close = cut[: last_open].rfind("```") if last_open >= 0 else -1
+    if last_open >= 0 and (last_close < 0 or last_close < last_open):
+        # Odd number of fences = unterminated → cut before the last fence.
+        cut = cut[:last_open].rstrip()
+    return cut.rstrip() + "\n…(truncated; read SKILL.md for the rest)"
 
 
 def _xml_escape(s: str) -> str:

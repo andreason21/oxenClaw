@@ -146,8 +146,17 @@ def build_skill_command_tool(
 
 
 def build_skill_command_tools(skill_name: str, commands: list[SkillCommand]) -> list[Tool]:
-    """Convenience: build one tool per declared command."""
-    return [build_skill_command_tool(skill_name, c) for c in commands]
+    """Convenience: build one tool per declared command.
+
+    Skips docs-only entries (no `template`) — those originate from
+    shorthand string lines in the manifest and are catalog-only, not
+    runnable. Without the skip every install would either crash on
+    the strict pydantic schema (pre-fix) or register zero-template
+    tools that fail at execute time.
+    """
+    return [
+        build_skill_command_tool(skill_name, c) for c in commands if c.is_runnable
+    ]
 
 
 def maybe_route_slash_command(

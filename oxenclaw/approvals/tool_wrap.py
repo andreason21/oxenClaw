@@ -24,6 +24,8 @@ def default_format_prompt(tool_name: str, args: dict[str, Any]) -> str:
 
 
 class _GatedTool:
+    is_gated: bool = True
+
     def __init__(
         self,
         wrapped: Tool,
@@ -40,6 +42,10 @@ class _GatedTool:
     @property
     def name(self) -> str:
         return self._wrapped.name
+
+    @property
+    def wrapped(self) -> Tool:
+        return self._wrapped
 
     @property
     def description(self) -> str:

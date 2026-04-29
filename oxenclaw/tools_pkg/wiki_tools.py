@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from oxenclaw.agents.tools import FunctionTool, Tool
 from oxenclaw.tools_pkg._arg_aliases import fold_aliases
+from oxenclaw.tools_pkg._desc import hermes_desc
 from oxenclaw.wiki.models import WikiPageKind, parse_wiki_page_kind
 from oxenclaw.wiki.store import SlugConflict, WikiVaultStore
 
@@ -99,11 +100,20 @@ def wiki_search_tool(vault: WikiVaultStore) -> Tool:
 
     return FunctionTool(
         name="wiki_search",
-        description=(
-            "Search the persistent wiki knowledge base by keyword. "
-            "Use this when the user asks 'what do you know about X?' or "
-            "references a past decision, entity, concept, or source that "
-            "may be stored across sessions."
+        description=hermes_desc(
+            "Substring search across the persistent wiki vault.",
+            when_use=[
+                "the user references a past decision / entity / concept",
+                "you suspect cross-session knowledge exists for the topic",
+            ],
+            when_skip=[
+                "the user wants fresh web info (use web_search)",
+                "you already know the slug (use wiki_get directly)",
+            ],
+            alternatives={
+                "wiki_get": "fetch a specific page",
+                "web_search": "fresh public info",
+            },
         ),
         input_model=_SearchArgs,
         handler=_handler,
@@ -142,10 +152,16 @@ def wiki_get_tool(vault: WikiVaultStore) -> Tool:
 
     return FunctionTool(
         name="wiki_get",
-        description=(
-            "Retrieve a wiki page by slug. Returns the full markdown body "
-            "plus a claims summary. Use after wiki_search to read the "
-            "complete content of a matched page."
+        description=hermes_desc(
+            "Retrieve a wiki page by slug — full body + claims summary.",
+            when_use=[
+                "you have a slug from wiki_search and need the body",
+                "the user named a known wiki page",
+            ],
+            when_skip=[
+                "you don't know the slug yet (use wiki_search)",
+            ],
+            alternatives={"wiki_search": "discover slugs"},
         ),
         input_model=_GetArgs,
         handler=_handler,
@@ -218,11 +234,18 @@ def wiki_save_tool(
 
     tool = FunctionTool(
         name="wiki_save",
-        description=(
-            "Create or update a wiki page in the persistent knowledge base. "
-            "Always approval-gated when a knowledge-base mutation requires "
-            "user confirmation. Use to record authoritative decisions, entity "
-            "facts, or concepts the user wants preserved across sessions."
+        description=hermes_desc(
+            "Create or update a wiki page (persistent knowledge base).",
+            when_use=[
+                "the user wants a fact / decision preserved across sessions",
+                "you've gathered claims worth promoting from transient chat",
+            ],
+            when_skip=[
+                "ephemeral working notes (don't pollute the vault)",
+                "transient debug context (use update_plan instead)",
+            ],
+            alternatives={"update_plan": "session-scoped task tracking"},
+            notes="Mutating — approval-gated when ApprovalManager is wired in.",
         ),
         input_model=_SaveArgs,
         handler=_handler,

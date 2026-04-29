@@ -43,10 +43,20 @@ def pick_model_interactively(prompter: Prompter) -> ModelPickerChoice:
     factory or persisting in `config.yaml`.
     """
     sorted_providers = sorted(CATALOG_PROVIDERS)
+    # Recommend `llamacpp-direct` first when this host is set up for it
+    # (env GGUF + binary discoverable). Otherwise fall back to the
+    # historical Ollama default. `resolve_default_local_provider` is
+    # the same helper the CLI's `--provider auto` uses, so the wizard
+    # and the headless flag stay aligned.
+    from oxenclaw.agents.factory import resolve_default_local_provider
+
+    suggested_default = resolve_default_local_provider()
+    if suggested_default not in sorted_providers:
+        suggested_default = sorted_providers[0]
     provider = prompter.select(
         "Which provider?",
         choices=sorted_providers,
-        default="ollama" if "ollama" in sorted_providers else sorted_providers[0],
+        default=suggested_default,
     )
 
     suggested_model = PROVIDER_DEFAULT_MODELS.get(provider, "")
@@ -69,15 +79,12 @@ def pick_model_interactively(prompter: Prompter) -> ModelPickerChoice:
         )
 
     base_url: str | None = None
-    if provider in {
-        "ollama",
-        "vllm",
-        "lmstudio",
-        "llamacpp",
-        "openai-compatible",
-        "proxy",
-        "litellm",
-    }:
+    # Catalog is local-only — every provider is inline. base_url
+    # override is offered for the OpenAI-compat trio (vllm / lmstudio /
+    # llamacpp) since those typically run on operator-chosen ports.
+    # Ollama uses the daemon's well-known port; llamacpp-direct picks
+    # an ephemeral port at spawn time and ignores --base-url.
+    if provider in {"vllm", "lmstudio", "llamacpp"}:
         change_url = prompter.confirm(
             f"Override the {provider} base URL? (default endpoint will be used otherwise)",
             default=False,
@@ -86,15 +93,8 @@ def pick_model_interactively(prompter: Prompter) -> ModelPickerChoice:
             base_url = prompter.text(f"{provider} base URL", default="")
 
     api_key: str | None = None
-    if provider not in {
-        "ollama",
-        "vllm",
-        "lmstudio",
-        "llamacpp",
-        "openai-compatible",
-        "proxy",
-        "litellm",
-    }:
+    # No hosted providers in the catalog → nothing to prompt for keys.
+    if False:
         # Hosted providers — ask for a key. Empty answer means "leave
         # the env var to provide it later" (EnvAuthStorage path).
         secret = prompter.text(

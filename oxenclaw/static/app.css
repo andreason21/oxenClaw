@@ -827,6 +827,27 @@ label { display: block; font-size: 11px; color: var(--fg-3); margin-bottom: 4px;
 }
 .approval .actions { display: flex; gap: 6px; }
 
+.gated-tools { margin-top: var(--sp-4); }
+.gated-tools h3 {
+  font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--fg-3); margin: 0 0 var(--sp-2);
+}
+.gated-tools-table {
+  width: 100%; border-collapse: collapse; font-size: 12px;
+  border: 1px solid var(--line); border-radius: var(--r-2); overflow: hidden;
+}
+.gated-tools-table th, .gated-tools-table td {
+  text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+.gated-tools-table thead th {
+  background: var(--bg-2); color: var(--fg-3);
+  font-weight: 600; text-transform: uppercase; font-size: 11px;
+  letter-spacing: 0.05em;
+}
+.gated-tools-table tbody tr:last-child td { border-bottom: none; }
+.gated-tools-table .mono { font-family: var(--mono); }
+
 /* RPC log */
 .rpc-log {
   background: var(--bg-1); border: 1px solid var(--line);

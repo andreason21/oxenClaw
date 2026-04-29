@@ -30,6 +30,7 @@ from pydantic import BaseModel, Field
 from oxenclaw.agents.tools import FunctionTool, Tool
 from oxenclaw.config.paths import OxenclawPaths, default_paths
 from oxenclaw.plugin_sdk.runtime_env import get_logger
+from oxenclaw.tools_pkg._desc import hermes_desc
 
 logger = get_logger("tools.update_plan")
 
@@ -122,13 +123,23 @@ def update_plan_tool(*, paths: OxenclawPaths | None = None) -> Tool:
 
     return FunctionTool(
         name="update_plan",
-        description=(
+        description=hermes_desc(
             "Write or replace the structured plan for the current session. "
-            "Pass the FULL list of steps every time — this call overwrites "
-            "the previous plan atomically. "
-            "Use this instead of freeform <plan> text blocks so the dashboard "
-            "can render live progress. "
-            "status values: pending | in_progress | completed | blocked | cancelled."
+            "Pass the FULL step list each call — this overwrites the prior "
+            "plan atomically.",
+            when_use=[
+                "the task has 3+ steps that benefit from tracking",
+                "the dashboard should render live progress",
+            ],
+            when_skip=[
+                "single-step trivial requests (overhead not worth it)",
+                "you're storing freeform notes (use the wiki tools)",
+            ],
+            alternatives={"wiki": "long-form notes / decisions"},
+            notes=(
+                "status values: pending | in_progress | completed | blocked | "
+                "cancelled. Only one in_progress at a time."
+            ),
         ),
         input_model=_Args,
         handler=_handler,

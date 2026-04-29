@@ -118,9 +118,11 @@ def test_stream_simple_dispatches_via_registry() -> None:
 
 
 def test_provider_id_alias_normalises() -> None:
-    assert normalize_provider_id("Claude") == "anthropic"
-    assert normalize_provider_id("vertex") == "vertex-ai"
-    assert normalize_provider_id("openai") == "openai"  # passthrough
+    # Local-only catalog aliases.
+    assert normalize_provider_id("LM-Studio") == "lmstudio"
+    assert normalize_provider_id("llama-cpp") == "llamacpp"
+    assert normalize_provider_id("llamacpp-managed") == "llamacpp-direct"
+    assert normalize_provider_id("ollama") == "ollama"  # passthrough
     assert normalize_provider_id("Brand-New-Provider") == "brand-new-provider"
 
 
@@ -133,10 +135,11 @@ def test_inmemory_registry_aliases_resolve() -> None:
 
 def test_default_registry_seeds_known_models() -> None:
     reg = default_registry()
-    assert reg.get("claude-sonnet-4-6") is not None
+    # Catalog is on-host only — only Ollama tags are seeded.
+    assert reg.get("qwen3.5:9b") is not None
     assert reg.get("qwen2.5:7b-instruct") is not None
     # Aliases work.
-    assert reg.get("claude-haiku-4-5") is not None
+    assert reg.get("gemma4:e4b") is not None  # alias of gemma4:latest
 
 
 async def test_inline_provider_synthesises_api() -> None:
@@ -158,7 +161,10 @@ async def test_inline_provider_extra_overrides_base() -> None:
 def test_is_inline_provider_classifies() -> None:
     assert is_inline_provider("ollama")
     assert is_inline_provider("vllm")
-    assert not is_inline_provider("anthropic")
+    assert is_inline_provider("llamacpp-direct")
+    assert is_inline_provider("lmstudio")
+    # Unknown / removed provider ids are not inline.
+    assert not is_inline_provider("anthropic")  # no longer in catalog
     assert not is_inline_provider("openai")
 
 
@@ -170,14 +176,24 @@ async def test_resolve_api_inline_skips_auth() -> None:
 
 
 async def test_resolve_api_hosted_requires_credential() -> None:
-    auth = InMemoryAuthStorage()
-    model = Model(id="claude-sonnet-4-6", provider="anthropic")
-    with pytest.raises(MissingCredential):
-        await resolve_api(model, auth)
-    await auth.set("anthropic", "sk-test")
-    api = await resolve_api(model, auth)
-    assert api.api_key == "sk-test"
-    assert "anthropic.com" in api.base_url
+    """Hosted-provider auth path is preserved as a stub for plugins. With
+    the bundled (local-only) catalog there are no hosted provider ids, so
+    we exercise the contract by patching `_HOSTED_DEFAULT_BASE_URL` with
+    a synthetic id."""
+    from oxenclaw.pi import auth as auth_mod
+
+    auth_mod._HOSTED_DEFAULT_BASE_URL["plugin-x"] = "https://example.test/v1"
+    try:
+        auth = InMemoryAuthStorage()
+        model = Model(id="m", provider="plugin-x")  # type: ignore[arg-type]
+        with pytest.raises(MissingCredential):
+            await resolve_api(model, auth)
+        await auth.set("plugin-x", "sk-test")  # type: ignore[arg-type]
+        api = await resolve_api(model, auth)
+        assert api.api_key == "sk-test"
+        assert "example.test" in api.base_url
+    finally:
+        auth_mod._HOSTED_DEFAULT_BASE_URL.pop("plugin-x", None)
 
 
 async def test_env_auth_storage_reads_env(monkeypatch) -> None:  # type: ignore[no-untyped-def]

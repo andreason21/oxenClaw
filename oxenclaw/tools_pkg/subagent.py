@@ -37,6 +37,7 @@ from oxenclaw.pi.auth import resolve_api
 from oxenclaw.pi.run import RuntimeConfig, run_agent_turn
 from oxenclaw.plugin_sdk.runtime_env import get_logger
 from oxenclaw.tools_pkg._arg_aliases import fold_aliases
+from oxenclaw.tools_pkg._desc import hermes_desc
 
 logger = get_logger("tools.subagent")
 
@@ -129,10 +130,28 @@ def subagents_tool(config: SubagentConfig, *, current_depth: int = 0) -> Tool:
 
     return FunctionTool(
         name="subagents",
-        description=(
+        description=hermes_desc(
             "Spawn a sub-agent to handle a focused sub-task in isolation "
             "(separate session + restricted tool set). Returns the child's "
-            "final text answer."
+            "final text answer.",
+            when_use=[
+                "the sub-task is self-contained and ≥3 tool calls",
+                "you want sub-task chatter kept out of the parent transcript",
+                "the sub-task can run with the restricted tool set",
+            ],
+            when_skip=[
+                "you can answer in one tool call yourself (overhead not worth it)",
+                "the sub-task needs a tool the child doesn't have",
+                "current depth is at max_depth (will be refused)",
+            ],
+            alternatives={
+                "skill_run": "running a documented skill script",
+                "shell": "single ad-hoc command",
+            },
+            notes=(
+                "The `task` field is self-contained — the child has no "
+                "memory of the parent's conversation."
+            ),
         ),
         input_model=_SubagentArgs,
         handler=_h,

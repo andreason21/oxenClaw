@@ -16,3 +16,6 @@ soak.csv
 # Desktop (Tauri) build artefacts
 desktop/src-tauri/target/
 desktop/src-tauri/gen/
+
+# Local CUDA toolkit installer (4 GB blob; users download themselves)
+cuda_*.run

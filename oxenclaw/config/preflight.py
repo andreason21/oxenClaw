@@ -157,6 +157,11 @@ def _check_embedding_endpoint(report: PreflightReport) -> None:
     features simply won't work until the operator pulls the model or
     points to a different endpoint. Uses stdlib urllib with a short
     timeout so we don't drag aiohttp into the sync preflight path.
+
+    Special case: when `OXENCLAW_EMBEDDER=llamacpp-direct`, no daemon
+    needs to be running ahead of time — oxenClaw spawns
+    `llama-server --embedding` lazily on the first embedding request.
+    We do a static check instead (binary discoverable + GGUF on disk).
     """
     import json as _json
     import os
@@ -167,6 +172,41 @@ def _check_embedding_endpoint(report: PreflightReport) -> None:
         DEFAULT_EMBED_BASE_URL,
         DEFAULT_EMBED_MODEL,
     )
+
+    if os.environ.get("OXENCLAW_EMBEDDER", "").strip() == "llamacpp-direct":
+        gguf_raw = os.environ.get("OXENCLAW_LLAMACPP_EMBED_GGUF", "").strip()
+        if not gguf_raw:
+            report.add(
+                "warning",
+                "embeddings",
+                "OXENCLAW_EMBEDDER=llamacpp-direct but OXENCLAW_LLAMACPP_EMBED_GGUF "
+                "is not set. Run `oxenclaw setup llamacpp` Step 3 to configure it.",
+            )
+            return
+        from pathlib import Path as _Path
+
+        gguf_path = _Path(os.path.expanduser(gguf_raw))
+        if not gguf_path.is_file():
+            report.add(
+                "warning",
+                "embeddings",
+                f"embedding GGUF unreachable at {gguf_path}; fix the path or "
+                f"re-run `oxenclaw setup llamacpp`.",
+            )
+            return
+        try:
+            from oxenclaw.pi.llamacpp_server.manager import find_llama_server_binary
+
+            find_llama_server_binary()
+        except Exception as exc:
+            report.add(
+                "warning",
+                "embeddings",
+                f"llama-server binary not discoverable for embeddings: {exc}",
+            )
+            return
+        # Static prerequisites OK — managed server boots on first request.
+        return
 
     base_url = os.environ.get("OXENCLAW_EMBED_BASE_URL", DEFAULT_EMBED_BASE_URL).rstrip("/")
     model = os.environ.get("OXENCLAW_EMBED_MODEL", DEFAULT_EMBED_MODEL)

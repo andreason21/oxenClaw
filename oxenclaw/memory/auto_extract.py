@@ -170,6 +170,18 @@ def _ko_name(m: re.Match[str]) -> str:
     return f"사용자의 이름은 {name}이다. The user's name is {name}."
 
 
+def _ko_relation_name(m: re.Match[str]) -> str:
+    """Render '우리/내/제/나의/저의 <rel> 이름은 <name>' → bilingual fact."""
+    rel = m.group(1)
+    name = _strip_ko_ending(m.group(2).strip())
+    if len(name) < 1 or name in _KO_RELATIONS:
+        return ""
+    josa = _josa_eun_neun(rel)
+    return (
+        f"사용자의 {rel}{josa} {name}이다. The user's {rel} ({_ko_to_en_relation(rel)}) is {name}."
+    )
+
+
 def _ko_location(m: re.Match[str]) -> str:
     place = _strip_ko_ending(m.group(1).strip())
     if len(place) < 1:
@@ -221,6 +233,16 @@ _PATTERNS: list[tuple[re.Pattern[str], Callable[[re.Match[str]], str]]] = [
     (
         re.compile(rf"(?:내|제)\s*이름은\s*({_NAME_TOK})"),
         _ko_name,
+    ),
+    # Korean: "<owner> <relation> 이름은 <name>" — covers the "나의 형
+    # 이름은 민수야" / "우리 누나 이름은 수지" shape that the bare
+    # `<name>는 우리 <rel>이야` pattern misses.
+    (
+        re.compile(
+            rf"(?:우리|내|제|나의|저의)\s*({'|'.join(_KO_RELATIONS)})\s*"
+            rf"이름은\s*({_NAME_TOK})"
+        ),
+        _ko_relation_name,
     ),
     # Korean location: "나는 <place>에 살아 / 살고 / 거주" or
     # "<place>에서 살아".

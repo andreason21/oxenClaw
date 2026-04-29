@@ -29,12 +29,15 @@ return both manifest + body separately. Body content stays unparsed
 
 from __future__ import annotations
 
+import logging
 import re
 from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+_logger = logging.getLogger("clawhub.frontmatter")
 
 # kebab-case-ish slug rule from openclaw `skills-clawhub.ts:VALID_SLUG_PATTERN`.
 VALID_SLUG_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$", re.IGNORECASE)
@@ -112,13 +115,20 @@ class SkillCommand(BaseModel):
             template: 'curl "wttr.in/{city}?format=3"'
             inputs:
               city: { type: string, required: true }
+
+    `template` defaults to "" so the manifest can also carry docs-only
+    shorthand entries (parsed from string lines like
+    `"/stock_alerts - Check triggered alerts"`). Docs-only entries
+    appear in the catalog but are not registered as callable tools —
+    `is_runnable` returns False for them so `build_skill_command_tools`
+    can skip cleanly.
     """
 
     model_config = ConfigDict(extra="allow", populate_by_name=True)
 
     name: str
     description: str
-    template: str
+    template: str = ""
     inputs: dict[str, dict[str, Any]] = Field(default_factory=dict)
     timeout_seconds: float = Field(default=30.0, alias="timeoutSeconds")
 
@@ -130,6 +140,73 @@ class SkillCommand(BaseModel):
         if not VALID_SLUG_RE.match(v.replace("_", "-")):
             raise ValueError(f"command name {v!r} must be alphanumeric + underscores/hyphens")
         return v
+
+    @property
+    def is_runnable(self) -> bool:
+        """True when this command has a shell template to execute.
+        Docs-only entries (shorthand string in the manifest) report
+        False and should be skipped by the tool builder."""
+        return bool(self.template and self.template.strip())
+
+
+_SHORTHAND_CMD_RE = re.compile(
+    r"""^/?           # optional leading slash
+        (?P<name>[A-Za-z0-9_][A-Za-z0-9_\-]*)   # command name
+        \s*
+        (?:[\-:–—]\s*(?P<desc>.+?))?            # optional " - description"
+        \s*$""",
+    re.VERBOSE,
+)
+
+
+def _coerce_skill_commands(raw: Any) -> Any:
+    """Normalise the `commands:` list before pydantic validation.
+
+    Real-world skill manifests on ClawHub mix two shapes:
+
+      - Full dict entries with `name` + `template` (callable, what we
+        register as LLM tools).
+      - Shorthand strings like `"/stock_alerts - Check triggered alerts"`
+        — documentation-only catalog entries with no template.
+
+    Pre-fix, the strict pydantic schema rejected the strings outright
+    and the entire `skills.install` RPC failed with a ValidationError.
+    Result: the skill folder existed on disk but zero tools were
+    registered, leaving the agent with nothing to call. This coercion
+    keeps the manifest loadable: dicts pass through, parseable strings
+    become docs-only `SkillCommand` entries (template=""), and
+    anything we can't parse is dropped with a warning instead of
+    nuking the install.
+    """
+    if not isinstance(raw, list):
+        return raw
+    out: list[Any] = []
+    for entry in raw:
+        if isinstance(entry, dict):
+            out.append(entry)
+            continue
+        if isinstance(entry, str):
+            m = _SHORTHAND_CMD_RE.match(entry.strip())
+            if m is None:
+                _logger.warning(
+                    "skill manifest: dropping unparseable command entry %r", entry
+                )
+                continue
+            name = m.group("name").replace("-", "_")
+            desc = (m.group("desc") or name).strip()
+            out.append(
+                {
+                    "name": name,
+                    "description": desc,
+                    "template": "",  # docs-only — see SkillCommand.is_runnable
+                }
+            )
+            continue
+        _logger.warning(
+            "skill manifest: dropping non-dict / non-string command entry %r",
+            entry,
+        )
+    return out
 
 
 class SkillManifest(BaseModel):
@@ -148,6 +225,16 @@ class SkillManifest(BaseModel):
     version: str | None = None
     openclaw: SkillOpenClawMetadata = Field(default_factory=SkillOpenClawMetadata)
     commands: list[SkillCommand] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce_commands_block(cls, data: Any) -> Any:
+        """Run `commands` through the lenient coercer before per-entry
+        validation so mixed-shape manifests don't crash the install."""
+        if isinstance(data, dict) and "commands" in data:
+            data = dict(data)
+            data["commands"] = _coerce_skill_commands(data["commands"])
+        return data
 
     @field_validator("name")
     @classmethod
@@ -185,10 +272,20 @@ def parse_skill_text(content: str) -> tuple[SkillManifest, str]:
     if not isinstance(data, dict):
         raise SkillManifestError("frontmatter root must be a mapping")
 
-    # Promote `metadata.openclaw` → top-level `openclaw` for our model shape.
+    # Promote `metadata.openclaw` → top-level `openclaw` for our model
+    # shape. Real-world ClawHub skills published from the Clawdbot
+    # publisher use `metadata.clawdbot` instead — treat it as a synonym
+    # so `requires.bins` / `install` / `os` get parsed and the compat
+    # filter actually applies. Pre-fix, `stock-analysis` (and every
+    # other Clawdbot-published skill) reported "no requirements" so
+    # the catalog showed it as installable on a machine without `uv`,
+    # the user installed it, and then `analyze_stock.py` failed at
+    # runtime with no actionable signal.
     metadata = data.pop("metadata", None)
-    if isinstance(metadata, dict) and "openclaw" in metadata:
-        data["openclaw"] = metadata["openclaw"]
+    if isinstance(metadata, dict):
+        oc_block = metadata.get("openclaw") or metadata.get("clawdbot")
+        if isinstance(oc_block, dict):
+            data["openclaw"] = oc_block
 
     try:
         manifest = SkillManifest.model_validate(data)

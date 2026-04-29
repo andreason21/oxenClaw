@@ -1,8 +1,11 @@
 """High-level credential resolution.
 
-Combines `Model` + `AuthStorage` → `Api`. For inline (local) providers,
-delegates to `inline_api`; for hosted providers, looks up the API key
-from `AuthStorage` and synthesises the canonical base URL.
+Combines `Model` + `AuthStorage` → `Api`. The catalog is on-host-only,
+so every supported provider is `is_inline_provider(...)` → True and the
+resolution is just a thin wrapper around `inline_api(model)`. The
+hosted-provider code path is preserved as a stub so external plugins
+that register their own provider id can still slot in by extending
+`_HOSTED_DEFAULT_BASE_URL` (currently empty).
 """
 
 from __future__ import annotations
@@ -10,26 +13,9 @@ from __future__ import annotations
 from oxenclaw.pi.models import Api, Model, ProviderId
 from oxenclaw.pi.registry import AuthStorage, inline_api, is_inline_provider
 
-# Canonical base URLs for hosted providers we know about. Adapters are free
-# to override via `model.extra["base_url"]`.
-_HOSTED_DEFAULT_BASE_URL: dict[ProviderId, str] = {
-    "anthropic": "https://api.anthropic.com",
-    "anthropic-vertex": "https://us-central1-aiplatform.googleapis.com",
-    "openai": "https://api.openai.com/v1",
-    "google": "https://generativelanguage.googleapis.com",
-    "vertex-ai": "https://us-central1-aiplatform.googleapis.com",
-    "bedrock": "https://bedrock-runtime.us-east-1.amazonaws.com",
-    "openrouter": "https://openrouter.ai/api/v1",
-    "moonshot": "https://api.moonshot.ai/v1",
-    "minimax": "https://api.minimaxi.chat/v1",
-    "zai": "https://open.bigmodel.cn/api/paas/v4",
-    "kilocode": "https://kilocode.ai/api/v1",
-    "groq": "https://api.groq.com/openai/v1",
-    "deepseek": "https://api.deepseek.com/v1",
-    "mistral": "https://api.mistral.ai/v1",
-    "together": "https://api.together.xyz/v1",
-    "fireworks": "https://api.fireworks.ai/inference/v1",
-}
+# Empty by default: oxenClaw's bundled catalog is local-only. Plugins that
+# want to add a hosted provider should append to this dict at import time.
+_HOSTED_DEFAULT_BASE_URL: dict[ProviderId, str] = {}
 
 
 class MissingCredential(RuntimeError):
@@ -39,9 +25,9 @@ class MissingCredential(RuntimeError):
 async def resolve_api(model: Model, auth: AuthStorage) -> Api:
     """Build an `Api` for `model`, fetching credentials as needed.
 
-    Inline providers (Ollama / LM Studio / vLLM / llama.cpp / litellm /
-    proxy / openai-compatible) don't need credentials and synthesise the
-    base URL from `model.extra["base_url"]` or the inline default.
+    Inline providers (Ollama / LM Studio / vLLM / llama.cpp /
+    llamacpp-direct) don't need credentials and synthesise the base
+    URL from `model.extra["base_url"]` or the inline default.
 
     Hosted providers require an API key; if `auth.get(provider)` returns
     None we raise `MissingCredential` rather than silently calling the

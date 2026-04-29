@@ -5,10 +5,11 @@
 [![license](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 A self-hosted, in-house AI assistant gateway in Python. Bring your
-own model (local Ollama, Anthropic, or 22 providers via the bundled `pi`
-runner), talk to it from the bundled web dashboard or the native
-desktop app (Windows / Ubuntu), give it tools and skills, and let it
-push outbound alerts to Slack — all on a long-lived service with
+own **on-host** model — five providers ship in the bundled catalog
+(`ollama`, `llamacpp-direct`, `llamacpp`, `vllm`, `lmstudio`) — talk
+to it from the bundled web dashboard or the native desktop app
+(Windows / Ubuntu), give it tools and skills, and let it push
+outbound alerts to Slack — all on a long-lived service with
 production-grade observability.
 
 > Python port of [openclaw](https://github.com/openclaw/openclaw) — the
@@ -22,7 +23,7 @@ production-grade observability.
 
 | | |
 |---|---|
-| 🦙 **Bring your own model** | Local Ollama by default (any tool-capable model). Anthropic, OpenAI-compatible, Bedrock, Google, Groq, DeepSeek, Mistral, Together, Fireworks, … 22 providers via `pi`. |
+| 🦙 **Bring your own model** | On-host only — five providers in the catalog: **`llamacpp-direct`** (default; oxenClaw spawns its own `llama-server` with the unsloth-studio fast preset — ~3× faster decode than Ollama on the same GGUF), **`ollama`** (auto-fallback when no GGUF is configured), **`llamacpp`** (external server), **`vllm`**, **`lmstudio`**. Cloud providers were removed from the bundled catalog 2026-04-29; plugins can still register their own. Full guide: [`docs/AGENTS.md`](docs/AGENTS.md). |
 | 🖼️ **Multimodal in/out of the box** | Attach a photo in the dashboard chat (📎 button) or the desktop client and a vision-capable model (gemma4 / Claude 3+ / GPT-4o / Gemini 1.5+ / llava / etc.) sees it. Models without vision get a dropped-image notice in their text context. |
 | 🖥️ **Bundled dashboard SPA** | Light/dark theme toggle, Ctrl+K command palette, sessions browser (list/preview/reset/fork/archive), responsive mobile drawer, in-app login gate. No build step, served on the same port as the JSON-RPC websocket. |
 | 💻 **Native desktop app (Windows + Ubuntu)** | Tauri client for Windows 11 (`.msi` / NSIS `.exe`), Ubuntu 22.04 + 24.04 (`.deb`), or any glibc Linux (`.AppImage`). OS keychain–backed tokens, native toast notifications, system tray, Origin-locked WS upgrade, Ed25519-signed auto-updates. See [`docs/DESKTOP_APP.md`](docs/DESKTOP_APP.md). |
@@ -54,12 +55,21 @@ oxenclaw config validate
 ```
 
 **Linux / macOS / WSL2** are supported. Requires Python **3.11+**. The
-default LLM backend is [Ollama](https://ollama.ai/)
-running on `127.0.0.1:11434` — install Ollama and pull a tool-capable
-model, e.g.:
+default chat backend is **`llamacpp-direct`** (managed `llama-server`,
+`--provider auto`); it auto-falls-back to **Ollama** when no GGUF is
+configured. Two paths:
 
 ```bash
-ollama pull qwen3.5:9b
+# Path A (recommended) — llamacpp-direct, ~3x faster decode.
+#   1. Put `llama-server` on $PATH (any recent llama.cpp build).
+#   2. Download a GGUF you want to serve, then:
+export OXENCLAW_LLAMACPP_GGUF=$HOME/models/your-model.gguf
+# `--provider auto` (the default) now picks llamacpp-direct.
+# Full guide: docs/LLAMACPP_DIRECT.md
+
+# Path B — classic Ollama (also used for embeddings regardless of A).
+ollama pull qwen3.5:9b              # chat
+ollama pull nomic-embed-text        # embeddings (memory features)
 ```
 
 Override the model with `--model <id>`. Tested models:
@@ -118,7 +128,7 @@ channels: {}     # populate per channel below
 agents:
   default:
     id: default
-    provider: local              # local | vllm | anthropic | pi | echo
+    provider: auto               # auto (default) | llamacpp-direct | ollama | vllm | anthropic | …
     model: qwen3.5:9b
     system_prompt: |
       You are a helpful assistant.
@@ -147,7 +157,7 @@ channels:
 
 ```bash
 export OXENCLAW_GATEWAY_TOKEN=$(openssl rand -hex 32)
-oxenclaw gateway start --provider local
+oxenclaw gateway start              # --provider defaults to 'auto'
 ```
 
 The gateway binds to `127.0.0.1` only — it **refuses to expose
@@ -345,7 +355,7 @@ Drop the bot token at `~/.oxenclaw/credentials/slack/<account_id>.json`
 | Layer | What lives there |
 |---|---|
 | `gateway/` | WS JSON-RPC server, HTTP routes (`/metrics`, `/healthz`, `/readyz`, dashboard), per-connection concurrency cap, bearer auth, graceful shutdown |
-| `agents/` | Agent registry, factory, `LocalAgent` (Ollama / vLLM / OpenAI-compatible), `PiAgent` (22 providers via `pi/`), `EchoAgent` |
+| `agents/` | Agent registry, factory, `LocalAgent` (Ollama / vLLM / OpenAI-compatible), `PiAgent` (5 on-host providers via `pi/`), `EchoAgent` |
 | `channels/` | Channel abstraction, router, runner supervisor (restart-on-error with backoff) |
 | `extensions/slack/` | First-party Slack outbound plugin (Web API `chat.postMessage`) |
 | `extensions/dashboard/` | Built-in dashboard / desktop-client channel — agent replies surface via `chat.history` |
@@ -640,7 +650,7 @@ channels:
 
 ```bash
 export OXENCLAW_GATEWAY_TOKEN=$(openssl rand -hex 32)
-oxenclaw gateway start --provider local
+oxenclaw gateway start              # --provider defaults to 'auto'
 ```
 
 게이트웨이는 `127.0.0.1`만 바인딩한다 — `--allow-non-loopback`을

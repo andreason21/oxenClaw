@@ -110,7 +110,57 @@ def _probe_mcp(paths: OxenclawPaths, report: DoctorReport) -> None:
 
 
 def _probe_embeddings(report: DoctorReport) -> None:
-    """Reuses the embedding-endpoint probe from `config.preflight`."""
+    """Surfaces embedding readiness for the configured backend.
+
+    Two paths:
+
+    - `OXENCLAW_EMBEDDER=llamacpp-direct` — check that the embedding
+      GGUF and binary are reachable. Spawn is deferred (we don't want
+      to fire up llama-server during a `doctor` run), but if the
+      static prerequisites are wrong the operator can fix them
+      without trial-and-error.
+    - Default (Ollama) — reuse the existing endpoint probe from
+      `config.preflight`, which actually hits `/v1/embeddings`.
+    """
+    import os as _os
+
+    if _os.environ.get("OXENCLAW_EMBEDDER", "").strip() == "llamacpp-direct":
+        gguf_raw = _os.environ.get("OXENCLAW_LLAMACPP_EMBED_GGUF", "").strip()
+        if not gguf_raw:
+            report.add(
+                "embeddings",
+                "warn",
+                "OXENCLAW_EMBEDDER=llamacpp-direct but OXENCLAW_LLAMACPP_EMBED_GGUF unset",
+                "run `oxenclaw setup llamacpp` to configure",
+            )
+            return
+        from pathlib import Path as _Path
+
+        p = _Path(_os.path.expanduser(gguf_raw))
+        if not p.is_file():
+            report.add(
+                "embeddings",
+                "warn",
+                f"embedding GGUF unreachable: {p}",
+                "fix the path or re-run `oxenclaw setup llamacpp`",
+            )
+            return
+        try:
+            from oxenclaw.pi.llamacpp_server.manager import find_llama_server_binary
+
+            find_llama_server_binary()
+        except Exception as exc:
+            report.add("embeddings", "warn", "llama-server binary not discoverable", str(exc))
+            return
+        size_mb = p.stat().st_size / (1024 * 1024)
+        report.add(
+            "embeddings",
+            "ok",
+            "llamacpp-direct embedder ready",
+            f"gguf={p} ({size_mb:.0f} MiB) — server spawns on first request",
+        )
+        return
+
     try:
         from oxenclaw.config.preflight import PreflightReport, _check_embedding_endpoint
 
@@ -183,6 +233,109 @@ def _probe_providers(report: DoctorReport) -> None:
     if extra:
         detail += f" (+{len(extra)} non-catalog stream(s) registered: {sorted(extra)})"
     report.add("providers", "ok", detail)
+
+
+def _probe_llamacpp_direct(report: DoctorReport) -> None:
+    """Surface the two manual prerequisites for `--provider llamacpp-direct`.
+
+    Both `llama-server` (binary) and `$OXENCLAW_LLAMACPP_GGUF` (weights)
+    must be reachable before the managed-server path can boot. We don't
+    fail if they aren't — Ollama is the documented fallback — but we
+    point users at the one-shot wizard so they don't have to assemble
+    the recipe by hand.
+    """
+    import os as _os
+
+    try:
+        from oxenclaw.pi.llamacpp_server.manager import (
+            LlamaCppServerError,
+            find_llama_server_binary,
+        )
+    except Exception as exc:
+        report.add("llamacpp-direct", "warn", "manager import failed", str(exc))
+        return
+
+    binary_path: str | None = None
+    try:
+        binary_path = str(find_llama_server_binary())
+    except LlamaCppServerError:
+        binary_path = None
+
+    gguf_raw = _os.environ.get("OXENCLAW_LLAMACPP_GGUF", "").strip()
+    gguf_ok = False
+    gguf_detail = ""
+    if gguf_raw:
+        from pathlib import Path as _Path
+
+        p = _Path(_os.path.expanduser(gguf_raw))
+        if p.is_file():
+            size_mb = p.stat().st_size / (1024 * 1024)
+            gguf_ok = True
+            gguf_detail = f"{p} ({size_mb:.0f} MiB)"
+        else:
+            gguf_detail = f"{p} (not found)"
+
+    if binary_path and gguf_ok:
+        # Quick "does this binary actually run on this host?" check —
+        # SYCL/ROCm/Vulkan prebuilt assets dropped on a CUDA-only box
+        # exit code 127 at first spawn because the dynamic linker can't
+        # find their backend's runtime (`libsvml.so`, `libamdhip64.so`,
+        # …). Catch that here instead of mid-chat.
+        import subprocess as _sp
+        from pathlib import Path as _Path
+
+        binary_dir = str(_Path(binary_path).resolve().parent)
+        existing_ld = _os.environ.get("LD_LIBRARY_PATH", "")
+        new_ld = f"{binary_dir}:{existing_ld}" if existing_ld else binary_dir
+        try:
+            r = _sp.run(
+                [binary_path, "--version"],
+                capture_output=True,
+                text=True,
+                timeout=15,
+                env={**_os.environ, "LD_LIBRARY_PATH": new_ld},
+            )
+        except (FileNotFoundError, _sp.TimeoutExpired) as exc:
+            report.add(
+                "llamacpp-direct",
+                "warn",
+                "binary smoke spawn failed",
+                f"{binary_path}: {exc}",
+            )
+            return
+        if r.returncode != 0:
+            tail = ((r.stderr or r.stdout) or "")[-400:].strip()
+            report.add(
+                "llamacpp-direct",
+                "warn",
+                f"binary won't run on this host (rc={r.returncode}) — likely "
+                "wrong-arch prebuilt (SYCL/ROCm asset on CUDA box). "
+                "Re-run `oxenclaw setup llamacpp` and pick build-from-source.",
+                f"{binary_path}\n{tail}",
+            )
+            return
+        report.add(
+            "llamacpp-direct",
+            "ok",
+            "ready",
+            f"binary={binary_path}; gguf={gguf_detail}",
+        )
+        return
+
+    missing: list[str] = []
+    if not binary_path:
+        missing.append("llama-server binary (set $OXENCLAW_LLAMACPP_BIN or put on $PATH)")
+    if not gguf_raw:
+        missing.append("$OXENCLAW_LLAMACPP_GGUF (path to a downloaded GGUF)")
+    elif not gguf_ok:
+        missing.append(f"GGUF unreachable: {gguf_detail}")
+
+    report.add(
+        "llamacpp-direct",
+        "warn",
+        "not configured — `oxenclaw setup llamacpp` will set this up in one shot",
+        "; ".join(missing),
+    )
 
 
 def _probe_plugins(report: DoctorReport) -> None:
@@ -284,6 +437,7 @@ def run_doctor(
     _probe_credentials(resolved, report)
     _probe_mcp(resolved, report)
     _probe_providers(report)
+    _probe_llamacpp_direct(report)
     _probe_context_engines(report)
     _probe_plugins(report)
     _probe_isolation(report)

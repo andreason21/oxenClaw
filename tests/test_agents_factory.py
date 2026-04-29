@@ -47,24 +47,16 @@ def test_build_echo_returns_echo_agent() -> None:
     assert isinstance(agent, EchoAgent)
 
 
-def test_build_anthropic_uses_claude_default() -> None:
-    """`--provider anthropic` resolves to PiAgent with the catalog's
-    default Anthropic model (cheap / latest mid-tier)."""
-    agent = build_agent(agent_id="a", provider="anthropic")
-    assert isinstance(agent, PiAgent)
-    assert agent._model.id == PROVIDER_DEFAULT_MODELS["anthropic"]
-    assert agent._model.provider == "anthropic"
-
-
-def test_build_anthropic_with_explicit_model() -> None:
+def test_build_lmstudio_with_explicit_model() -> None:
+    """Explicit model id + system prompt round-trip through PiAgent."""
     agent = build_agent(
         agent_id="a",
-        provider="anthropic",
+        provider="lmstudio",
         system_prompt="You are brief.",
-        model="claude-haiku-4-5-20251001",
+        model="qwen2.5:7b-instruct",
     )
     assert isinstance(agent, PiAgent)
-    assert agent._model.id == "claude-haiku-4-5-20251001"
+    assert agent._model.id == "qwen2.5:7b-instruct"
     assert agent._system_prompt == "You are brief."
 
 
@@ -77,10 +69,14 @@ def test_build_ollama_picks_qwen35_default() -> None:
     assert agent._model.provider == "ollama"
 
 
-def test_build_local_alias_maps_to_ollama_with_warning(caplog: pytest.LogCaptureFixture) -> None:
-    """`--provider local` is a legacy alias kept for back-compat with
-    pre-rc.15 config.yaml files. Should produce the same agent as
-    `--provider ollama` and log a deprecation warning."""
+def test_build_local_alias_falls_back_to_ollama_when_unconfigured(
+    caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`--provider local` is a legacy alias that now routes through the
+    `auto` resolver. With no GGUF / llama-server configured, the resolver
+    must fall back to `ollama` so existing Ollama-only installs don't
+    break on first run after the default flip."""
+    monkeypatch.delenv("OXENCLAW_LLAMACPP_GGUF", raising=False)
     with caplog.at_level(logging.WARNING):
         agent = build_agent(agent_id="a", provider="local")
     assert isinstance(agent, PiAgent)
@@ -88,12 +84,61 @@ def test_build_local_alias_maps_to_ollama_with_warning(caplog: pytest.LogCapture
     assert any("legacy alias" in r.getMessage() for r in caplog.records)
 
 
-def test_build_pi_alias_also_warns_and_maps_to_ollama(caplog: pytest.LogCaptureFixture) -> None:
+def test_build_pi_alias_resolves_via_auto(
+    caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("OXENCLAW_LLAMACPP_GGUF", raising=False)
     with caplog.at_level(logging.WARNING):
         agent = build_agent(agent_id="a", provider="pi")
     assert isinstance(agent, PiAgent)
     assert agent._model.provider == "ollama"
     assert any("legacy alias" in r.getMessage() for r in caplog.records)
+
+
+def test_auto_picks_llamacpp_direct_when_configured(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    """When both `$OXENCLAW_LLAMACPP_GGUF` is set and a llama-server
+    binary is reachable, `--provider auto` (and the `local`/`pi` aliases
+    that route through it) must select `llamacpp-direct`."""
+    fake_gguf = tmp_path / "model.gguf"
+    fake_gguf.write_bytes(b"\x00")
+    fake_bin = tmp_path / "llama-server"
+    fake_bin.write_text("#!/bin/sh\nexit 0\n")
+    fake_bin.chmod(0o755)
+    monkeypatch.setenv("OXENCLAW_LLAMACPP_GGUF", str(fake_gguf))
+    monkeypatch.setenv("OXENCLAW_LLAMACPP_BIN", str(fake_bin))
+
+    agent = build_agent(agent_id="a", provider="auto")
+    assert isinstance(agent, PiAgent)
+    assert agent._model.provider == "llamacpp-direct"
+
+    # Legacy alias should land in the same place.
+    agent2 = build_agent(agent_id="b", provider="local")
+    assert agent2._model.provider == "llamacpp-direct"
+
+
+def test_resolve_default_local_provider_branches(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    from oxenclaw.agents.factory import resolve_default_local_provider
+
+    # Branch 1: no GGUF env → ollama.
+    monkeypatch.delenv("OXENCLAW_LLAMACPP_GGUF", raising=False)
+    assert resolve_default_local_provider() == "ollama"
+
+    # Branch 2: GGUF env set but binary missing → still ollama
+    # (we don't pretend to have llama-server when we can't find it).
+    monkeypatch.setenv("OXENCLAW_LLAMACPP_GGUF", str(tmp_path / "x.gguf"))
+    monkeypatch.setenv("OXENCLAW_LLAMACPP_BIN", str(tmp_path / "no-such-bin"))
+    assert resolve_default_local_provider() == "ollama"
+
+    # Branch 3: GGUF env + reachable binary → llamacpp-direct.
+    fake_bin = tmp_path / "llama-server"
+    fake_bin.write_text("#!/bin/sh\nexit 0\n")
+    fake_bin.chmod(0o755)
+    monkeypatch.setenv("OXENCLAW_LLAMACPP_BIN", str(fake_bin))
+    assert resolve_default_local_provider() == "llamacpp-direct"
 
 
 def test_build_vllm_with_custom_model_synthesises_registry_entry() -> None:
@@ -132,10 +177,14 @@ def test_unknown_provider_raises() -> None:
 
 def test_legacy_aliases_cover_pre_rc15_names() -> None:
     """The two main pre-rc.15 names (`local`, `pi`) must remain
-    accepted so existing config.yaml + dashboards keep working."""
+    accepted so existing config.yaml + dashboards keep working. They
+    now route through the `auto` sentinel so the resolver picks the
+    right local backend per host (llamacpp-direct when configured,
+    else ollama)."""
     assert "local" in LEGACY_ALIASES
     assert "pi" in LEGACY_ALIASES
-    assert LEGACY_ALIASES["local"] == "ollama"
+    assert LEGACY_ALIASES["local"] == "auto"
+    assert LEGACY_ALIASES["pi"] == "auto"
 
 
 def test_default_tools_are_registered_when_none_passed() -> None:
@@ -144,7 +193,7 @@ def test_default_tools_are_registered_when_none_passed() -> None:
     process/update_plan in addition to echo/get_time. Mutating tools
     are raw without an ApprovalManager (operator opts in to gating
     via OXENCLAW_APPROVER_TOKEN); read-only tools are always present."""
-    agent = build_agent(agent_id="a", provider="anthropic")
+    agent = build_agent(agent_id="a", provider="ollama")
     names = set(agent._tools.names())
     # Read-only bundle (always there, never gated).
     for t in ("echo", "get_time", "read_file", "list_dir", "grep", "glob", "read_pdf"):

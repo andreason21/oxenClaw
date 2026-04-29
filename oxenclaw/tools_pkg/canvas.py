@@ -37,6 +37,7 @@ from oxenclaw.canvas import (
 )
 from oxenclaw.pi.tool_runtime import truncate_tool_result
 from oxenclaw.plugin_sdk.runtime_env import get_logger
+from oxenclaw.tools_pkg._desc import hermes_desc
 
 logger = get_logger("tools.canvas")
 
@@ -113,11 +114,21 @@ def canvas_present_tool(
 
     return FunctionTool(
         name="canvas_present",
-        description=(
-            "Render an HTML page on the user's dashboard canvas panel. "
-            "Use this whenever the user asks to show, display, render, "
-            "draw, visualize, or chart something. The HTML must be a "
-            "self-contained document; do not link external CSS or JS."
+        description=hermes_desc(
+            "Render an HTML page on the dashboard canvas panel.",
+            when_use=[
+                "the user asks to show / display / render / draw / chart / visualize",
+                "you want to surface a chart, table, or mini-UI alongside text",
+            ],
+            when_skip=[
+                "a plain-text reply suffices (don't open a panel for one number)",
+                "the content needs external scripts/CSS (sandboxed iframe)",
+            ],
+            alternatives={"canvas_hide": "collapse the panel when done"},
+            notes=(
+                "HTML must be a self-contained document; no external CSS/JS "
+                "URLs."
+            ),
         ),
         input_model=_PresentArgs,
         handler=_handler,
@@ -137,7 +148,16 @@ def canvas_hide_tool(
 
     return FunctionTool(
         name="canvas_hide",
-        description="Hide the dashboard canvas panel.",
+        description=hermes_desc(
+            "Hide / collapse the dashboard canvas panel.",
+            when_use=[
+                "the rendered visual is no longer relevant",
+                "the user asked to dismiss the canvas",
+            ],
+            when_skip=[
+                "you're about to call canvas_present again — just present, no need to hide first",
+            ],
+        ),
         input_model=_HideArgs,
         handler=_handler,
     )
@@ -180,11 +200,18 @@ def canvas_eval_tool(
 
     return FunctionTool(
         name="canvas_eval",
-        description=(
+        description=hermes_desc(
             "Evaluate a JavaScript expression inside the currently-open "
-            "canvas iframe and return its JSON-stringified result. The "
-            "HTML you presented must wire a 'message' event handler that "
-            "runs the expression and replies via the provided MessagePort."
+            "canvas iframe; returns its JSON-stringified result.",
+            when_use=[
+                "the canvas HTML you wrote already wires a 'message' handler",
+                "you need a value back from the iframe (form state, chart pick)",
+            ],
+            when_skip=[
+                "no canvas is open (call canvas_present first)",
+                "the iframe HTML has no message handler — call will time out",
+            ],
+            alternatives={"canvas_present": "render the HTML you'll later eval into"},
         ),
         input_model=_EvalArgs,
         handler=_handler,

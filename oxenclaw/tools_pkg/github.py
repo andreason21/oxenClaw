@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from pydantic import BaseModel, Field
 
 from oxenclaw.agents.tools import FunctionTool, Tool
+from oxenclaw.tools_pkg._desc import hermes_desc
 
 # Default allowlist — read-only operations only. Operators can extend
 # this set when building the tool.
@@ -99,10 +100,26 @@ def github_tool(config: GithubToolConfig | None = None) -> Tool:
 
     return FunctionTool(
         name="github",
-        description=(
-            "Run a curated GitHub CLI verb (`gh issue list`, `gh pr view`, "
-            "`gh api ...`, ...). Read-only by default; operators can extend "
-            "the allow-list."
+        description=hermes_desc(
+            "Run a curated `gh` CLI verb (issue list / pr view / pr diff / "
+            "repo view / api ...). Read-only by default.",
+            when_use=[
+                "querying issues, PRs, releases, or repo metadata",
+                "calling `gh api` GET endpoints",
+            ],
+            when_skip=[
+                "writing to GitHub (not in allow-list — use web_fetch + auth flow)",
+                "browsing code in a known repo (use read_file / grep)",
+                "general web search (use web_search)",
+            ],
+            alternatives={
+                "web_search": "general web queries",
+                "web_fetch": "fetching a specific URL",
+            },
+            notes=(
+                "Verb must be in the allow-list; shell metacharacters in args "
+                "are refused."
+            ),
         ),
         input_model=_GhArgs,
         handler=_h,

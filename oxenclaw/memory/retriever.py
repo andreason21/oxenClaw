@@ -8,6 +8,7 @@ BM25), MMR diversity re-ranking, and temporal half-life decay layers.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 from oxenclaw.config.paths import OxenclawPaths
@@ -18,7 +19,13 @@ from oxenclaw.memory.hybrid import (
     build_fts_query,
     merge_hybrid_results,
 )
-from oxenclaw.memory.inbox import append_to_inbox
+from oxenclaw.memory.inbox import (
+    InboxEntry,
+    append_to_inbox,
+    normalize_for_dedup,
+    parse_inbox,
+    remove_inbox_entry,
+)
 from oxenclaw.memory.indexer import MemoryIndexer
 from oxenclaw.memory.mmr import MMRConfig, mmr_rerank
 from oxenclaw.memory.models import (
@@ -185,10 +192,113 @@ class MemoryRetriever:
         *,
         tags: list[str] | None = None,
         redact_level: str | None = None,
+        dedup: bool = True,
+        dedup_threshold: float = 0.93,
     ) -> SyncReport:
+        """Append `text` to the inbox and re-index.
+
+        Dedup: when an existing inbox entry is near-identical to
+        ``text`` (case/whitespace/punctuation-normalised exact match,
+        or — when embeddings are configured — cosine similarity above
+        ``dedup_threshold``), the existing entry is REMOVED and the
+        new one appended in its place. Net effect: one entry per
+        fact, with the timestamp tracking the latest mention and tags
+        merged across mentions. The resulting `SyncReport.dedup_replaced`
+        is True so callers can report "duplicate updated" instead of
+        "saved fresh".
+
+        Pass ``dedup=False`` to bypass the dedup probe — useful for
+        tests that intentionally write near-duplicates and for the
+        indexer's own re-import path.
+        """
         effective_level = redact_level if redact_level is not None else self._redact_level
-        append_to_inbox(self._inbox_path, text, tags=tags, redact_level=effective_level)
-        return await self._indexer.sync()
+        replaced = False
+        merged_tags = list(tags or [])
+        if dedup and text.strip():
+            try:
+                existing = await self._find_duplicate_entry(
+                    text, threshold=dedup_threshold
+                )
+            except Exception:
+                logger.exception("memory.save: dedup probe failed; saving as-new")
+                existing = None
+            if existing is not None:
+                merged_tags = _merge_tags(existing.tags, merged_tags)
+                try:
+                    if remove_inbox_entry(self._inbox_path, existing):
+                        replaced = True
+                        logger.info(
+                            "memory.save: replaced duplicate entry "
+                            "(when=%s lines=%d-%d) text=%r",
+                            existing.when,
+                            existing.start_line,
+                            existing.end_line,
+                            text[:80],
+                        )
+                except Exception:
+                    logger.exception(
+                        "memory.save: dedup remove failed; appending alongside"
+                    )
+        append_to_inbox(
+            self._inbox_path,
+            text,
+            tags=merged_tags or None,
+            redact_level=effective_level,
+        )
+        report = await self._indexer.sync()
+        if replaced:
+            report = replace(report, dedup_replaced=True)
+        return report
+
+    async def _find_duplicate_entry(
+        self, text: str, *, threshold: float
+    ) -> InboxEntry | None:
+        """Return an inbox entry that should be replaced by ``text``.
+
+        Two layers, in order:
+
+          1. Normalised-text exact match against every parsed inbox
+             entry (case, whitespace, trailing-punctuation folded).
+             Catches "user lives in Suwon" / "User lives in Suwon."
+             style duplicates without any embedding cost.
+          2. Embedding similarity ≥ ``threshold`` against the highest-
+             scoring inbox chunk for ``text``. Catches paraphrases
+             and cross-language equivalents when real embeddings are
+             configured. Skipped silently when the embedder isn't
+             ready (dimensions=0) so cold-start writes still land.
+        """
+        entries = parse_inbox(self._inbox_path)
+        if not entries:
+            return None
+
+        # Layer 1 — normalised exact match.
+        norm_new = normalize_for_dedup(text)
+        if norm_new:
+            for e in entries:
+                if normalize_for_dedup(e.body) == norm_new:
+                    return e
+
+        # Layer 2 — semantic similarity. Use vector-only search so we
+        # don't get confused by BM25 ranking on short snippets.
+        if getattr(self._embeddings, "dimensions", 0) <= 0:
+            return None
+        try:
+            hits = await self.search(query=text, k=1)
+        except Exception:
+            logger.exception("memory.save: dedup vector search failed")
+            return None
+        if not hits:
+            return None
+        top = hits[0]
+        if top.score < threshold:
+            return None
+        if top.chunk.path != self._inbox_path.name:
+            return None  # don't dedup against external corpus files
+        # Find the parsed inbox entry whose line range covers this chunk.
+        for e in entries:
+            if e.start_line <= top.chunk.start_line and e.end_line >= top.chunk.end_line:
+                return e
+        return None
 
     def get(
         self,
@@ -279,3 +389,20 @@ def format_memories_as_prelude(results: list[MemorySearchResult]) -> str:
 
 def _xml_escape(s: str) -> str:
     return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+
+
+def _merge_tags(old: list[str], new: list[str]) -> list[str]:
+    """Union of two tag lists preserving deterministic order: every
+    `old` tag in original order, then any `new` tag not seen yet.
+    Empty strings are dropped."""
+    out: list[str] = []
+    seen: set[str] = set()
+    for t in (*old, *new):
+        if not t:
+            continue
+        key = t.strip()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        out.append(key)
+    return out

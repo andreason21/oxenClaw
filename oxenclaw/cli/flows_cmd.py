@@ -146,6 +146,29 @@ def setup_model() -> None:
     typer.echo(f"  oxenclaw gateway start {' '.join(bits)}")
 
 
+@setup_app.command("llamacpp")
+def setup_llamacpp() -> None:
+    """One-shot setup for the `llamacpp-direct` provider.
+
+    Walks four steps interactively: install / locate `llama-server`,
+    place a GGUF on disk, persist the resulting paths to
+    `~/.oxenclaw/env` (optionally sourced from your shell rc), and run
+    a quick CPU smoke test. Re-runnable: every step short-circuits when
+    the prerequisite is already in place.
+    """
+    from oxenclaw.flows.llamacpp_setup import (
+        DefaultWizardIO,
+        LlamaCppSetupWizard,
+    )
+
+    wizard = LlamaCppSetupWizard(prompter=_TyperPrompter(), io=DefaultWizardIO())
+    result = wizard.run()
+    if not result.is_ready():
+        raise typer.Exit(code=1)
+    if result.smoke_ok is False:
+        raise typer.Exit(code=2)
+
+
 @setup_app.command("provider")
 def setup_provider(
     provider_id: str = typer.Argument(..., help="Catalog provider id (e.g. anthropic, openai)."),
@@ -183,14 +206,21 @@ def setup_provider(
 
 _INLINE_BASE_URL_HINT: dict[str, str] = {
     "ollama": "http://127.0.0.1:11434/v1",
+    "llamacpp-direct": "managed (oxenclaw spawns llama-server on a free port)",
+    "llamacpp": "http://127.0.0.1:8080/v1",
     "vllm": "http://127.0.0.1:8000/v1",
     "lmstudio": "http://127.0.0.1:1234/v1",
-    "llamacpp": "http://127.0.0.1:8080/v1",
-    "litellm": "http://127.0.0.1:4000/v1",
 }
 
 
-__all__ = ["doctor", "doctor_app", "setup_app", "setup_model", "setup_provider"]
+__all__ = [
+    "doctor",
+    "doctor_app",
+    "setup_app",
+    "setup_llamacpp",
+    "setup_model",
+    "setup_provider",
+]
 
 
 if __name__ == "__main__":  # pragma: no cover

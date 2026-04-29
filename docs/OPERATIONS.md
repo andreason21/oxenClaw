@@ -444,7 +444,39 @@ Recommended cadence: run a 4h soak in CI before each release.
 | `OXENCLAW_AUDIT_OUTBOUND=1` | Log every outbound HTTP from `aiohttp` *and* the browser route handler into `~/.oxenclaw/outbound-audit.db`. | [`SECURITY.md`](./SECURITY.md) |
 | `OXENCLAW_LLM_TRACE=1` | Wire-level LLM trace: every provider request/response/error is appended to `~/.oxenclaw/logs/llm-trace.jsonl` (override sink with `OXENCLAW_LLM_TRACE_FILE`, body cap with `OXENCLAW_LLM_TRACE_MAX_BODY`). Captures the *final* payload after every patch + the assembled `tool_calls` / `usage` / `finish_reason` — the byte-level evidence needed to diagnose "why didn't the model call the tool?" | — |
 | `OXENCLAW_OLLAMA_NUM_CTX` | Controls the `num_ctx` the native Ollama provider sends in every `/api/chat` request. Default `32768`. Set to a raw integer for an explicit window, or `auto` to detect each model's max from `/api/show` and use `min(model_max, 32768)` — auto only lowers, never raises. Bumping above 32 K is an explicit-integer-only call: a 65 K+ KV cache locks up Ollama for minutes on a 16 GB box and times out concurrent `memory.search` traffic. Sizing recipe: [`OLLAMA.md`](./OLLAMA.md). | [`OLLAMA.md`](./OLLAMA.md) |
+| `OXENCLAW_LLAMACPP_GGUF` / `_BIN` / `_CTX` / `_NGL` / `_THREADS` / `_PARALLEL` / `_EXTRA_ARGS` / `_HEALTH_TIMEOUT_S` | Knobs for the managed `llamacpp-direct` provider, which spawns its own `llama-server` child with the unsloth-studio fast preset (`--flash-attn on --jinja --no-context-shift -ngl 999`). Set `_GGUF` to the absolute path of a manually-downloaded GGUF (required); the rest have sane defaults. Same wire trace as Ollama under `OXENCLAW_LLM_TRACE=1`. Full guide: [`LLAMACPP_DIRECT.md`](./LLAMACPP_DIRECT.md). | [`LLAMACPP_DIRECT.md`](./LLAMACPP_DIRECT.md) |
+| `OXENCLAW_LLAMACPP_EMBED_GGUF` / `_CTX` / `_NGL` / `_POOLING`, `OXENCLAW_EMBEDDER=llamacpp-direct` | Switch the memory-pipeline embedder from Ollama (`/v1/embeddings` on 11434) to a second managed `llama-server --embedding` instance that oxenClaw spawns. Required: `_EMBED_GGUF` (e.g. nomic-embed-text-v2-moe Q4). `oxenclaw setup llamacpp` Step 3 wires this up automatically and writes `OXENCLAW_EMBEDDER=llamacpp-direct` to `~/.oxenclaw/env`. | [`LLAMACPP_DIRECT.md`](./LLAMACPP_DIRECT.md#embeddings-via-llama-server---embedding-replaces-ollama) |
 | `OXENCLAW_CRON_DEFAULT_AGENT_ID` / `_CHANNEL` / `_ACCOUNT_ID` / `_CHAT_ID` | Defaults the LLM-callable `cron` tool uses when registering a job. The model's `cron(action="add", schedule=..., prompt=...)` call deliberately omits routing boilerplate; the gateway fills it from these env vars. Fallbacks: `assistant` / `dashboard` / `main` / `demo` (matches the dashboard's default session shape). Override when running multi-channel or multi-account deployments. | — |
+| `OXEN_SKILL_AUTO_ENRICH` | Kill-switch for the post-install LLM call that derives `WHEN TO USE / WHEN NOT TO USE / ALTERNATIVES` routing hints for every freshly-installed skill (and caches them at `<skill_dir>/.clawhub/llm_desc.json`). Default ON when the gateway has a primary chat model + auth wired. Set to `0` / `false` / `no` / `off` to disable — useful when running on a tiny local model that can't afford the extra one-off call, or in air-gapped boots. The loader reads the cache when present, so disabling enrichment only affects future installs; existing caches keep contributing to `<available_skills>` until the skill is reinstalled. | — |
+
+### Tool & skill description convention
+
+Every `FunctionTool` registered under `oxenclaw/tools_pkg/` must
+build its `description=` argument through
+`oxenclaw.tools_pkg._desc.hermes_desc(...)`. The helper appends three
+canonical sections to the prose summary:
+
+```
+WHEN TO USE: …; …
+WHEN NOT TO USE: …; …
+ALTERNATIVES: other_tool (use it when …); …
+```
+
+Static tool descriptions ship in the cached schema, so the model
+sees them on every turn at zero token cost — making them the
+right place to encode routing rules. `tests/test_tool_descriptions.py`
+asserts `WHEN TO USE` and `WHEN NOT TO USE` are present in every
+tool's description as a hard regression gate.
+
+For ClawHub skills the equivalent block is generated **once at
+install time** by `oxenclaw.clawhub.desc_enricher` using the
+gateway's primary chat model + auth (no separate provider knob).
+The cache record is content-hashed over `(name, description,
+SKILL.md body)` so a re-install of the same payload is a no-op,
+and the loader merges the enriched block into `<description>` when
+rendering `<available_skills>`. Failures (no creds, malformed JSON,
+disabled via env) cleanly fall back to the original SKILL.md
+description — enrichment never breaks an install.
 
 ### First-run token bootstrap
 

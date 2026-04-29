@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 from oxenclaw.agents.tools import FunctionTool, Tool
 from oxenclaw.cron.models import NewCronJob
 from oxenclaw.cron.scheduler import CronScheduler
+from oxenclaw.tools_pkg._desc import hermes_desc
 
 
 class _CronArgs(BaseModel):
@@ -135,11 +136,20 @@ def cron_tool(
 
     return FunctionTool(
         name="cron",
-        description=(
-            "Manage scheduled tasks. action=add registers a new job; "
-            "action=list shows all jobs; action=remove deletes by id; "
-            "action=toggle enables/disables. The prompt fires as a "
-            "synthetic user message on the configured channel."
+        description=hermes_desc(
+            "Manage scheduled tasks (add | list | remove | toggle). The "
+            "stored prompt fires as a synthetic user message on the "
+            "configured channel when its 5-field crontab matches.",
+            when_use=[
+                "the user asks 'remind me at …' / 'every weekday do …'",
+                "you want to register a recurring scheduled prompt",
+            ],
+            when_skip=[
+                "a one-off task — just do it now (don't schedule)",
+                "you only need a single delayed call (use a different scheduler)",
+            ],
+            alternatives={"message": "send a one-off message right now"},
+            notes="action=add requires schedule + prompt + a channel target.",
         ),
         input_model=_CronArgs,
         handler=_h,

@@ -15,9 +15,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import contextlib
 import json
-import os
 import resource
 import socket
 import sys
@@ -30,8 +28,7 @@ import websockets
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from oxenclaw.config.paths import OxenclawPaths  # noqa: E402
-from oxenclaw.gateway import (  # noqa: E402
+from oxenclaw.gateway import (
     ChatSendParams,
     ChatSendResult,
     GatewayServer,

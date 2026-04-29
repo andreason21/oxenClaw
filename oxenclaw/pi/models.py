@@ -11,29 +11,11 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 ProviderId = Literal[
-    "anthropic",
-    "anthropic-vertex",
-    "openai",
-    "google",
-    "vertex-ai",
-    "bedrock",
-    "openrouter",
-    "moonshot",
-    "minimax",
-    "zai",
-    "kilocode",
-    "groq",
-    "deepseek",
-    "mistral",
-    "together",
-    "fireworks",
     "ollama",
-    "lmstudio",
+    "llamacpp-direct",
     "vllm",
+    "lmstudio",
     "llamacpp",
-    "litellm",
-    "proxy",
-    "openai-compatible",
 ]
 
 

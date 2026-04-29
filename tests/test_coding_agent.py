@@ -28,7 +28,7 @@ from oxenclaw.tools_pkg.fs_tools import (
 
 def test_factory_builds_coding_agent_when_requested() -> None:
     """build_agent(agent_type='coding') must return a CodingAgent instance."""
-    agent = build_agent(agent_id="c", provider="anthropic", agent_type="coding")
+    agent = build_agent(agent_id="c", provider="ollama", agent_type="coding")
     assert isinstance(agent, CodingAgent)
 
 
@@ -36,7 +36,7 @@ def test_factory_builds_pi_agent_by_default() -> None:
     """build_agent without agent_type must still return a plain PiAgent."""
     from oxenclaw.agents.pi_agent import PiAgent
 
-    agent = build_agent(agent_id="p", provider="anthropic")
+    agent = build_agent(agent_id="p", provider="ollama")
     # CodingAgent is a subclass of PiAgent; verify it's the base class.
     assert type(agent) is PiAgent
 

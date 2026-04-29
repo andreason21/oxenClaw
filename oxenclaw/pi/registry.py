@@ -25,15 +25,12 @@ from oxenclaw.pi.models import Api, Model, ProviderId
 
 
 _PROVIDER_ALIASES: dict[str, ProviderId] = {
-    "claude": "anthropic",
-    "anthropic-claude": "anthropic",
-    "vertex": "vertex-ai",
-    "google-vertex": "vertex-ai",
-    "gemini": "google",
-    "openai-compat": "openai-compatible",
+    # Local-only catalog → only on-host inference aliases survive.
     "ollama-openai": "ollama",
     "lm-studio": "lmstudio",
     "llama-cpp": "llamacpp",
+    "llama-cpp-direct": "llamacpp-direct",
+    "llamacpp-managed": "llamacpp-direct",
 }
 
 
@@ -186,28 +183,30 @@ class ModelRegistry(Protocol):
 
 
 _PROVIDER_ID_GUESS: tuple[tuple[str, ProviderId], ...] = (
-    ("claude", "anthropic"),
-    ("anthropic-", "anthropic"),
-    ("gpt-", "openai"),
-    ("o1", "openai"),
-    ("o3", "openai"),
-    ("o4", "openai"),
-    ("gemini", "google"),
-    ("deepseek", "deepseek"),
-    ("qwen", "alibaba" if False else "openrouter"),  # qwen routed via OR
-    ("mistral", "mistral"),
+    # Local-only catalog: most local model ids ship through Ollama
+    # (which has the friendliest "pull a name and go" UX). Operators
+    # who want llamacpp-direct / vllm / lmstudio should pass
+    # `--provider` explicitly — there's no reliable id-prefix signal
+    # to distinguish them from Ollama.
+    ("qwen", "ollama"),
     ("llama", "ollama"),
     ("gemma", "ollama"),
+    ("mistral", "ollama"),
 )
 
 
 def guess_provider_from_id(model_id: str) -> ProviderId:
-    """Best-effort default provider from a model id prefix."""
+    """Best-effort default provider from a model id prefix.
+
+    The catalog is local-only, so the fallback is `ollama` (the
+    friendliest UX for unknown model ids). Operators wanting a
+    different on-host backend should set `--provider` explicitly.
+    """
     lower = model_id.lower()
     for prefix, provider in _PROVIDER_ID_GUESS:
         if lower.startswith(prefix):
             return provider  # type: ignore[return-value]
-    return "openai-compatible"  # type: ignore[return-value]
+    return "ollama"  # type: ignore[return-value]
 
 
 class InMemoryModelRegistry:
@@ -327,9 +326,10 @@ _INLINE_DEFAULT_BASE_URL: dict[ProviderId, str] = {
     "lmstudio": "http://127.0.0.1:1234/v1",
     "vllm": "http://127.0.0.1:8000/v1",
     "llamacpp": "http://127.0.0.1:8080/v1",
-    "litellm": "http://127.0.0.1:4000/v1",
-    "openai-compatible": "http://127.0.0.1:8000/v1",
-    "proxy": "http://127.0.0.1:7332",
+    # llamacpp-direct: oxenclaw owns lifecycle and picks an ephemeral port
+    # at spawn time. The placeholder here is overwritten by the wrapper
+    # before the first request so this URL is never actually contacted.
+    "llamacpp-direct": "managed://llamacpp-direct",
 }
 
 

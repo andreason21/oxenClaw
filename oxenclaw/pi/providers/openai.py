@@ -1,8 +1,20 @@
-"""OpenAI + every OpenAI-compatible inline provider.
+"""Local OpenAI-compatible providers (`vllm`, `lmstudio`, `llamacpp`).
 
-A single shared SSE wrapper handles: openai, ollama, lmstudio, vllm,
-llamacpp, litellm, openai-compatible, proxy. Per-provider tweaks live
-alongside the registration as `payload_patch` callables.
+oxenClaw's catalog is on-host-only by design (cloud / aggregator
+providers were removed). The remaining OpenAI-shape providers all
+target a local or LAN inference server that exposes
+`POST /v1/chat/completions` with the standard SSE shape.
+
+- `vllm`     — vLLM serve (`vllm serve …`), default `127.0.0.1:8000/v1`
+- `lmstudio` — LM Studio's local server, default `127.0.0.1:1234/v1`
+- `llamacpp` — external `llama-server` that you started yourself,
+               default `127.0.0.1:8080/v1`. For the *managed* path
+               (oxenClaw spawns the server itself), see the
+               `llamacpp-direct` provider in `llamacpp_direct.py`.
+
+`ollama` is registered separately in `ollama.py` against the native
+`/api/chat` endpoint because Ollama's OpenAI shim silently caps
+`num_ctx` at 4096 and drops tool-call deltas.
 """
 
 from __future__ import annotations
@@ -22,22 +34,6 @@ def _make_streamfn(payload_patch: PayloadPatch | None = None):  # type: ignore[n
     return _fn
 
 
-# Plain OpenAI / OpenAI-compat providers — no payload tweak.
-register_provider_stream("openai", _make_streamfn())
-register_provider_stream("openai-compatible", _make_streamfn())
-register_provider_stream("proxy", _make_streamfn())
 register_provider_stream("vllm", _make_streamfn())
-register_provider_stream("llamacpp", _make_streamfn())
-register_provider_stream("litellm", _make_streamfn())
 register_provider_stream("lmstudio", _make_streamfn())
-register_provider_stream("groq", _make_streamfn())
-register_provider_stream("deepseek", _make_streamfn())
-register_provider_stream("mistral", _make_streamfn())
-register_provider_stream("together", _make_streamfn())
-register_provider_stream("fireworks", _make_streamfn())
-register_provider_stream("kilocode", _make_streamfn())
-
-# Note: provider id "ollama" is registered by `oxenclaw.pi.providers.ollama`
-# against the native /api/chat endpoint. The OpenAI shim path is unusable
-# for Ollama because it silently caps num_ctx at 4096 regardless of
-# `options.num_ctx`, truncating memory + skill manifests.
+register_provider_stream("llamacpp", _make_streamfn())

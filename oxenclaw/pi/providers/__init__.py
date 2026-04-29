@@ -1,37 +1,33 @@
 """Provider stream wrappers.
 
-Each module in this subpackage is responsible for one provider family:
-translating its native SSE / response shape into the pi `AssistantMessageEvent`
-union and registering itself via `register_provider_stream(provider_id, fn)`
-at import time.
-
-Importing `oxenclaw.pi.providers` registers all bundled wrappers. Operators
-that don't want a wrapper loaded can import individual modules selectively.
+oxenClaw ships with **five** provider wrappers, all targeting on-host /
+LAN inference. Each module registers itself via
+`register_provider_stream(provider_id, fn)` at import time.
 
 Bundled providers:
-- `openai`         (also covers lmstudio / vllm / llamacpp / litellm /
-                    openai-compatible / proxy via the OpenAI-style
-                    chat-completions SSE shape)
-- `ollama`         (native /api/chat — bypasses Ollama's OpenAI shim
-                    because the shim drops num_ctx and tool_call deltas)
-- `anthropic`      (Anthropic native SSE with cache_control + thinking)
-- `google`         (Gemini generateContent SSE with thinking config)
-- `bedrock`        (AWS Bedrock invoke-model — wraps anthropic family
-                    payload semantics)
-- `openrouter`     (capability-aware OpenAI-shape; thin wrapper)
-- `moonshot`       (OpenAI-compat with optional thinking-stream variant)
-- `zai`            (OpenAI-compat with payload patch)
-- `minimax`        (OpenAI-compat with extra params)
+
+- `ollama`            — native `/api/chat`, bypasses Ollama's OpenAI
+                        shim because the shim drops `num_ctx` and
+                        tool-call deltas
+- `llamacpp-direct`   — oxenClaw spawns and owns its own `llama-server`
+                        with the unsloth-studio fast preset
+                        (`--flash-attn on --jinja --no-context-shift`,
+                        full GPU offload). ~3x faster decode than
+                        Ollama on the same GGUF
+- `llamacpp`          — externally-managed llama.cpp server (you start
+                        `llama-server` yourself, oxenClaw just talks to
+                        it via OpenAI-compat)
+- `vllm`              — externally-managed vLLM server (OpenAI-compat)
+- `lmstudio`          — externally-managed LM Studio server
+                        (OpenAI-compat)
+
+The `--provider auto` default at the CLI picks `llamacpp-direct` when
+configured, else `ollama`. See `docs/AGENTS.md` for the full agent
+configuration guide.
 """
 
 from oxenclaw.pi.providers import (  # noqa: F401  (registers via side effect)
-    anthropic,
-    bedrock,
-    google,
-    minimax,
-    moonshot,
+    llamacpp_direct,
     ollama,
     openai,
-    openrouter,
-    zai,
 )

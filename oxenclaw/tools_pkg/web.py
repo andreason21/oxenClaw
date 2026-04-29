@@ -32,6 +32,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from oxenclaw.agents.tools import FunctionTool, Tool
 from oxenclaw.pi.registry import AuthStorage
+from oxenclaw.tools_pkg._desc import hermes_desc
 from oxenclaw.plugin_sdk.runtime_env import get_logger
 from oxenclaw.security.net import NetPolicy
 from oxenclaw.security.net.guarded_fetch import (
@@ -503,9 +504,23 @@ def web_fetch_tool() -> Tool:
 
     return FunctionTool(
         name="web_fetch",
-        description=(
-            "Fetch a public URL over HTTP(S). Refuses private/non-public addresses "
-            "(SSRF guard). Returns readable text for HTML, raw bytes-as-text otherwise."
+        description=hermes_desc(
+            "Fetch a public URL over HTTP(S) with SSRF guard + DNS pin. "
+            "Returns readable text for HTML, raw bytes-as-text otherwise.",
+            when_use=[
+                "you already have a specific URL to read",
+                "you need the body of a known page / JSON endpoint",
+            ],
+            when_skip=[
+                "you don't have a URL yet (use web_search first)",
+                "the host is internal / private (will be refused)",
+                "you want a structured search result (use web_search)",
+            ],
+            alternatives={
+                "web_search": "find URLs by query",
+                "github": "GitHub repo / issue / PR queries",
+                "weather": "weather lookups",
+            },
         ),
         input_model=_FetchArgs,
         handler=_h,
@@ -616,9 +631,29 @@ def web_search_tool(
 
     return FunctionTool(
         name="web_search",
-        description=(
-            "Search the web. Tries providers in order (Brave → Tavily → Exa → "
-            "SearXNG → DuckDuckGo) and returns the first non-empty result set."
+        description=hermes_desc(
+            "Search the web. Tries providers in order (Brave → Tavily → "
+            "Exa → SearXNG → DuckDuckGo) and returns the first non-empty "
+            "result set.",
+            when_use=[
+                "you need to discover URLs for a topic",
+                "you want a quick set of titles + snippets to triage",
+            ],
+            when_skip=[
+                "the question is about weather (use weather)",
+                "the question is about GitHub (use github)",
+                "you already have the URL (use web_fetch)",
+                "the question is about current time (use a time tool)",
+            ],
+            alternatives={
+                "web_fetch": "read a known URL",
+                "weather": "weather queries",
+                "github": "GitHub queries",
+            },
+            notes=(
+                "0 hits is data — fall back to web_fetch on a likely URL "
+                "or rephrase rather than giving up."
+            ),
         ),
         input_model=_SearchArgs,
         handler=_h,

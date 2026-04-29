@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field, model_validator
 from oxenclaw.agents.tools import FunctionTool, Tool
 from oxenclaw.pi.session import SessionManager
 from oxenclaw.tools_pkg._arg_aliases import fold_aliases
+from oxenclaw.tools_pkg._desc import hermes_desc
 
 
 def _block_text(block) -> str:  # type: ignore[no-untyped-def]
@@ -115,10 +116,20 @@ def session_logs_tool(sessions: SessionManager) -> Tool:
 
     return FunctionTool(
         name="session_logs",
-        description=(
-            "Inspect agent session transcripts. action=list shows recent "
-            "sessions; action=view session_id shows the last N turns; "
-            "action=grep query searches across sessions."
+        description=hermes_desc(
+            "Inspect agent session transcripts (list | view | grep).",
+            when_use=[
+                "the user asks about a past conversation / session",
+                "you need to grep transcripts for an earlier decision",
+            ],
+            when_skip=[
+                "you want current-task plan state (use update_plan output)",
+                "the user is asking about wiki facts (use wiki_search)",
+            ],
+            alternatives={
+                "wiki_search": "long-term facts",
+                "sessions_list": "session metadata only",
+            },
         ),
         input_model=_LogsArgs,
         handler=_h,

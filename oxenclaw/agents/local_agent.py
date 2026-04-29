@@ -26,12 +26,14 @@ from __future__ import annotations
 import asyncio
 import json
 import random
+import time
 from collections.abc import AsyncIterator
 from typing import Any, Literal
 
 import aiohttp
 
 from oxenclaw.agents.base import AgentContext
+from oxenclaw.observability import llm_trace
 from oxenclaw.agents.history import ConversationHistory
 from oxenclaw.agents.tools import ToolRegistry
 from oxenclaw.clawhub.loader import format_skills_for_prompt, load_installed_skills
@@ -367,7 +369,40 @@ class LocalAgent:
         payload = self._build_payload(messages=messages, tools=tools, stream=stream)
         headers = self._build_headers()
         url = f"{self._base_url}/chat/completions"
-        return await self._post_with_retry(url=url, payload=payload, headers=headers)
+        trace_id = llm_trace.new_request_id()
+        trace_t0 = time.monotonic()
+        llm_trace.log_request(
+            request_id=trace_id,
+            provider=self._flavor,
+            model_id=self._model,
+            url=url,
+            payload=payload,
+        )
+        try:
+            response = await self._post_with_retry(url=url, payload=payload, headers=headers)
+        except Exception as exc:
+            llm_trace.log_error(
+                request_id=trace_id,
+                provider=self._flavor,
+                model_id=self._model,
+                status=getattr(exc, "status", None),
+                message=str(exc),
+                duration_ms=(time.monotonic() - trace_t0) * 1000.0,
+            )
+            raise
+        choice = (response.get("choices") or [{}])[0]
+        message = choice.get("message") or {}
+        llm_trace.log_response(
+            request_id=trace_id,
+            provider=self._flavor,
+            model_id=self._model,
+            content=message.get("content") or "",
+            tool_calls=list(message.get("tool_calls") or []),
+            finish_reason=choice.get("finish_reason"),
+            usage=response.get("usage") if isinstance(response.get("usage"), dict) else None,
+            duration_ms=(time.monotonic() - trace_t0) * 1000.0,
+        )
+        return response
 
     async def _post_with_retry(
         self,
@@ -435,6 +470,16 @@ class LocalAgent:
         headers = self._build_headers()
         url = f"{self._base_url}/chat/completions"
 
+        trace_id = llm_trace.new_request_id()
+        trace_t0 = time.monotonic()
+        llm_trace.log_request(
+            request_id=trace_id,
+            provider=self._flavor,
+            model_id=self._model,
+            url=url,
+            payload=payload,
+        )
+
         attempt = 0
         while True:
             session = await self._ensure_session()
@@ -457,9 +502,32 @@ class LocalAgent:
                         )
                     else:
                         resp.raise_for_status()
-                        return await self._consume_sse(resp)
+                        envelope = await self._consume_sse(resp)
+                        choice = (envelope.get("choices") or [{}])[0]
+                        message = choice.get("message") or {}
+                        llm_trace.log_response(
+                            request_id=trace_id,
+                            provider=self._flavor,
+                            model_id=self._model,
+                            content=message.get("content") or "",
+                            tool_calls=list(message.get("tool_calls") or []),
+                            finish_reason=choice.get("finish_reason"),
+                            usage=envelope.get("usage")
+                            if isinstance(envelope.get("usage"), dict)
+                            else None,
+                            duration_ms=(time.monotonic() - trace_t0) * 1000.0,
+                        )
+                        return envelope
             except (TimeoutError, aiohttp.ClientConnectionError) as exc:
                 if attempt >= self._max_retries:
+                    llm_trace.log_error(
+                        request_id=trace_id,
+                        provider=self._flavor,
+                        model_id=self._model,
+                        status=None,
+                        message=f"connection error: {exc}",
+                        duration_ms=(time.monotonic() - trace_t0) * 1000.0,
+                    )
                     raise
                 logger.warning(
                     "agent %s stream transient error (attempt %d/%d): %s",

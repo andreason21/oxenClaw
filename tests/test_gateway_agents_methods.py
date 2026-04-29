@@ -18,7 +18,8 @@ async def test_providers_lists_supported() -> None:
     router, _ = _setup()
     resp = await router.dispatch({"jsonrpc": "2.0", "id": 1, "method": "agents.providers"})
     assert "echo" in resp.result
-    assert "anthropic" in resp.result
+    assert "ollama" in resp.result
+    assert "llamacpp-direct" in resp.result
 
 
 async def test_create_echo_agent() -> None:

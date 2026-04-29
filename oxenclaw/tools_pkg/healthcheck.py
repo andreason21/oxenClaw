@@ -20,6 +20,7 @@ from oxenclaw.pi.store_ops import db_size_bytes
 from oxenclaw.security.isolation.registry import (
     available_backends,
 )
+from oxenclaw.tools_pkg._desc import hermes_desc
 
 
 class _HealthArgs(BaseModel):
@@ -89,9 +90,21 @@ def healthcheck_tool(
 
     return FunctionTool(
         name="healthcheck",
-        description=(
+        description=hermes_desc(
             "Aggregate gateway / runtime health: channels, cron jobs, "
-            "sessions store, memory index, isolation backends."
+            "session store size, memory index counts, isolation backends.",
+            when_use=[
+                "the user asks 'is everything OK' / 'system status'",
+                "you want a quick sanity probe before kicking off work",
+            ],
+            when_skip=[
+                "the user asks about a specific subsystem (call its tool)",
+                "you need actionable metrics — this is a coarse probe",
+            ],
+            alternatives={
+                "session_logs": "agent session diagnostics",
+                "wiki": "long-form docs / runbooks",
+            },
         ),
         input_model=_HealthArgs,
         handler=_h,

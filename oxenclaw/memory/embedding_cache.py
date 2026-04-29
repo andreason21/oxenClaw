@@ -74,9 +74,34 @@ class EmbeddingCache:
             put_batch: list[tuple[str, list[float]]] = []
             for idx, h, vec in zip(misses_idx, misses_hash, fresh, strict=True):
                 out[idx] = vec
+                # Sanity guard: a vector whose elements are all (near-)
+                # zero is a backend bug — the most common cause is
+                # `--pooling` not being set on llama.cpp's embedding
+                # endpoint, which makes nomic/bge models hand back
+                # un-pooled per-token vectors that score 0.0 against
+                # everything. Refusing to cache them means the user
+                # gets correct similarity as soon as the backend is
+                # fixed, without having to manually wipe the embed
+                # cache table.
+                if not _is_meaningful_vector(vec):
+                    continue
                 put_batch.append((h, vec))
-            self._store.cache_put_many(self.provider, self.model, put_batch)
+            if put_batch:
+                self._store.cache_put_many(self.provider, self.model, put_batch)
 
         self._cache_hits = hits
         # All slots filled by construction.
         return [v for v in out if v is not None]
+
+
+def _is_meaningful_vector(vec: list[float]) -> bool:
+    """True iff `vec` has at least one non-trivial component.
+
+    A vector whose every entry is within 1e-6 of zero is a backend
+    failure mode (mis-pooled embeddings, bad probe response). Caching
+    it would persist the bug across requests; rejecting it forces a
+    re-embed once the backend is healthy.
+    """
+    if not vec:
+        return False
+    return any(abs(x) > 1e-6 for x in vec)

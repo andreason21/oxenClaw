@@ -158,6 +158,11 @@ def memory_save_tool(retriever: MemoryRetriever) -> Tool:
                 "directives) and try again."
             )
         report = await retriever.save(args.text, tags=args.tags or None)
+        if report.dedup_replaced:
+            return (
+                f"updated existing entry in {retriever.inbox_path.name} "
+                "(near-duplicate detected; tags merged, timestamp refreshed)"
+            )
         return (
             f"saved to {retriever.inbox_path.name}; reindexed "
             f"{report.added + report.changed} file(s), "

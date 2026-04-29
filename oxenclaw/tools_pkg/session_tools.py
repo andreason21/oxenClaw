@@ -23,6 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from oxenclaw.agents.tools import FunctionTool, Tool
 from oxenclaw.pi import UserMessage
 from oxenclaw.pi.session import AgentSession, CreateAgentSessionOptions, SessionManager
+from oxenclaw.tools_pkg._desc import hermes_desc
 
 if TYPE_CHECKING:
     from oxenclaw.approvals.manager import ApprovalManager
@@ -138,11 +139,20 @@ def sessions_status_tool(sm: SessionManager) -> Tool:
 
     return FunctionTool(
         name="sessions_status",
-        description=(
-            "Return metadata for a session: title, message_count, model_id, "
-            "created_at, updated_at, has_plan, last_assistant_preview "
-            "(first 200 chars of the final assistant message). "
-            "Requires session_key (= session id). Read-only; never gated."
+        description=hermes_desc(
+            "Return metadata for one session (title, counts, "
+            "last_assistant_preview, has_plan).",
+            when_use=[
+                "you have a session_key and need its current status",
+            ],
+            when_skip=[
+                "you want to enumerate sessions (use sessions_list)",
+                "you need full transcript (use sessions_history)",
+            ],
+            alternatives={
+                "sessions_list": "list across sessions",
+                "sessions_history": "full message tail",
+            },
         ),
         input_model=_StatusArgs,
         handler=_h,
@@ -170,9 +180,17 @@ def sessions_list_tool(sm: SessionManager) -> Tool:
 
     return FunctionTool(
         name="sessions_list",
-        description=(
-            "List all sessions. Pass agent_id to filter to one agent. "
-            "Returns a JSON array of session summaries. Read-only; never gated."
+        description=hermes_desc(
+            "List sessions (optionally filtered by agent_id) as a JSON "
+            "array of summaries.",
+            when_use=[
+                "the user wants to browse / pick a session by id",
+                "you need to discover the session_key for a follow-up tool",
+            ],
+            when_skip=[
+                "you already have the session_key (use sessions_status)",
+            ],
+            alternatives={"sessions_status": "single-session metadata"},
         ),
         input_model=_ListArgs,
         handler=_h,
@@ -208,10 +226,17 @@ def sessions_history_tool(sm: SessionManager) -> Tool:
 
     return FunctionTool(
         name="sessions_history",
-        description=(
-            "Return the last `limit` messages (default 20) from a session. "
-            "Each row has {role, preview} where preview is the first 200 chars. "
-            "Read-only; never gated."
+        description=hermes_desc(
+            "Return the last `limit` messages (default 20) from a session "
+            "as {role, preview} rows.",
+            when_use=[
+                "you need to read what was actually said in a prior session",
+            ],
+            when_skip=[
+                "you only need session metadata (use sessions_status)",
+                "you want substring search (use session_logs action=grep)",
+            ],
+            alternatives={"session_logs": "grep across sessions"},
         ),
         input_model=_HistoryArgs,
         handler=_h,
@@ -250,11 +275,20 @@ def sessions_send_tool(sm: SessionManager) -> Tool:
 
     return FunctionTool(
         name="sessions_send",
-        description=(
-            "Append a synthetic user message to an existing session's conversation history. "
-            "LIMITATION: does NOT trigger a new agent run; the operator must "
-            "re-engage from the dashboard. "
-            "Mutating — gate via ApprovalManager when available."
+        description=hermes_desc(
+            "Append a synthetic user message to a session's history.",
+            when_use=[
+                "you want a message recorded in a session for later replay",
+            ],
+            when_skip=[
+                "you expect the agent to act on it now — this does NOT run",
+                "the user is in a live chat (just reply normally)",
+            ],
+            alternatives={"message": "real channel send to a user"},
+            notes=(
+                "Does NOT trigger an agent run. Mutating — approval-gated "
+                "when available."
+            ),
         ),
         input_model=_SendArgs,
         handler=_h,
@@ -309,12 +343,19 @@ def sessions_spawn_tool(sm: SessionManager) -> Tool:
 
     return FunctionTool(
         name="sessions_spawn",
-        description=(
-            "Create an empty child session linked to a parent session. "
-            "The child gets a _meta record with parent_session_key so a parent "
-            "agent can trace lineage. copy_compactions=true (default) copies "
-            "parent compaction summaries into the child. "
-            "Mutating — gate via ApprovalManager when available."
+        description=hermes_desc(
+            "Create an empty child session linked to a parent (lineage in "
+            "_meta.parent_session_key).",
+            when_use=[
+                "you need a fresh transcript that inherits parent's compactions",
+                "modeling a fork-style sub-conversation",
+            ],
+            when_skip=[
+                "a single tool call would do (use subagents for one-shot)",
+                "you don't need separate session storage",
+            ],
+            alternatives={"subagents": "one-shot isolated child agent"},
+            notes="Mutating — approval-gated when available.",
         ),
         input_model=_SpawnArgs,
         handler=_h,
@@ -344,11 +385,21 @@ def sessions_yield_tool(sm: SessionManager) -> Tool:
 
     return FunctionTool(
         name="sessions_yield",
-        description=(
-            "Append a yield-marker message "
-            "`{role:'assistant', content:'<yield>summary</yield>', meta:{kind:'yield'}}` "
-            "to a session so a parent agent can detect completion. "
-            "Mutating — gate via ApprovalManager when available."
+        description=hermes_desc(
+            "Append a <yield>summary</yield> marker to a session so a "
+            "parent agent can detect completion.",
+            when_use=[
+                "you're a child session signaling 'done — here is my summary'",
+            ],
+            when_skip=[
+                "you want to abort the current turn (use the runtime yield tool)",
+                "you're a parent — read children with sessions_history",
+            ],
+            alternatives={
+                "sessions_history": "parent reading child output",
+                "sessions_yield (runtime)": "abort current run loop",
+            },
+            notes="Mutating — approval-gated when available.",
         ),
         input_model=_YieldArgs,
         handler=_h,

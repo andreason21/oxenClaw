@@ -12,6 +12,7 @@ import aiohttp
 from pydantic import BaseModel, Field, model_validator
 
 from oxenclaw.agents.tools import FunctionTool, Tool
+from oxenclaw.tools_pkg._desc import hermes_desc
 from oxenclaw.tools_pkg.web import assert_public_url
 
 
@@ -194,9 +195,19 @@ def weather_tool() -> Tool:
 
     return FunctionTool(
         name="weather",
-        description=(
-            "Get the current weather. Provide either `city` or both `lat`+`lon`. "
-            "Free, no-auth providers (wttr.in / open-meteo)."
+        description=hermes_desc(
+            "Get the current weather via wttr.in (city) or open-meteo "
+            "(lat/lon). Free, no-auth.",
+            when_use=[
+                "the user asks about temperature / forecast / 날씨",
+                "you have a place name or coordinates",
+            ],
+            when_skip=[
+                "you don't have a location yet (ask the user)",
+                "the user wants long-range climate stats (use web_search)",
+            ],
+            alternatives={"web_search": "non-current-weather questions"},
+            notes="Provide either `city` OR both `lat`+`lon`, not neither.",
         ),
         input_model=_WeatherArgs,
         handler=_h,

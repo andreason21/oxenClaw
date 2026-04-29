@@ -59,14 +59,14 @@ def test_provider_flow_contributions_cover_all_catalog_providers() -> None:
 
 def test_provider_flow_contributions_carry_default_model_metadata() -> None:
     contribs = {c.option.value: c for c in list_provider_flow_contributions()}
-    anthropic = contribs["anthropic"]
-    assert anthropic.metadata["default_model"] == "claude-sonnet-4-6"
-    assert "default model:" in (anthropic.option.hint or "")
+    ollama = contribs["ollama"]
+    assert ollama.metadata["default_model"] == "qwen3.5:9b"
+    assert "default model:" in (ollama.option.hint or "")
 
 
 def test_local_providers_are_grouped_under_local() -> None:
     contribs = {c.option.value: c for c in list_provider_flow_contributions()}
-    for inline in ("ollama", "vllm", "lmstudio", "llamacpp"):
+    for inline in ("ollama", "llamacpp-direct", "vllm", "lmstudio", "llamacpp"):
         assert contribs[inline].option.group is not None
         assert contribs[inline].option.group.id == "local"  # type: ignore[union-attr]
 
@@ -113,17 +113,19 @@ def test_pick_model_inline_provider_with_default_model_no_overrides() -> None:
     assert choice.api_key is None
 
 
-def test_pick_model_hosted_provider_prompts_for_api_key() -> None:
-    """Anthropic: accept default model + supply an API key."""
+def test_pick_model_llamacpp_direct_no_base_url_prompt() -> None:
+    """llamacpp-direct: managed-server path — no base_url override
+    prompt (oxenClaw picks an ephemeral port itself) and no api_key
+    prompt (the catalog has no hosted providers)."""
     prompter = _StubPrompter(
-        selects=["anthropic"],
-        confirms=[True],  # accept default model
-        texts=["sk-ant-fake"],  # api key
+        selects=["llamacpp-direct"],
+        confirms=[True],  # accept default model — no override / no key prompts follow
     )
     choice = pick_model_interactively(prompter)
-    assert choice.provider == "anthropic"
-    assert choice.model == "claude-sonnet-4-6"
-    assert choice.api_key == "sk-ant-fake"
+    assert choice.provider == "llamacpp-direct"
+    assert choice.model == "local-gguf"
+    assert choice.base_url is None
+    assert choice.api_key is None
 
 
 def test_pick_model_inline_provider_with_base_url_override() -> None:

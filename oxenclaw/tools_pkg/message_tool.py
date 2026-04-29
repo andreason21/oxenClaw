@@ -19,6 +19,7 @@ from oxenclaw.channels.router import ChannelRouter
 from oxenclaw.plugin_sdk.channel_contract import ChannelTarget, SendParams
 from oxenclaw.plugin_sdk.error_runtime import UserVisibleError
 from oxenclaw.tools_pkg._arg_aliases import fold_aliases
+from oxenclaw.tools_pkg._desc import hermes_desc
 
 
 class _MessageArgs(BaseModel):
@@ -68,10 +69,22 @@ def message_tool(router: ChannelRouter) -> Tool:
 
     return FunctionTool(
         name="message",
-        description=(
-            "Send a one-off message to a configured channel target. Use "
-            "responsibly — pair with the approval gate when the channel "
-            "reaches real users."
+        description=hermes_desc(
+            "Send a one-off message to a configured channel target "
+            "(slack, dashboard, etc.).",
+            when_use=[
+                "the user explicitly asks you to notify someone",
+                "you've completed work the operator wants pushed to a channel",
+            ],
+            when_skip=[
+                "you're answering inline in the current chat (just reply)",
+                "the channel/account/chat target is unknown (don't guess)",
+            ],
+            alternatives={"cron": "schedule a recurring channel message"},
+            notes=(
+                "External-visible side effect — pair with the approval gate. "
+                "Don't invent target ids."
+            ),
         ),
         input_model=_MessageArgs,
         handler=_h,

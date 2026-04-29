@@ -32,6 +32,9 @@ class AgentRegistry:
     def ids(self) -> list[str]:
         return sorted(self._agents)
 
+    def items(self) -> list[tuple[str, Agent]]:
+        return sorted(self._agents.items())
+
 
 def session_key_for(target: ChannelTarget) -> str:
     """Derive a stable session key from a channel target.

@@ -67,6 +67,48 @@ def test_factory_raises_for_unknown_provider() -> None:
         build_embedder("totally-made-up-provider")
 
 
+def test_factory_llamacpp_direct_requires_gguf(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("OXENCLAW_LLAMACPP_EMBED_GGUF", raising=False)
+    with pytest.raises(UnknownEmbedderProvider, match="no GGUF configured"):
+        build_embedder("llamacpp-direct")
+
+
+def test_factory_llamacpp_direct_uses_env_gguf(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    from oxenclaw.memory.embeddings import LlamaCppDirectEmbeddings
+
+    fake_gguf = tmp_path / "embed.gguf"
+    fake_gguf.write_bytes(b"\x00")
+    monkeypatch.setenv("OXENCLAW_LLAMACPP_EMBED_GGUF", str(fake_gguf))
+    monkeypatch.setenv("OXENCLAW_LLAMACPP_EMBED_CTX", "4096")
+    monkeypatch.setenv("OXENCLAW_LLAMACPP_EMBED_NGL", "0")
+
+    embedder = build_embedder("llamacpp-direct")
+    assert isinstance(embedder, LlamaCppDirectEmbeddings)
+    assert embedder._gguf_path == str(fake_gguf)
+    assert embedder._n_ctx == 4096
+    assert embedder._n_gpu_layers == 0
+    assert embedder.provider_name == "llamacpp-direct"
+
+
+def test_factory_llamacpp_direct_kwarg_overrides_env(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    from oxenclaw.memory.embeddings import LlamaCppDirectEmbeddings
+
+    env_gguf = tmp_path / "from_env.gguf"
+    env_gguf.write_bytes(b"\x00")
+    extra_gguf = tmp_path / "from_kwarg.gguf"
+    extra_gguf.write_bytes(b"\x00")
+    monkeypatch.setenv("OXENCLAW_LLAMACPP_EMBED_GGUF", str(env_gguf))
+
+    embedder = build_embedder("llamacpp-direct", gguf_path=str(extra_gguf), n_ctx=2048)
+    assert isinstance(embedder, LlamaCppDirectEmbeddings)
+    assert embedder._gguf_path == str(extra_gguf)
+    assert embedder._n_ctx == 2048
+
+
 def test_factory_model_override() -> None:
     embedder = build_embedder("cohere", model="embed-multilingual-v3.0")
     assert isinstance(embedder, CohereEmbeddings)

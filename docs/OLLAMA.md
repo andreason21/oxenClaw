@@ -1,5 +1,24 @@
 # Ollama tuning guide
 
+> **As of 2026-04-29, `llamacpp-direct` is the recommended local path
+> for chat** — it runs the same GGUF roughly **3× faster** in our live
+> RTX 3050 measurement (16.6 tok/s vs 5.6 tok/s, see
+> [`LLAMACPP_DIRECT.md`](./LLAMACPP_DIRECT.md)). The CLI's
+> `--provider auto` (the new default) automatically picks
+> `llamacpp-direct` when it's configured, and silently falls back to
+> the Ollama path documented below when it isn't, so this guide stays
+> relevant for two cases:
+>
+> 1. You're using Ollama for **embeddings** (`nomic-embed-text` for
+>    memory features). The `llamacpp-direct` provider can now also
+>    serve embeddings via a second managed `llama-server --embedding`
+>    instance, so this is no longer a hard requirement — see
+>    [`LLAMACPP_DIRECT.md` § Embeddings](./LLAMACPP_DIRECT.md#embeddings-via-llama-server---embedding-replaces-ollama)
+>    for the unplug-Ollama path. The wizard's `oxenclaw setup llamacpp`
+>    Step 3 wires it up in one shot.
+> 2. You explicitly want the Ollama chat path because you prefer its
+>    "pull a name and go" model management.
+
 oxenClaw talks to Ollama through the **native `/api/chat` provider**
 (`oxenclaw/pi/providers/ollama.py`), not Ollama's OpenAI compatibility
 shim. The shim silently caps `num_ctx` at 4096, truncates large prompts,

@@ -19,6 +19,7 @@ import asyncio
 from pydantic import BaseModel, Field
 
 from oxenclaw.agents.tools import FunctionTool, Tool
+from oxenclaw.tools_pkg._desc import hermes_desc
 
 
 class _YieldArgs(BaseModel):
@@ -50,12 +51,19 @@ def yield_tool(*, abort_event: asyncio.Event | None = None) -> Tool:
 
     return FunctionTool(
         name="sessions_yield",
-        description=(
-            "Voluntarily end the current turn early — useful for long-"
-            "running sub-agents that want to wait for an external "
-            "trigger. The run loop catches the yield and stops cleanly "
-            "with stop_reason=`yielded`. Provide a short `reason` for "
-            "the operator log."
+        description=hermes_desc(
+            "Voluntarily end the current turn early. The run loop stops "
+            "cleanly with stop_reason='yielded'. Useful when waiting on a "
+            "cron tick / user reply / sibling agent.",
+            when_use=[
+                "you've done all you can until an external trigger fires",
+                "blocking would burn tokens with no progress",
+            ],
+            when_skip=[
+                "you can still make progress with the tools you have",
+                "you'd be yielding to avoid a hard problem (don't)",
+            ],
+            notes="Provide a short, specific `reason` for the operator log.",
         ),
         input_model=_YieldArgs,
         handler=_h,

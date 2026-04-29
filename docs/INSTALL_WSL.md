@@ -75,7 +75,72 @@ python3.12 --version    # → Python 3.12.x
 
 ---
 
-## 4. Install Ollama
+## 4. Pick a local-inference backend
+
+oxenClaw ships with **two** local-inference paths. The default
+`--provider auto` picks whichever you've configured for the host.
+
+| Path | Speed (same Q4 GGUF) | When to pick it |
+|---|---|---|
+| `llamacpp-direct` (recommended for chat) | ~16 tok/s on RTX 3050 | You want the fastest local decode and don't mind pointing at a GGUF file. |
+| `ollama` | ~5–6 tok/s on the same GPU | You want the easy "pull a model name and go" experience or you also need embeddings (memory features still use Ollama for `nomic-embed-text`). |
+
+Most installs run **both**: `llamacpp-direct` for chat, Ollama for
+embeddings. They share the same machine without conflict.
+
+### 4a. (Recommended) Install `llama.cpp` for `llamacpp-direct`
+
+oxenClaw spawns and owns the `llama-server` child process; you only
+need the binary on `PATH` (or via `$OXENCLAW_LLAMACPP_BIN`) and a GGUF
+on disk.
+
+> **One-shot wizard:** `oxenclaw setup llamacpp` walks the binary
+> download, GGUF download (default
+> `unsloth/gemma-4-E4B-it-GGUF/gemma-4-E4B-it-UD-Q4_K_XL.gguf`), env
+> persistence, and a CPU smoke test in a single interactive flow. Run
+> it after creating the venv in §6 and skip the manual recipe below
+> unless you want to script everything yourself.
+
+Manual recipe for WSL2 + NVIDIA:
+
+```bash
+# ── Install llama-server (git clone + cmake build) ──
+sudo apt-get install -y git cmake build-essential cuda-toolkit  # adjust for your CUDA setup
+git clone --depth 1 https://github.com/ggml-org/llama.cpp ~/.oxenclaw/llama.cpp
+cd ~/.oxenclaw/llama.cpp
+cmake -S . -B build -DGGML_CUDA=ON
+cmake --build build --config Release --target llama-server -j
+# `~/.oxenclaw/llama.cpp/build/bin/` is on oxenClaw's discovery path —
+# no env var required, but you can pin it explicitly:
+export OXENCLAW_LLAMACPP_BIN=$HOME/.oxenclaw/llama.cpp/build/bin/llama-server
+echo "export OXENCLAW_LLAMACPP_BIN=$OXENCLAW_LLAMACPP_BIN" >> ~/.bashrc
+$OXENCLAW_LLAMACPP_BIN --version            # smoke-check
+
+# ── Download a GGUF (any HF GGUF works) ──
+pip install -U "huggingface_hub[cli]"
+mkdir -p ~/models
+hf download unsloth/gemma-4-E4B-it-GGUF \
+    gemma-4-E4B-it-UD-Q4_K_XL.gguf --local-dir ~/models
+# Or curl: huggingface.co/<repo>/resolve/main/<file>.gguf
+
+export OXENCLAW_LLAMACPP_GGUF=$HOME/models/gemma-4-E4B-it-UD-Q4_K_XL.gguf
+echo "export OXENCLAW_LLAMACPP_GGUF=$OXENCLAW_LLAMACPP_GGUF" >> ~/.bashrc
+
+# Optional knobs (defaults are sane):
+export OXENCLAW_LLAMACPP_CTX=32768       # default 32768
+export OXENCLAW_LLAMACPP_NGL=999         # full GPU offload (default)
+```
+
+With those ingredients (binary discoverable, `$OXENCLAW_LLAMACPP_GGUF`
+set), `--provider auto` picks `llamacpp-direct` and oxenClaw boots
+`llama-server` itself with the fast preset (`--flash-attn on --jinja
+--no-context-shift -ngl 999`).
+
+Other install paths (Homebrew, pacman, build-from-source for custom
+CUDA flags), the full binary discovery order, and tuning knobs:
+[`LLAMACPP_DIRECT.md` § Prerequisites](./LLAMACPP_DIRECT.md#prerequisites).
+
+### 4b. Install Ollama (still needed for embeddings)
 
 You have **two options**. Option A is recommended for simplicity.
 
@@ -213,7 +278,11 @@ Create `~/.oxenclaw/config.yaml`:
 channels: {}
 agents:
   default:
-    provider: ollama
+    # 'auto' picks llamacpp-direct when $OXENCLAW_LLAMACPP_GGUF is set
+    # and a llama-server binary is reachable; otherwise falls back to
+    # ollama. Both 'llamacpp-direct' and 'ollama' are also valid here
+    # if you want to pin one explicitly.
+    provider: auto
     model: qwen3.5:9b
     system_prompt: |
       You are a helpful assistant.
@@ -223,7 +292,7 @@ Generate a token and start:
 
 ```bash
 export OXENCLAW_GATEWAY_TOKEN=$(openssl rand -hex 32)
-oxenclaw gateway start --provider ollama
+oxenclaw gateway start          # --provider defaults to 'auto'
 ```
 
 You should see `gateway listening on http://127.0.0.1:7331`.
@@ -240,7 +309,7 @@ If you want the gateway reachable from another machine on your LAN
 (through the Windows host), bind to `0.0.0.0`:
 
 ```bash
-oxenclaw gateway start --host 0.0.0.0 --port 7331 --provider ollama
+oxenclaw gateway start --host 0.0.0.0 --port 7331       # 'auto' default
 ```
 
 Then open Windows port 7331 if your Windows Firewall blocks it. WSL2
@@ -264,7 +333,7 @@ the systemd unit from [`docs/OPERATIONS.md`](OPERATIONS.md).
 If systemd isn't available, run under `tmux` / `screen` / `nohup`:
 
 ```bash
-nohup oxenclaw gateway start --provider ollama > ~/oxenclaw.log 2>&1 &
+nohup oxenclaw gateway start          # 'auto' default > ~/oxenclaw.log 2>&1 &
 disown
 ```
 
@@ -509,7 +578,7 @@ agents:
 
 ```bash
 export OXENCLAW_GATEWAY_TOKEN=$(openssl rand -hex 32)
-oxenclaw gateway start --provider ollama
+oxenclaw gateway start          # 'auto' default
 ```
 
 `gateway listening on http://127.0.0.1:7331` 확인. **Windows 브라우저**에서
@@ -520,7 +589,7 @@ oxenclaw gateway start --provider ollama
 다른 PC에서 접근하려면 `0.0.0.0` 바인드:
 
 ```bash
-oxenclaw gateway start --host 0.0.0.0 --port 7331 --provider ollama
+oxenclaw gateway start --host 0.0.0.0 --port 7331       # 'auto' default
 ```
 
 Windows 방화벽이 막으면 7331 포트 열기. WSL2가 LAN 자동 포워딩.
@@ -540,7 +609,7 @@ PowerShell에서 `wsl --shutdown` → 재시작 →
 systemd 없으면 `nohup`:
 
 ```bash
-nohup oxenclaw gateway start --provider ollama > ~/oxenclaw.log 2>&1 &
+nohup oxenclaw gateway start          # 'auto' default > ~/oxenclaw.log 2>&1 &
 disown
 ```
 

@@ -153,9 +153,8 @@ def test_remote_registry_unknown_model_falls_back_to_probe_tier() -> None:
     with patch.object(models_dev, "fetch_models_dev", return_value={}):
         m = reg.require("totally-new-model-2099")
     assert m.context_window == models_dev.CONTEXT_PROBE_TIERS[0]
-    # Provider guessed via id prefix; "totally-..." doesn't match anything,
-    # so the openai-compatible default applies.
-    assert m.provider in {"openai-compatible", "openrouter"}
+    # Catalog is on-host only — provider-guess fallback is `ollama`.
+    assert m.provider == "ollama"
 
 
 def test_models_dev_enabled_reads_env(monkeypatch) -> None:
@@ -180,11 +179,13 @@ def test_default_registry_picks_remote_when_env_flag_set(monkeypatch) -> None:
 
 
 def test_guess_provider_from_id() -> None:
-    assert guess_provider_from_id("claude-opus-4-7") == "anthropic"
-    assert guess_provider_from_id("gpt-5") == "openai"
-    assert guess_provider_from_id("o3") == "openai"
-    assert guess_provider_from_id("gemini-2.5-pro") == "google"
-    assert guess_provider_from_id("deepseek-v3") == "deepseek"
+    # Catalog is on-host only: every prefix lands on `ollama`.
+    assert guess_provider_from_id("qwen3.5:9b") == "ollama"
+    assert guess_provider_from_id("llama3.1:8b") == "ollama"
+    assert guess_provider_from_id("gemma4:e4b") == "ollama"
+    assert guess_provider_from_id("mistral-nemo:12b") == "ollama"
+    # Unknown prefix falls back to ollama too.
+    assert guess_provider_from_id("totally-new-2099") == "ollama"
 
 
 def test_lookup_models_dev_context_uses_cascade() -> None:

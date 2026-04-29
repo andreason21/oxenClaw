@@ -41,6 +41,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from pydantic import BaseModel, Field, model_validator
 
 from oxenclaw.tools_pkg._arg_aliases import fold_aliases
+from oxenclaw.tools_pkg._desc import hermes_desc
 
 if TYPE_CHECKING:
     from oxenclaw.agents.tools import Tool
@@ -343,16 +344,22 @@ def process_tool() -> Tool:
 
     return FunctionTool(
         name="process",
-        description=(
-            "Manage long-running background processes (dev servers, REPLs, watchers, etc.).\n"
-            "Actions:\n"
-            "- start: spawn a shell command in the background; returns {pid, command, started_at}.\n"
-            "- send_keys: write literal text to the process stdin and return latest stdout tail.\n"
-            "- read_output: return the latest stdout tail without blocking (up to tail_chars).\n"
-            "- stop: terminate the process (SIGTERM then SIGKILL) and return exit_code + final output.\n"
-            "- list: enumerate all active processes with uptime and buffer size.\n"
-            "Use 'process' for dev servers / REPLs / file watchers that must stay alive across turns. "
-            "REQUIRES human approval before execution (same risk class as shell)."
+        description=hermes_desc(
+            "Manage long-running background processes (dev servers, REPLs, "
+            "watchers). Actions: start | send_keys | read_output | stop | list.",
+            when_use=[
+                "you need a dev server / REPL / watcher to stay alive across turns",
+                "you must read incremental stdout from a process that's still running",
+            ],
+            when_skip=[
+                "the command finishes quickly and stdout fits in one capture (use shell)",
+                "you only need to verify a one-off exit code",
+            ],
+            alternatives={"shell": "single short-lived command"},
+            notes=(
+                "Risk class: same as shell — REQUIRES human approval. "
+                "Output buffer is capped at 64 KiB per process."
+            ),
         ),
         input_model=_Args,
         handler=_h,

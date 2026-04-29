@@ -79,10 +79,15 @@ def test_pi_runtime_drives_every_catalog_provider() -> None:
     accepted via the alias map so pre-rc.15 configs keep working."""
     from oxenclaw.agents.factory import CATALOG_PROVIDERS, LEGACY_ALIASES
 
+    # Catalog is on-host only as of 2026-04-29 — no cloud providers.
     assert "ollama" in CATALOG_PROVIDERS
-    assert "anthropic" in CATALOG_PROVIDERS
+    assert "llamacpp-direct" in CATALOG_PROVIDERS
     assert "pi" in LEGACY_ALIASES
-    assert LEGACY_ALIASES["pi"] == "ollama"
+    # Pre-rc.15 `pi` previously mapped directly to `ollama`. As of the
+    # 2026-04-29 default flip it routes through the `auto` sentinel so
+    # the resolver can pick the faster `llamacpp-direct` path when the
+    # host is configured for it (and falls back to `ollama` otherwise).
+    assert LEGACY_ALIASES["pi"] == "auto"
     assert set(SUPPORTED_PROVIDERS) >= set(CATALOG_PROVIDERS)
 
 

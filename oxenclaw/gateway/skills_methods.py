@@ -21,6 +21,7 @@ from oxenclaw.clawhub import (
     SkillInstaller,
     load_installed_skills,
 )
+from oxenclaw.clawhub.compat import check_skill_dict_compatibility
 from oxenclaw.clawhub.frontmatter import serialise_install_specs
 from oxenclaw.config.paths import OxenclawPaths, default_paths
 from oxenclaw.gateway.router import Router
@@ -31,6 +32,12 @@ class _SearchParams(BaseModel):
     query: str = ""
     limit: int | None = None
     registry: str | None = None
+    # When True, results that fail the environment-compatibility
+    # probe (wrong OS, missing required bins/env vars) are still
+    # returned (annotated with `compat`). Default False filters them
+    # out so the dashboard catalog only surfaces things the operator
+    # could actually install + run on this machine.
+    include_incompatible: bool = False
 
 
 class _SlugParam(BaseModel):
@@ -48,6 +55,24 @@ class _InstallParams(BaseModel):
     registry: str | None = None
 
 
+def _annotate_and_filter(
+    results: list[dict[str, Any]], *, include_incompatible: bool
+) -> list[dict[str, Any]]:
+    """Attach `compat` to every result and drop incompatible ones
+    unless the caller opted in to see them. Pure function — easy to
+    unit-test against a constructed payload."""
+    out: list[dict[str, Any]] = []
+    for r in results:
+        if not isinstance(r, dict):
+            continue
+        report = check_skill_dict_compatibility(r)
+        annotated = {**r, "compat": report.to_dict()}
+        if not include_incompatible and not report.installable:
+            continue
+        out.append(annotated)
+    return out
+
+
 def _installed_view(paths: OxenclawPaths) -> list[dict[str, Any]]:
     # `skills.list_installed` is about what the user explicitly installed
     # via ClawHub — it powers the dashboard's Skills view and the
@@ -56,6 +81,12 @@ def _installed_view(paths: OxenclawPaths) -> list[dict[str, Any]]:
     skills = load_installed_skills(paths, include_bundled=False)
     out: list[dict[str, Any]] = []
     for s in skills:
+        # Re-check compat at view time so the dashboard surfaces
+        # "installed but no longer runnable" cases (deleted bin,
+        # cleared env var) without an explicit reinstall step.
+        compat = check_skill_dict_compatibility(
+            {"openclaw": s.manifest.openclaw.model_dump(by_alias=True)}
+        ).to_dict()
         out.append(
             {
                 "slug": s.slug,
@@ -71,6 +102,7 @@ def _installed_view(paths: OxenclawPaths) -> list[dict[str, Any]]:
                 "emoji": s.manifest.openclaw.emoji,
                 "requires": s.manifest.openclaw.requires.model_dump(by_alias=True),
                 "install_specs": serialise_install_specs(s.manifest.openclaw.install),
+                "compat": compat,
             }
         )
     return out
@@ -125,7 +157,15 @@ def register_skills_methods(
             results = await _client_for(p.registry).search_skills(p.query, limit=p.limit)
         except (ClawHubError, KeyError) as exc:
             return _wrap(exc)
-        return {"ok": True, "registry": p.registry, "results": results}
+        annotated = _annotate_and_filter(
+            results, include_incompatible=p.include_incompatible
+        )
+        return {
+            "ok": True,
+            "registry": p.registry,
+            "results": annotated,
+            "filtered_count": len(results) - len(annotated),
+        }
 
     @router.method("skills.list_remote", _SearchParams)
     async def _list_remote(p: _SearchParams) -> dict[str, Any]:  # type: ignore[type-arg]
@@ -133,7 +173,16 @@ def register_skills_methods(
             data = await _client_for(p.registry).list_skills(limit=p.limit)
         except (ClawHubError, KeyError) as exc:
             return _wrap(exc)
-        return {"ok": True, "registry": p.registry, **data}
+        results = data.get("results") if isinstance(data, dict) else None
+        results = list(results or [])
+        annotated = _annotate_and_filter(
+            results, include_incompatible=p.include_incompatible
+        )
+        out = {**data, "results": annotated} if isinstance(data, dict) else {
+            "results": annotated
+        }
+        out["filtered_count"] = len(results) - len(annotated)
+        return {"ok": True, "registry": p.registry, **out}
 
     @router.method("skills.detail", _SlugParam)
     async def _detail(p: _SlugParam) -> dict[str, Any]:  # type: ignore[type-arg]
@@ -141,7 +190,15 @@ def register_skills_methods(
             data = await _client_for(p.registry).fetch_skill_detail(p.slug)
         except (ClawHubError, KeyError) as exc:
             return _wrap(exc)
-        return {"ok": True, "registry": p.registry, "detail": data}
+        # Detail always carries compat — we never hide a slug the
+        # caller asked about by name; they wouldn't see why.
+        compat = check_skill_dict_compatibility(data).to_dict()
+        return {
+            "ok": True,
+            "registry": p.registry,
+            "detail": data,
+            "compat": compat,
+        }
 
     @router.method("skills.list_installed")
     async def _list_installed(_: dict) -> dict[str, Any]:  # type: ignore[type-arg]

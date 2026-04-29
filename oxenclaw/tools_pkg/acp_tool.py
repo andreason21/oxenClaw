@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field, model_validator
 from oxenclaw.agents.acp_subprocess import spawn_acp
 from oxenclaw.agents.tools import FunctionTool, Tool
 from oxenclaw.tools_pkg._arg_aliases import fold_aliases
+from oxenclaw.tools_pkg._desc import hermes_desc
 
 
 class _AcpSpawnArgs(BaseModel):
@@ -88,12 +89,22 @@ def acp_spawn_tool() -> Tool:
 
     return FunctionTool(
         name="sessions_spawn",
-        description=(
-            "Delegate a one-shot prompt to an external AI CLI "
-            "(Claude Code / Codex / Gemini). Use when the local model "
-            "is the wrong tool for the job — e.g. user explicitly "
-            "asks for Claude Code, or the task needs a stronger "
-            "frontier model. Returns the CLI's stdout."
+        description=hermes_desc(
+            "Delegate a one-shot prompt to an external AI CLI (Claude "
+            "Code / Codex / Gemini) and return its stdout.",
+            when_use=[
+                "the user explicitly asks for Claude Code / Codex / Gemini",
+                "the local model is too weak for the sub-task",
+            ],
+            when_skip=[
+                "you can do the task locally (cheaper / faster)",
+                "you need a persistent ACP session (use delegate_to_acp)",
+            ],
+            alternatives={
+                "delegate_to_acp": "richer ACP delegation w/ tool-call summary",
+                "subagents": "local isolated child agent",
+            },
+            notes="The CLI sees no parent context — restate the goal fully.",
         ),
         input_model=_AcpSpawnArgs,
         handler=_h,

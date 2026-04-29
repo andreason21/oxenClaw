@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from oxenclaw.agents.tools import FunctionTool, Tool
 from oxenclaw.tools_pkg._arg_aliases import fold_aliases
+from oxenclaw.tools_pkg._desc import hermes_desc
 from oxenclaw.tools_pkg.file_state import get_registry as _file_state_registry
 from oxenclaw.tools_pkg.fuzzy_match import FuzzyMatchError, fuzzy_find_and_replace
 
@@ -150,12 +151,25 @@ def read_file_tool() -> Tool:
 
     return FunctionTool(
         name="read_file",
-        description=(
-            "Read the contents of a file and return them as text. "
-            "Supports start_line/end_line for targeted reads. "
-            "Line numbers are prefixed as '   1│ ' by default. "
-            "Binary files return a hex-sniff sentinel. "
-            "Truncates at `max_chars` (default 32 000) with a notice."
+        description=hermes_desc(
+            "Read the contents of a text file and return it with optional "
+            "line-number prefixes. Supports start_line/end_line for partial "
+            "reads. Binary files return a hex-sniff sentinel.",
+            when_use=[
+                "you need to view source / config / log content",
+                "you only want a slice — pass start_line/end_line",
+            ],
+            when_skip=[
+                "the file is a PDF (use read_pdf)",
+                "you only need to know which files match a name (use glob)",
+                "you want to find a string across many files (use grep)",
+            ],
+            alternatives={
+                "read_pdf": "PDF text extraction",
+                "grep": "regex content search",
+                "glob": "filename matching",
+            },
+            notes="Truncates at max_chars (default 32 000) with a notice.",
         ),
         input_model=_ReadFileArgs,
         handler=_h,
@@ -219,10 +233,19 @@ def read_pdf_tool() -> Tool:
 
     return FunctionTool(
         name="read_pdf",
-        description=(
-            "Extract text from a PDF file using pypdf. "
-            "Pages are separated by '--- page N ---' markers. "
-            "Returns an error if pypdf is not installed."
+        description=hermes_desc(
+            "Extract text from a PDF using pypdf. Pages are separated by "
+            "'--- page N ---' markers.",
+            when_use=[
+                "the path ends in .pdf and you want its text",
+                "you need a per-page split rather than raw bytes",
+            ],
+            when_skip=[
+                "the file is plain text (use read_file)",
+                "the PDF is image-only / scanned — pypdf returns empty text",
+            ],
+            alternatives={"read_file": "non-PDF files"},
+            notes="Returns an error if pypdf is not installed.",
         ),
         input_model=_ReadPdfArgs,
         handler=_h,
@@ -291,10 +314,19 @@ def write_file_tool() -> Tool:
 
     return FunctionTool(
         name="write_file",
-        description=(
-            "Write text content to a file. Creates or overwrites the file. "
-            "Parent directories are created by default. "
-            "REQUIRES human approval before execution."
+        description=hermes_desc(
+            "Write text content to a file, creating or overwriting it. "
+            "Parent directories are created by default.",
+            when_use=[
+                "creating a new file from scratch",
+                "rewriting a small file end-to-end is simpler than patching",
+            ],
+            when_skip=[
+                "you want a localised change — prefer edit (token-efficient)",
+                "the file is large and you'd be rewriting most of it unchanged",
+            ],
+            alternatives={"edit": "in-place string replacement"},
+            notes="REQUIRES human approval before execution.",
         ),
         input_model=_WriteFileArgs,
         handler=_h,
@@ -420,12 +452,24 @@ def edit_tool() -> Tool:
 
     return FunctionTool(
         name="edit",
-        description=(
-            "Targeted string-replace file editor (token-efficient). "
-            "Reads the file, verifies the expected occurrence count of `old_str`, "
-            "then replaces and atomically writes. "
-            "Rejects if count mismatches, old_str is empty, or old_str == new_str. "
-            "REQUIRES human approval before execution."
+        description=hermes_desc(
+            "Targeted string-replace file editor (token-efficient). Reads "
+            "the file, verifies the expected count of old_str, then replaces "
+            "and atomically writes.",
+            when_use=[
+                "you need a localised change in an existing file",
+                "you can quote the exact old_str so the match is unambiguous",
+            ],
+            when_skip=[
+                "the file does not exist yet (use write_file)",
+                "you want to replace most of the file (use write_file)",
+                "old_str == new_str (no-op refused)",
+            ],
+            alternatives={"write_file": "create new or full rewrite"},
+            notes=(
+                "Rejects if occurrence count mismatches `count`. "
+                "REQUIRES human approval before execution."
+            ),
         ),
         input_model=_EditArgs,
         handler=_h,
@@ -479,9 +523,21 @@ def list_dir_tool() -> Tool:
 
     return FunctionTool(
         name="list_dir",
-        description=(
-            "List the contents of a directory. Directories end with /. "
-            "Returns up to `max_entries` entries sorted (dirs first, then files)."
+        description=hermes_desc(
+            "List a directory's immediate contents (one per line, dirs end "
+            "with '/'). Sorted dirs-first then files.",
+            when_use=[
+                "you want a quick top-level view of a folder",
+                "you don't yet know what files exist at this level",
+            ],
+            when_skip=[
+                "you need a recursive walk (use glob with **/)",
+                "you want to filter by content (use grep)",
+            ],
+            alternatives={
+                "glob": "recursive filename matching",
+                "grep": "content search",
+            },
         ),
         input_model=_ListDirArgs,
         handler=_h,
@@ -566,11 +622,23 @@ def grep_tool() -> Tool:
 
     return FunctionTool(
         name="grep",
-        description=(
-            "Search file contents with a Python regex. "
-            "Returns 'path:line:content' lines. "
-            "Optionally restrict to files matching a glob pattern. "
-            "Capped at `max_matches` (default 100)."
+        description=hermes_desc(
+            "Regex content search across files. Returns "
+            "'path:line:content' entries. Optionally restrict files via a "
+            "glob.",
+            when_use=[
+                "you want to find a symbol / phrase across many files",
+                "you need line numbers + surrounding match context",
+            ],
+            when_skip=[
+                "you only care about filenames (use glob)",
+                "you already know the file (use read_file)",
+            ],
+            alternatives={
+                "glob": "filename matching",
+                "read_file": "viewing a known file",
+            },
+            notes="Capped at max_matches (default 100).",
         ),
         input_model=_GrepArgs,
         handler=_h,
@@ -632,9 +700,21 @@ def glob_tool() -> Tool:
 
     return FunctionTool(
         name="glob",
-        description=(
-            "Find paths matching a glob pattern under a base directory. "
-            "Uses pathlib.Path.glob. Returns sorted paths, capped at 1000."
+        description=hermes_desc(
+            "Find paths matching a glob pattern under a base directory "
+            "(pathlib.Path.glob). Returns sorted paths, capped at 1000.",
+            when_use=[
+                "you want all files matching '**/*.py' or similar",
+                "you need a recursive enumeration of filenames",
+            ],
+            when_skip=[
+                "you want to filter by file content (use grep)",
+                "you only need top-level entries (use list_dir)",
+            ],
+            alternatives={
+                "grep": "content search",
+                "list_dir": "single-level directory listing",
+            },
         ),
         input_model=_GlobArgs,
         handler=_h,
@@ -717,11 +797,16 @@ def search_files_tool() -> Tool:
 
     return FunctionTool(
         name="search_files",
-        description=(
-            "DEPRECATED: prefer `grep` or `glob` instead. "
-            "Recursively search for files under `root` matching a glob `pattern` "
-            "(e.g. '*.py'). Optionally filter to files whose content contains `contains`. "
-            "Returns absolute paths, up to `max_results`."
+        description=hermes_desc(
+            "DEPRECATED. Recursively search files under `root` matching a "
+            "glob `pattern`, optionally filtered by literal substring.",
+            when_use=[
+                "back-compat with older registrations only",
+            ],
+            when_skip=[
+                "almost always — prefer glob (filenames) or grep (content)",
+            ],
+            alternatives={"glob": "filename matching", "grep": "content search"},
         ),
         input_model=_SearchFilesArgs,
         handler=_h,
@@ -812,10 +897,30 @@ def shell_run_tool() -> Tool:
 
     return FunctionTool(
         name="shell",
-        description=(
-            "Run an arbitrary shell command (via sh -c) and return stdout+stderr. "
-            "REQUIRES human approval before execution. "
-            "Exit code is included in the output header."
+        description=hermes_desc(
+            "Run an arbitrary shell command (via sh -c) and return "
+            "stdout+stderr. Exit code is included in the output header.",
+            when_use=[
+                "no dedicated tool exists for this operation",
+                "you need a one-off pipe / git plumbing / build invocation",
+            ],
+            when_skip=[
+                "reading a file (use read_file)",
+                "editing a file (use edit / write_file)",
+                "searching content (use grep) or filenames (use glob)",
+                "long-running processes (use process_tool)",
+            ],
+            alternatives={
+                "read_file": "cat / head / tail",
+                "edit": "sed / awk in-place edits",
+                "grep": "grep -r",
+                "glob": "find -name",
+                "process_tool": "background processes",
+            },
+            notes=(
+                "REQUIRES human approval. Hardline / dangerous patterns "
+                "are blocked outright."
+            ),
         ),
         input_model=_ShellRunArgs,
         handler=_h,

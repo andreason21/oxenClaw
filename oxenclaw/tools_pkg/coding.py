@@ -25,6 +25,7 @@ from oxenclaw.clawhub.runtime import prepare_skill_runtime
 from oxenclaw.config.paths import OxenclawPaths, default_paths
 from oxenclaw.plugin_sdk.runtime_env import get_logger
 from oxenclaw.tools_pkg._arg_aliases import fold_aliases
+from oxenclaw.tools_pkg._desc import hermes_desc
 
 logger = get_logger("tools.coding")
 
@@ -208,10 +209,24 @@ def coding_agent_tool(
 
     return FunctionTool(
         name="coding_agent",
-        description=(
+        description=hermes_desc(
             "Delegate a coding task to a CLI coding agent (claude / codex / "
             "opencode / pi). Runs in an ephemeral workspace and returns the "
-            "CLI's stdout."
+            "CLI's stdout.",
+            when_use=[
+                "the user asks for a multi-file code change",
+                "the task needs an external coding CLI's expertise",
+            ],
+            when_skip=[
+                "you can do the edit yourself with edit / write_file",
+                "the request isn't really code — use the obvious tool",
+            ],
+            alternatives={
+                "edit": "single-file in-place change",
+                "write_file": "create a new file",
+                "shell": "one-shot build / test command",
+            },
+            notes="Sandboxed workspace; pick a CLI that's actually on PATH.",
         ),
         input_model=_CodingArgs,
         handler=_h,

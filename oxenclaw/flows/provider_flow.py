@@ -5,6 +5,10 @@ provider list as `FlowContribution`s so the model-picker / setup
 wizard can render them without hard-coding. Plugins that add a new
 provider in `oxenclaw/pi/providers/` automatically show up here once
 the corresponding entry is added to `factory.CATALOG_PROVIDERS`.
+
+The catalog is on-host only (cloud providers were removed
+2026-04-29); every entry below renders under the single "Local /
+inline" group.
 """
 
 from __future__ import annotations
@@ -20,30 +24,14 @@ from oxenclaw.flows.types import (
     sort_flow_contributions_by_label,
 )
 
-# Group providers by transport family so the wizard can render
-# headings (cloud / local / aggregator). Mirrors openclaw's grouping
-# in the model-picker UI.
 _LOCAL = FlowOptionGroup(id="local", label="Local / inline", hint="On-host inference servers")
-_HOSTED = FlowOptionGroup(id="hosted", label="Hosted", hint="Direct API to a vendor")
-_AGGREGATOR = FlowOptionGroup(
-    id="aggregator", label="Aggregator", hint="Routes to many providers via one endpoint"
-)
-_VERTEX = FlowOptionGroup(id="vertex", label="Vertex AI", hint="Google Cloud Vertex backends")
-_BEDROCK = FlowOptionGroup(id="bedrock", label="Bedrock", hint="AWS Bedrock backends")
 
 _GROUP_BY_PROVIDER: dict[str, FlowOptionGroup] = {
     "ollama": _LOCAL,
+    "llamacpp-direct": _LOCAL,
+    "llamacpp": _LOCAL,
     "vllm": _LOCAL,
     "lmstudio": _LOCAL,
-    "llamacpp": _LOCAL,
-    "openai-compatible": _LOCAL,
-    "proxy": _LOCAL,
-    "litellm": _LOCAL,
-    "openrouter": _AGGREGATOR,
-    "kilocode": _AGGREGATOR,
-    "anthropic-vertex": _VERTEX,
-    "vertex-ai": _VERTEX,
-    "bedrock": _BEDROCK,
 }
 
 
@@ -68,7 +56,7 @@ def list_provider_flow_contributions() -> list[FlowContribution]:
                     value=provider,
                     label=provider,
                     hint=hint,
-                    group=_GROUP_BY_PROVIDER.get(provider, _HOSTED),
+                    group=_GROUP_BY_PROVIDER.get(provider, _LOCAL),
                 ),
                 metadata={"provider": provider, "default_model": default_model},
             )

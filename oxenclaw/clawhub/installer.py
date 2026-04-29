@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from oxenclaw.clawhub.client import ClawHubClient, sha256_integrity
+from oxenclaw.clawhub.desc_enricher import enrich_skill_description
 from oxenclaw.clawhub.frontmatter import (
     VALID_SLUG_RE,
     SkillManifest,
@@ -113,6 +114,8 @@ class SkillInstaller:
         *,
         paths: OxenclawPaths | None = None,
         scanner: SkillScanner | None = None,
+        enrich_model: object | None = None,
+        enrich_auth: object | None = None,
     ) -> None:
         # Accept either a single ClawHubClient (backward compat) or a
         # MultiRegistryClient. A bare ClawHubClient is treated as a
@@ -125,6 +128,13 @@ class SkillInstaller:
         self._paths = paths or default_paths()
         self._skills_root, self._lock_path = _skill_dirs(self._paths)
         self._scanner = scanner or SkillScanner()
+        # Optional primary-LLM hooks for routing-hint enrichment. When
+        # both are supplied, install() runs enrich_skill_description()
+        # after the SKILL.md lands. When either is None, enrichment is
+        # silently skipped — keeps unit tests / sandboxed boots working
+        # without an Anthropic key.
+        self._enrich_model = enrich_model
+        self._enrich_auth = enrich_auth
 
     @property
     def multi(self) -> MultiRegistryClient | None:
@@ -243,6 +253,21 @@ class SkillInstaller:
         lock = self.lockfile()
         lock.upsert(slug, resolved_version, installed_at=now)
         lock.save(self._lock_path)
+
+        # Best-effort LLM routing-hint enrichment. Failures are logged
+        # inside enrich_skill_description and never raise.
+        if self._enrich_model is not None and self._enrich_auth is not None:
+            try:
+                await enrich_skill_description(
+                    skill_dir=target,
+                    name=manifest.name,
+                    description=manifest.description,
+                    body=body,
+                    model=self._enrich_model,
+                    auth=self._enrich_auth,
+                )
+            except Exception:
+                logger.exception("desc enrichment raised for %s", slug)
 
         return InstallResult(
             slug=slug,

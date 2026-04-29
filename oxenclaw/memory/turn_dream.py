@@ -61,13 +61,24 @@ _TURN_PROMPT = (
 class TurnDreamConfig:
     """Operator knobs for the per-turn dreamer.
 
-    Default off — adds an LLM call per user message. Enable with
-    `OXENCLAW_TURN_DREAM=1` once you've confirmed your local model
-    can absorb the latency.
+    Dataclass default is `enabled=False` so direct PiAgent
+    construction (used by tests / library callers) never silently
+    consumes an extra LLM call per turn. Production wiring lives in
+    `oxenclaw.cli.gateway_cmd`, which now defaults the
+    `OXENCLAW_TURN_DREAM` env to "1" and constructs
+    `TurnDreamConfig(enabled=True, ...)` explicitly — that is what
+    makes the dreamer the in-production default.
+
+    Set `OXENCLAW_TURN_DREAM=0` on the gateway env to opt out when
+    local-model latency makes the per-turn LLM call too expensive.
     """
 
     enabled: bool = False
-    timeout_seconds: float = 8.0
+    # 4s used to be 8s; halving it keeps an unresponsive local model
+    # from doubling perceived latency on every turn (we observed two
+    # 8s timeouts per chat round in production logs — active_memory
+    # plus turn_dream — adding ~16s before the actual reply began).
+    timeout_seconds: float = 4.0
     # Skip messages shorter than this (after .strip()). Single-word
     # replies and emoji are almost never durable.
     min_chars: int = 8

@@ -43,6 +43,7 @@ from oxenclaw.browser.policy import BrowserPolicy
 from oxenclaw.browser.session import PlaywrightSession, get_default_session
 from oxenclaw.pi.tool_runtime import truncate_tool_result
 from oxenclaw.plugin_sdk.runtime_env import get_logger
+from oxenclaw.tools_pkg._desc import hermes_desc
 
 logger = get_logger("tools.browser")
 
@@ -142,10 +143,18 @@ def browser_navigate_tool(
 
     return FunctionTool(
         name="browser_navigate",
-        description=(
+        description=hermes_desc(
             "Open a URL in a sandboxed headless browser and report the "
-            "final URL, HTTP status and page title. The browser refuses "
-            "any URL that does not pass the configured net policy."
+            "final URL, HTTP status, and page title.",
+            when_use=[
+                "the page needs JS to render meaningful content",
+                "you'll follow up with click / fill / snapshot",
+            ],
+            when_skip=[
+                "static HTML you can read with web_fetch (much cheaper)",
+                "you only need the body text (use web_fetch + readability)",
+            ],
+            alternatives={"web_fetch": "static HTML / JSON", "web_search": "find a URL first"},
         ),
         input_model=_NavigateArgs,
         handler=_handler,
@@ -176,9 +185,18 @@ def browser_snapshot_tool(
 
     return FunctionTool(
         name="browser_snapshot",
-        description=(
-            "Load a URL and return its DOM as text, raw HTML, or ARIA tree. "
-            "Output is truncated to the policy's max_dom_chars."
+        description=hermes_desc(
+            "Load a URL in the headless browser and return its DOM as "
+            "text, raw HTML, or ARIA tree (truncated to policy cap).",
+            when_use=[
+                "the page is JS-rendered and web_fetch returns empty body",
+                "you need ARIA tree to reason about accessibility / structure",
+            ],
+            when_skip=[
+                "the site serves static HTML (use web_fetch)",
+                "you just need the URL / status (use browser_navigate)",
+            ],
+            alternatives={"web_fetch": "static fetch + readability"},
         ),
         input_model=_SnapshotArgs,
         handler=_handler,
@@ -206,9 +224,17 @@ def browser_screenshot_tool(
 
     return FunctionTool(
         name="browser_screenshot",
-        description=(
-            "Capture a PNG screenshot of a URL. Returns a base64 data URI. "
-            "Refuses captures larger than the policy's max_screenshot_bytes."
+        description=hermes_desc(
+            "Capture a PNG screenshot of a URL (base64 data URI).",
+            when_use=[
+                "the user explicitly wants a visual capture",
+                "diagnosing a layout bug that text snapshot can't show",
+            ],
+            when_skip=[
+                "you only need text content (use browser_snapshot or web_fetch)",
+                "image will exceed max_screenshot_bytes (will be refused)",
+            ],
+            alternatives={"browser_snapshot": "text/HTML/ARIA tree"},
         ),
         input_model=_ScreenshotArgs,
         handler=_handler,
@@ -233,7 +259,18 @@ def browser_click_tool(
 
     return FunctionTool(
         name="browser_click",
-        description="Navigate to a URL and click a selector. Returns the resulting URL.",
+        description=hermes_desc(
+            "Navigate to a URL and click a selector. Returns the resulting URL.",
+            when_use=[
+                "you need to traverse JS-only navigation (modal / dropdown)",
+                "you must trigger an action button to surface content",
+            ],
+            when_skip=[
+                "the target is a plain link — fetch the href URL directly",
+                "the selector is unknown (snapshot first)",
+            ],
+            alternatives={"browser_snapshot": "discover selectors first"},
+        ),
         input_model=_ClickArgs,
         handler=_handler,
     )
@@ -255,7 +292,17 @@ def browser_fill_tool(
 
     return FunctionTool(
         name="browser_fill",
-        description="Fill a form input on a URL with the given value.",
+        description=hermes_desc(
+            "Fill a form input on a URL with the given value.",
+            when_use=[
+                "the page has a form you must fill before submitting",
+            ],
+            when_skip=[
+                "you can hit the form's POST endpoint directly with web_fetch",
+                "the input requires complex events the page expects (use browser_evaluate)",
+            ],
+            alternatives={"browser_click": "submit after fill"},
+        ),
         input_model=_FillArgs,
         handler=_handler,
     )
@@ -279,9 +326,18 @@ def browser_evaluate_tool(
 
     return FunctionTool(
         name="browser_evaluate",
-        description=(
-            "Evaluate a JavaScript expression in the page context and return "
-            "its JSON-stringified result (truncated to policy max_eval_chars)."
+        description=hermes_desc(
+            "Evaluate a JavaScript expression in the page context and "
+            "return its JSON-stringified result.",
+            when_use=[
+                "you need a value only reachable via runtime JS (computed state)",
+                "snapshot/fetch can't get the data you need",
+            ],
+            when_skip=[
+                "you can derive the value from the rendered DOM (use snapshot)",
+                "the page exposes a JSON endpoint (use web_fetch)",
+            ],
+            alternatives={"web_fetch": "raw JSON endpoint", "browser_snapshot": "DOM text"},
         ),
         input_model=_EvaluateArgs,
         handler=_handler,
@@ -317,9 +373,16 @@ def browser_download_tool(
 
     return FunctionTool(
         name="browser_download",
-        description=(
-            "Trigger a download from a URL and save it under the given dest_dir. "
-            "Refuses downloads larger than the policy's max_download_bytes."
+        description=hermes_desc(
+            "Trigger a download from a URL and save it under dest_dir.",
+            when_use=[
+                "the file is only reachable via a JS-driven download flow",
+            ],
+            when_skip=[
+                "you have a direct URL — use web_fetch and write the bytes",
+                "policy.allow_downloads is False (will be rejected)",
+            ],
+            alternatives={"web_fetch": "direct URL download"},
         ),
         input_model=_DownloadArgs,
         handler=_handler,

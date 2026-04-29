@@ -72,3 +72,8 @@ class SyncReport:
     deleted: int
     chunks_embedded: int
     cache_hits: int
+    # Dedup outcome: when `MemoryRetriever.save` replaces an existing
+    # near-identical entry instead of appending a fresh one, this flag
+    # lets callers (e.g. `memory_save_tool`) surface a "duplicate
+    # updated" message instead of "saved 0 chunks".
+    dedup_replaced: bool = False

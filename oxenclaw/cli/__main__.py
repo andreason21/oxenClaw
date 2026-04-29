@@ -22,6 +22,18 @@ from oxenclaw.cli import (
 )
 
 app = typer.Typer(help="oxenclaw — Python port of openclaw.", no_args_is_help=True)
+
+
+@app.callback()
+def _root_callback() -> None:
+    """Runs before any subcommand. Autoloads `~/.oxenclaw/env` so the
+    `--provider auto` resolver (and any other env-driven path) sees
+    values persisted by `oxenclaw setup llamacpp` even when the user
+    didn't `source` the file in their shell. Shell-set vars still win.
+    """
+    from oxenclaw.config.env_loader import load_oxenclaw_env_file
+
+    load_oxenclaw_env_file()
 app.add_typer(config_cmd.app, name="config", help="Inspect and edit config.yaml.")
 app.add_typer(gateway_cmd.app, name="gateway", help="Run the gateway server.")
 app.add_typer(message_cmd.app, name="message", help="Send a message via the gateway.")

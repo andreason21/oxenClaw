@@ -34,7 +34,7 @@ Bump it only if `OXENCLAW_LLM_TRACE=1` shows you're hitting the cap.
 |---|---|
 | *(unset)* | `32768` — the default. |
 | Any integer (e.g. `49152`) | Used verbatim. No upper cap, so the operator owns the OOM risk. |
-| `auto` | On the first request for each model id, query `/api/show` and use `min(model_max, 65536)`. The cap stops a 262 144-window model from accidentally allocating 30+ GiB of KV cache. |
+| `auto` | On the first request for each model id, query `/api/show` and use `min(model_max, 32768)`. The cap matches the default deliberately — `auto` only lowers `num_ctx` for models whose advertised max is below the default; it never raises it. Bumping above `32768` is an explicit-integer-only decision because cold-allocating a 65 K+ KV cache on a 16 GB machine pegs Ollama for minutes and starves embedding traffic on the same server. |
 
 The `auto` resolution is cached per process per model id, so the extra
 `/api/show` round trip happens once.
@@ -51,10 +51,17 @@ where `attn_layers = block_count / full_attention_interval` (SSM
 hybrids only allocate KV on every Nth layer). For FP16 KV cache
 (`bytes_per_value = 2`):
 
-| Model | attn layers | kv_heads | key_len | num_ctx=32K | num_ctx=65K | num_ctx=max |
-|---|---|---|---|---|---|---|
-| `qwen3.5:9b` (262 144 max, SSM-hybrid, interval=4) | 8 | 16 | 256 | ~4 GiB | ~8 GiB | ~32 GiB |
-| `gemma4:latest` (131 072 max, GQA) | 12 | 2 | 512 | ~1.5 GiB | ~3 GiB | ~6 GiB |
+| Model | attn layers | kv_heads | key_len | num_ctx=16K | num_ctx=32K | num_ctx=65K | num_ctx=max |
+|---|---|---|---|---|---|---|---|
+| `qwen3.5:9b` (262 144 max, SSM-hybrid, interval=4) | 8 | 16 | 256 | ~2 GiB | ~4 GiB | ~8 GiB | ~32 GiB |
+| `gemma4:latest` (131 072 max, GQA) | 12 | 2 | 512 | ~0.75 GiB | ~1.5 GiB | ~3 GiB | ~6 GiB |
+
+The 8 GiB / 32 GiB column for `qwen3.5:9b` is the trap: cold-loading
+that KV cache on a machine with 16 GB total RAM serialises every other
+Ollama call (chat, embeddings) for the duration of the allocation and
+breaks `memory.search` timeouts elsewhere in the gateway. That's why
+`auto` caps at 32 K and bumping further is an explicit-integer-only
+decision.
 
 The provider logs an `info`-level estimate the first time it resolves
 `num_ctx=auto` for a model, so you can see what you signed up for:

@@ -334,7 +334,8 @@ inherits it. Full ACP reference: [`docs/ACP.md`](ACP.md).
 | `gpgsign` errors on `git commit` | WSL2 doesn't have your Windows GPG agent. Either disable signing (`git config --local commit.gpgsign false`) or set up `gpg` inside Ubuntu. |
 | Power saving makes Ollama feel slow | Windows aggressive power throttling can starve WSL2. Set Windows power plan to "High performance" while running. |
 | `ollama serve` says "Address already in use" | Another Ollama instance (often the Windows-host one) is bound to 11434. Either stop it (Task Manager → Ollama) or change WSL Ollama port via `OLLAMA_HOST=127.0.0.1:11435 ollama serve`. |
-| Tool calls don't fire on Ollama (model writes `skill_run(...)` as plain text instead) | The native `/api/chat` provider (shipped 2026-04-29) defaults to `num_ctx=32768`, which fits virtually every prompt. If your memory + skills payload is bigger, set `OXENCLAW_OLLAMA_NUM_CTX=auto` (detect from `/api/show`, capped at 65536) or an explicit integer. Full sizing recipe and KV cache cost table: [`OLLAMA.md`](./OLLAMA.md). |
+| Tool calls don't fire on Ollama (model writes `skill_run(...)` as plain text instead) | The native `/api/chat` provider (shipped 2026-04-29) defaults to `num_ctx=32768`, which fits virtually every prompt. `OXENCLAW_OLLAMA_NUM_CTX=auto` lowers further on small-window models (capped at 32 K — never raises). To go above 32 K you must set an explicit integer; a 65 K+ KV cache freezes Ollama for minutes on 16 GB boxes and times out concurrent `memory.search` calls. Full sizing recipe + KV cost table: [`OLLAMA.md`](./OLLAMA.md). |
+| `memory.search` keeps timing out in the gateway log right after a chat turn | Symptom of an over-sized Ollama KV cache hogging the server. Check whether `OXENCLAW_OLLAMA_NUM_CTX` is set to `auto` or a high integer; drop to `16384` (or unset for the 32 K default), kill the loaded runner with `pkill -f 'ollama runner'`, and restart the gateway. |
 
 ---
 

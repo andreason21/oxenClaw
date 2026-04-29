@@ -58,13 +58,19 @@ PayloadPatch = Callable[[dict[str, Any]], dict[str, Any]]
 RETRYABLE_STATUS = frozenset({408, 425, 429, 500, 502, 503, 504, 529})
 
 # Default num_ctx the native provider sends. Picked to fit memory + skill
-# manifest blobs comfortably without exploding KV cache RAM on the typical
-# 16-24 GB GPU. Override via `OXENCLAW_OLLAMA_NUM_CTX=N` (raw int) or
-# `OXENCLAW_OLLAMA_NUM_CTX=auto` to detect from `/api/show` (capped at
-# `_NUM_CTX_AUTO_CAP` so a 262K-window model doesn't allocate 30+ GB of
-# KV cache by accident).
+# manifest blobs on a 16 GB-class GPU/CPU machine. Override via
+# `OXENCLAW_OLLAMA_NUM_CTX=N` (raw int) or `OXENCLAW_OLLAMA_NUM_CTX=auto`
+# to detect from `/api/show` (capped at `_NUM_CTX_AUTO_CAP`).
+#
+# `_NUM_CTX_AUTO_CAP` is intentionally equal to the default: auto only
+# *lowers* num_ctx for models whose max is below the default (rare),
+# never raises it. Operators with headroom should set an explicit
+# integer — auto must not hurt anyone who flips it on. A bigger cap
+# previously locked up 16 GB machines for ~5 minutes during cold KV
+# allocation; even when it eventually loaded, concurrent embedding
+# requests against the same Ollama server timed out.
 _DEFAULT_NUM_CTX = 32768
-_NUM_CTX_AUTO_CAP = 65536
+_NUM_CTX_AUTO_CAP = 32768
 
 # Per-process cache of the resolved num_ctx, keyed by model id. Avoids
 # hitting `/api/show` once per request when the user opts into auto mode.

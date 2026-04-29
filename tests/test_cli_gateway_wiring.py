@@ -63,7 +63,7 @@ def _config_one_account(channel_id: str = "stub") -> RootConfig:
     )
 
 
-def _setup_gateway(tmp_path):  # type: ignore[no-untyped-def]
+def _setup_gateway(tmp_path, *, with_sessions: bool = False):  # type: ignore[no-untyped-def]
     config = _config_one_account()
     agents = AgentRegistry()
     agents.register(EchoAgent())
@@ -78,6 +78,14 @@ def _setup_gateway(tmp_path):  # type: ignore[no-untyped-def]
     paths = OxenclawPaths(home=tmp_path)
     paths.ensure_home()
 
+    extra: dict = {}
+    if with_sessions:
+        from oxenclaw.pi.lifecycle import LifecycleBus
+        from oxenclaw.pi.persistence import SQLiteSessionManager
+
+        extra["session_manager"] = SQLiteSessionManager(paths.home / "sessions.db")
+        extra["lifecycle_bus"] = LifecycleBus()
+
     router = _build_router(
         agents=agents,
         dispatcher=dispatcher,
@@ -85,6 +93,7 @@ def _setup_gateway(tmp_path):  # type: ignore[no-untyped-def]
         cron_scheduler=cron,
         approvals=approvals,
         paths_home=paths,
+        **extra,
     )
     return router, cr, agents, cron, approvals, stub
 
@@ -111,6 +120,23 @@ async def test_build_router_registers_every_method_group(tmp_path) -> None:  # t
         "exec-approvals.list",
         "exec-approvals.resolve",
         "exec-approvals.cancel",
+    ]:
+        assert router.has(name), f"missing: {name}"
+    # sessions.* is opt-in: omitted when no SessionManager is supplied.
+    assert not router.has("sessions.list")
+
+
+async def test_build_router_registers_sessions_when_manager_supplied(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    router, *_ = _setup_gateway(tmp_path, with_sessions=True)
+    for name in [
+        "sessions.list",
+        "sessions.get",
+        "sessions.preview",
+        "sessions.reset",
+        "sessions.fork",
+        "sessions.archive",
+        "sessions.delete",
+        "sessions.compact",
     ]:
         assert router.has(name), f"missing: {name}"
 

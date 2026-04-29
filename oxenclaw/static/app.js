@@ -1147,30 +1147,13 @@ const AgentsView = {
     // an agent-class selector. The model field auto-suggests a sensible
     // default per provider; users can type anything (custom vLLM models
     // etc. work via the factory's synthetic-registry path).
+    // On-host catalog only as of 2026-04-29.
     const PROVIDER_MODEL_HINTS = {
-      anthropic: "claude-sonnet-4-6",
-      "anthropic-vertex": "claude-sonnet-4-6",
-      openai: "gpt-4o-mini",
-      google: "gemini-2.0-flash",
-      "vertex-ai": "gemini-2.0-flash",
-      ollama: "gemma4:latest",
+      ollama: "qwen3.5:9b",
+      "llamacpp-direct": "local-gguf (uses $OXENCLAW_LLAMACPP_GGUF)",
+      llamacpp: "qwen3.5:9b",
       vllm: "meta-llama/Llama-3.1-8B-Instruct",
-      lmstudio: "gemma4:latest",
-      llamacpp: "gemma4:latest",
-      "openai-compatible": "gemma4:latest",
-      proxy: "gemma4:latest",
-      litellm: "gemma4:latest",
-      bedrock: "claude-sonnet-4-6",
-      groq: "llama-3.1-70b-versatile",
-      deepseek: "deepseek-chat",
-      mistral: "mistral-large-latest",
-      together: "meta-llama/Llama-3.1-70B-Instruct-Turbo",
-      fireworks: "accounts/fireworks/models/llama-v3p1-70b-instruct",
-      kilocode: "kilo-flash",
-      moonshot: "moonshot-v1-8k",
-      zai: "glm-4-plus",
-      minimax: "abab6.5-chat",
-      openrouter: "openrouter/auto",
+      lmstudio: "qwen3.5:9b",
       echo: "(no model — echoes input)",
     };
 
@@ -2480,8 +2463,42 @@ const ApprovalsView = {
     const refreshBtn = el("button", { class: "btn btn-ghost btn-sm", onclick: () => refresh() }, "↻ Refresh");
     actions.append(refreshBtn);
 
+    function renderGatedToolsPanel(tools) {
+      const panel = el("section", { class: "gated-tools" });
+      panel.append(el("h3", {}, `Gated tools (${tools ? tools.length : 0})`));
+      if (!tools || !tools.length) {
+        panel.append(el("div", { class: "ctx" },
+          "No tools are currently approval-gated. Wire an ApprovalManager " +
+          "into the agent factory to require human confirmation for " +
+          "destructive tools."));
+        return panel;
+      }
+      const tbl = el("table", { class: "gated-tools-table" });
+      const thead = el("thead", {},
+        el("tr", {},
+          el("th", {}, "Tool"),
+          el("th", {}, "Agents"),
+          el("th", {}, "Description"),
+        ),
+      );
+      const tbody = el("tbody");
+      for (const t of tools) {
+        tbody.append(el("tr", {},
+          el("td", { class: "mono" }, t.name),
+          el("td", {}, (t.agents || []).join(", ")),
+          el("td", {}, t.description || ""),
+        ));
+      }
+      tbl.append(thead, tbody);
+      panel.append(tbl);
+      return panel;
+    }
+
     async function refresh() {
-      const list = await safeRpc("exec-approvals.list", {}, { quiet: true });
+      const [list, tools] = await Promise.all([
+        safeRpc("exec-approvals.list", {}, { quiet: true }),
+        safeRpc("exec-approvals.tools", {}, { quiet: true }),
+      ]);
       root.innerHTML = "";
       if (!list || !list.length) {
         root.append(emptyState({
@@ -2491,33 +2508,34 @@ const ApprovalsView = {
                 "for human confirmation before running. Pending requests appear " +
                 "here — Approve or Deny to unblock the agent.",
         }));
-        return;
+      } else {
+        for (const a of list) {
+          const item = el("div", { class: "approval" });
+          item.append(
+            el("div", { class: "prompt" }, a.prompt),
+            el("div", { class: "ctx" }, `id=${a.id} • ${JSON.stringify(a.context || {})}`),
+            el("div", { class: "actions" },
+              el("button", { class: "btn btn-good", onclick: async () => {
+                await safeRpc("exec-approvals.resolve", { id: a.id, approved: true });
+                Toast.success("approved");
+                await refresh();
+              } }, "Approve"),
+              el("button", { class: "btn btn-danger", onclick: async () => {
+                const reason = window.prompt("reason (optional):") || null;
+                await safeRpc("exec-approvals.resolve", { id: a.id, approved: false, reason });
+                Toast.warn("denied");
+                await refresh();
+              } }, "Deny"),
+              el("button", { class: "btn btn-ghost", onclick: async () => {
+                await safeRpc("exec-approvals.cancel", { id: a.id });
+                await refresh();
+              } }, "Cancel"),
+            ),
+          );
+          root.append(item);
+        }
       }
-      for (const a of list) {
-        const item = el("div", { class: "approval" });
-        item.append(
-          el("div", { class: "prompt" }, a.prompt),
-          el("div", { class: "ctx" }, `id=${a.id} • ${JSON.stringify(a.context || {})}`),
-          el("div", { class: "actions" },
-            el("button", { class: "btn btn-good", onclick: async () => {
-              await safeRpc("exec-approvals.resolve", { id: a.id, approved: true });
-              Toast.success("approved");
-              await refresh();
-            } }, "Approve"),
-            el("button", { class: "btn btn-danger", onclick: async () => {
-              const reason = window.prompt("reason (optional):") || null;
-              await safeRpc("exec-approvals.resolve", { id: a.id, approved: false, reason });
-              Toast.warn("denied");
-              await refresh();
-            } }, "Deny"),
-            el("button", { class: "btn btn-ghost", onclick: async () => {
-              await safeRpc("exec-approvals.cancel", { id: a.id });
-              await refresh();
-            } }, "Cancel"),
-          ),
-        );
-        root.append(item);
-      }
+      root.append(renderGatedToolsPanel(tools));
     }
 
     await refresh();
@@ -3246,7 +3264,7 @@ const SessionsView = {
         card.append(
           el("div", {},
             el("div", { class: "head" },
-              el("span", { class: "key" }, `${s.agent_id || "?"} · ${s.session_key}`),
+              el("span", { class: "key" }, `${s.agent_id || "?"} · ${s.title || shortId(s)}`),
               el("span", { class: "tag" }, `${s.message_count ?? "?"} msgs`),
               s.archived ? el("span", { class: "tag warn" }, "archived") : null,
             ),
@@ -3270,17 +3288,30 @@ const SessionsView = {
       }
     }
 
+    function shortId(s) {
+      const k = s.session_key || s.id || "";
+      return k.length > 12 ? k.slice(0, 8) + "…" : k;
+    }
     async function preview(s) {
       try {
-        const res = await safeRpc("sessions.preview", {
-          agent_id: s.agent_id, session_key: s.session_key,
-        });
-        const text = (res && res.preview) || JSON.stringify(res, null, 2);
-        Toast.info("preview", text.slice(0, 400));
-      } catch {}
+        const res = await safeRpc("sessions.preview", { id: s.id });
+        if (!res) {
+          Toast.info("preview", "session not found");
+          return;
+        }
+        const lines = [
+          res.title ? `title: ${res.title}` : null,
+          res.first_user ? `first user: ${res.first_user}` : null,
+          res.last_assistant ? `last assistant: ${res.last_assistant}` : null,
+          `messages: ${res.message_count ?? "?"} · compactions: ${res.compaction_count ?? 0}`,
+        ].filter(Boolean);
+        Toast.info("preview", lines.join("\n"));
+      } catch (e) {
+        Toast.error(`preview failed: ${e.message}`);
+      }
     }
     async function compact(s) {
-      if (!confirm(`Compact session ${s.session_key || s.id}? Old turns will be summarised.`)) return;
+      if (!confirm(`Compact session ${shortId(s)}? Old turns will be summarised.`)) return;
       try {
         const res = await Rpc.call("sessions.compact", { id: s.id, keep_tail_turns: 6 });
         if (res && res.compacted) {
@@ -3294,34 +3325,26 @@ const SessionsView = {
       refresh();
     }
     async function reset(s) {
-      if (!confirm(`Reset session ${s.session_key}? Messages will be cleared.`)) return;
-      await safeRpc("sessions.reset", {
-        agent_id: s.agent_id, session_key: s.session_key,
-      });
+      if (!confirm(`Reset session ${shortId(s)}? Messages will be cleared.`)) return;
+      await safeRpc("sessions.reset", { id: s.id });
       Toast.success("session reset");
       refresh();
     }
     async function fork(s) {
-      const newKey = window.prompt("New session_key for the fork:", s.session_key + "-fork");
-      if (!newKey) return;
-      await safeRpc("sessions.fork", {
-        agent_id: s.agent_id, source_session_key: s.session_key, new_session_key: newKey,
-      });
-      Toast.success(`forked → ${newKey}`);
+      const newTitle = window.prompt("Title for the forked session:", (s.title || shortId(s)) + " (fork)");
+      if (newTitle === null) return;
+      const res = await safeRpc("sessions.fork", { id: s.id, title: newTitle || null });
+      if (res && res.id) Toast.success(`forked → ${res.id.slice(0, 8)}…`);
       refresh();
     }
     async function archive(s) {
-      await safeRpc("sessions.archive", {
-        agent_id: s.agent_id, session_key: s.session_key,
-      });
+      await safeRpc("sessions.archive", { id: s.id });
       Toast.success("archived");
       refresh();
     }
     async function del(s) {
-      if (!confirm(`Delete session ${s.session_key}? This cannot be undone.`)) return;
-      await safeRpc("sessions.delete", {
-        agent_id: s.agent_id, session_key: s.session_key,
-      });
+      if (!confirm(`Delete session ${shortId(s)}? This cannot be undone.`)) return;
+      await safeRpc("sessions.delete", { id: s.id });
       Toast.warn("session deleted");
       refresh();
     }
@@ -3330,6 +3353,280 @@ const SessionsView = {
     await refresh();
     const interval = setInterval(refresh, 5000);
     return () => clearInterval(interval);
+  },
+};
+
+// ─────────────────────────────────────────────────────────────────────────
+// MCP view — manage external MCP (Model Context Protocol) servers
+//
+// Reads and writes ~/.oxenclaw/mcp.json via the mcp.* RPC surface. Lets
+// the operator add, edit, delete, and connection-test stdio (subprocess)
+// or HTTP/SSE servers without leaving the dashboard. Restart the gateway
+// after edits — MCP servers are wired into the agent at startup.
+// ─────────────────────────────────────────────────────────────────────────
+const MCPView = {
+  title: "MCP",
+  async render(root, actions) {
+    let alive = true;
+    let configPath = "";
+
+    root.className = (root.className || "") + " mcp-view";
+
+    const introCard = el("div", { class: "card" },
+      el("div", { class: "card-meta" },
+        "Configure external MCP (Model Context Protocol) servers. Their tools become " +
+        "available to the agent at gateway startup. ",
+        el("strong", {}, "Restart the gateway after edits."),
+      ),
+    );
+    const pathLine = el("div", { class: "card-meta", style: "margin-top:8px" });
+    introCard.append(pathLine);
+
+    const listBox = el("div", { class: "mcp-list", style: "display:flex;flex-direction:column;gap:12px;margin-top:12px" });
+
+    const addBtn = el("button", { class: "btn btn-primary btn-sm", onclick: () => openModal({ mode: "add" }) }, "+ Add server");
+    const refreshBtn = el("button", { class: "btn btn-ghost btn-sm", onclick: () => refresh() }, "↻ Refresh");
+    actions.append(addBtn, refreshBtn);
+
+    root.append(introCard, listBox);
+
+    async function refresh() {
+      if (!alive) return;
+      listBox.innerHTML = "";
+      const r = await safeRpc("mcp.list", {}, { quiet: true });
+      configPath = (r && r.config_path) || "~/.oxenclaw/mcp.json";
+      pathLine.innerHTML = "";
+      pathLine.append(
+        document.createTextNode("Config file: "),
+        el("code", {}, configPath),
+        document.createTextNode(r && r.exists ? "" : " (not yet created)"),
+      );
+      const servers = (r && r.servers) || [];
+      if (!servers.length) {
+        listBox.append(emptyState({
+          icon: "🔌",
+          title: "No MCP servers configured",
+          body:
+            "Add a <strong>stdio</strong> server (subprocess like " +
+            "<code>npx @modelcontextprotocol/server-filesystem</code>) or an " +
+            "<strong>HTTP / SSE</strong> server to expose its tools to the agent.",
+          actions: [
+            el("button", { class: "btn btn-primary btn-sm", onclick: () => openModal({ mode: "add" }) },
+              "+ Add your first server"),
+          ],
+        }));
+        return;
+      }
+      for (const s of servers) listBox.append(renderCard(s));
+    }
+
+    function renderCard(s) {
+      const card = el("div", { class: "skill-card mcp-card" });
+      const head = el("div", { class: "head" });
+      head.append(
+        el("span", { class: "emoji" }, s.kind === "http" ? "🌐" : "⚙"),
+        el("span", { class: "slug" }, s.name),
+        el("span", { class: "name" }, s.kind ? `· ${s.kind}` : ""),
+      );
+      if (!s.valid) head.append(el("span", { class: "tag req", style: "background:#a33;color:#fff" }, "invalid"));
+      card.append(head);
+
+      if (s.description) card.append(el("div", { class: "summary" }, s.description));
+      if (!s.valid && s.reason) card.append(el("div", { class: "summary", style: "color:#c44" }, `⚠ ${s.reason}`));
+
+      if (s.kind === "stdio" && s.dropped_env_keys && s.dropped_env_keys.length) {
+        const meta = el("div", { class: "meta" }, "stripped env: ");
+        for (const k of s.dropped_env_keys) meta.append(el("span", { class: "tag req" }, k));
+        card.append(meta);
+      }
+      if (s.connection_timeout_ms) {
+        card.append(el("div", { class: "meta" }, `timeout ${s.connection_timeout_ms} ms`));
+      }
+
+      card.append(el("div", { class: "actions" },
+        el("button", { class: "btn btn-sm", onclick: () => openModal({ mode: "edit", server: s }) }, "Edit"),
+        el("button", { class: "btn btn-sm btn-ghost", onclick: () => testServer(s.name) }, "Test"),
+        el("button", { class: "btn btn-sm btn-danger", onclick: async () => {
+          if (!confirm(`Delete MCP server "${s.name}"?`)) return;
+          const r = await safeRpc("mcp.delete", { name: s.name });
+          if (r.ok) Toast.success(`removed ${s.name}`);
+          else Toast.error("delete failed", r.error || "");
+          await refresh();
+        } }, "Delete"),
+      ));
+      return card;
+    }
+
+    async function testServer(name) {
+      Toast.info(`testing ${name}…`, "connecting");
+      const r = await safeRpc("mcp.test", { name }, { quiet: true });
+      if (r.ok) {
+        const tools = (r.tools || []).map((t) => t.name).filter(Boolean);
+        Toast.success(`${name} reachable`, `${tools.length} tool(s)${tools.length ? ": " + tools.slice(0, 6).join(", ") : ""}`);
+      } else {
+        Toast.error(`${name} test failed`, r.error || "unknown error");
+      }
+    }
+
+    // ── Modal: add / edit form ────────────────────────────────────────
+    function openModal({ mode, server }) {
+      const overlay = el("div", { class: "cmd-help" });
+      const card = el("div", { class: "cmd-help-card", style: "min-width:520px;max-width:720px;text-align:left" });
+
+      const title = el("h3", {}, mode === "add" ? "Add MCP server" : `Edit ${server?.name || ""}`);
+      card.append(title);
+
+      const initial = server?.raw || {};
+      const initialKind = server?.kind || (initial.url ? "http" : "stdio");
+
+      const form = el("div", { style: "display:flex;flex-direction:column;gap:10px" });
+
+      // Name (locked when editing — used as the dict key on disk)
+      const nameField = field("Name", el("input", {
+        type: "text",
+        value: server?.name || "",
+        placeholder: "e.g. filesystem",
+        spellcheck: "false",
+        readonly: mode === "edit" ? true : false,
+      }));
+      form.append(nameField.row);
+
+      // Kind selector
+      const kindSel = el("select", {},
+        el("option", { value: "stdio" }, "stdio (subprocess)"),
+        el("option", { value: "http" }, "http (SSE / streamable-http)"),
+      );
+      kindSel.value = initialKind;
+      form.append(field("Transport", kindSel).row);
+
+      // ── stdio fields ──
+      const cmdInput = el("input", { type: "text", value: initial.command || "", placeholder: "npx", spellcheck: "false" });
+      const argsInput = el("textarea", { rows: "2", placeholder: "one arg per line" });
+      argsInput.value = (initial.args || []).join("\n");
+      const cwdInput = el("input", { type: "text", value: initial.cwd || "", placeholder: "(optional) working directory", spellcheck: "false" });
+      const envInput = el("textarea", { rows: "3", placeholder: "KEY=VALUE per line\nFOO=bar" });
+      envInput.value = Object.entries(initial.env || {}).map(([k, v]) => `${k}=${v}`).join("\n");
+
+      const stdioBox = el("div", { style: "display:flex;flex-direction:column;gap:10px" },
+        field("Command", cmdInput).row,
+        field("Args", argsInput).row,
+        field("Working dir", cwdInput).row,
+        field("Env", envInput).row,
+      );
+
+      // ── http fields ──
+      const urlInput = el("input", { type: "text", value: initial.url || "", placeholder: "https://mcp.example.com/sse", spellcheck: "false" });
+      const transportSel = el("select", {},
+        el("option", { value: "sse" }, "sse"),
+        el("option", { value: "streamable-http" }, "streamable-http"),
+      );
+      transportSel.value = initial.transport === "streamable-http" ? "streamable-http" : "sse";
+      const headersInput = el("textarea", { rows: "3", placeholder: "Header-Name: value per line\nAuthorization: Bearer xxx" });
+      headersInput.value = Object.entries(initial.headers || {}).map(([k, v]) => `${k}: ${v}`).join("\n");
+
+      const httpBox = el("div", { style: "display:flex;flex-direction:column;gap:10px" },
+        field("URL", urlInput).row,
+        field("Transport type", transportSel).row,
+        field("Headers", headersInput).row,
+      );
+
+      // Shared: connection timeout
+      const timeoutInput = el("input", { type: "number", min: "0", step: "500",
+        value: server?.connection_timeout_ms || "", placeholder: "30000" });
+      const timeoutBox = field("Connection timeout (ms)", timeoutInput).row;
+
+      const dynBox = el("div");
+      function syncKind() {
+        dynBox.innerHTML = "";
+        if (kindSel.value === "stdio") dynBox.append(stdioBox);
+        else dynBox.append(httpBox);
+      }
+      kindSel.addEventListener("change", syncKind);
+      syncKind();
+      form.append(dynBox, timeoutBox);
+
+      const errBox = el("div", { class: "login-gate__error", hidden: true, style: "margin-top:8px" });
+
+      const saveBtn = el("button", { class: "btn primary" }, mode === "add" ? "Create" : "Save");
+      const cancelBtn = el("button", { class: "btn btn-ghost btn-sm", onclick: () => overlay.remove() }, "Cancel");
+      const btnRow = el("div", { style: "margin-top:12px;display:flex;gap:8px;justify-content:flex-end" }, cancelBtn, saveBtn);
+
+      saveBtn.addEventListener("click", async () => {
+        errBox.hidden = true;
+        const name = (nameField.input.value || "").trim();
+        if (!name) {
+          errBox.textContent = "Name is required.";
+          errBox.hidden = false;
+          return;
+        }
+        const payload = {
+          name,
+          kind: kindSel.value,
+          args: [],
+          env: {},
+          headers: {},
+        };
+        if (kindSel.value === "stdio") {
+          payload.command = cmdInput.value.trim();
+          payload.args = argsInput.value.split("\n").map((s) => s.trim()).filter(Boolean);
+          payload.cwd = cwdInput.value.trim() || null;
+          payload.env = parseKvBlock(envInput.value, "=");
+        } else {
+          payload.url = urlInput.value.trim();
+          payload.transport = transportSel.value;
+          payload.headers = parseKvBlock(headersInput.value, ":");
+        }
+        const t = parseInt(timeoutInput.value, 10);
+        if (Number.isFinite(t) && t > 0) payload.connection_timeout_ms = t;
+
+        // Strip null/empty fields the backend's pydantic spec rejects (extra="forbid").
+        if (payload.cwd == null) delete payload.cwd;
+
+        saveBtn.disabled = true;
+        const method = mode === "add" ? "mcp.add" : "mcp.update";
+        const r = await safeRpc(method, payload, { quiet: true });
+        saveBtn.disabled = false;
+        if (!r.ok) {
+          errBox.textContent = r.error || "save failed";
+          errBox.hidden = false;
+          return;
+        }
+        Toast.success(mode === "add" ? `added ${name}` : `updated ${name}`);
+        overlay.remove();
+        await refresh();
+      });
+
+      card.append(form, errBox, btnRow);
+      overlay.append(card);
+      document.body.append(overlay);
+      setTimeout(() => nameField.input.focus(), 50);
+
+      function field(label, input) {
+        const row = el("label", { class: "field" },
+          el("span", {}, label),
+          input,
+        );
+        return { row, input };
+      }
+    }
+
+    function parseKvBlock(text, sep) {
+      const out = {};
+      for (const line of (text || "").split("\n")) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        const idx = trimmed.indexOf(sep);
+        if (idx <= 0) continue;
+        const k = trimmed.slice(0, idx).trim();
+        const v = trimmed.slice(idx + 1).trim();
+        if (k) out[k] = v;
+      }
+      return out;
+    }
+
+    await refresh();
+    const interval = setInterval(refresh, 8000);
+    return () => { alive = false; clearInterval(interval); };
   },
 };
 
@@ -3395,6 +3692,13 @@ async function refreshNavBadges() {
     const sessions = (r && (r.sessions || r)) || [];
     const badge = $("nav-sessions-badge");
     if (badge && sessions.length) { badge.hidden = false; badge.textContent = String(sessions.length); }
+    else if (badge) badge.hidden = true;
+  } catch {}
+  try {
+    const r = await Rpc.call("mcp.list", {});
+    const badge = $("nav-mcp-badge");
+    const n = (r && r.servers && r.servers.length) || 0;
+    if (badge && n > 0) { badge.hidden = false; badge.textContent = String(n); }
     else if (badge) badge.hidden = true;
   } catch {}
 }
@@ -3520,6 +3824,7 @@ const Palette = (() => {
     { id: "go-approvals",  group: "Go to", icon: "✅", title: "Approvals",  hint: "g p", run: () => Router.go("approvals") },
     { id: "go-skills",     group: "Go to", icon: "🧰", title: "Skills",     hint: "g s", run: () => Router.go("skills") },
     { id: "go-memory",     group: "Go to", icon: "🧠", title: "Memory",     hint: "g m", run: () => Router.go("memory") },
+    { id: "go-mcp",        group: "Go to", icon: "🔌", title: "MCP",        hint: "",     run: () => Router.go("mcp") },
     { id: "go-config",     group: "Go to", icon: "⚙",  title: "Config",     hint: "g g", run: () => Router.go("config") },
     { id: "go-rpc",        group: "Go to", icon: "📜", title: "RPC log",    hint: "",     run: () => Router.go("rpc") },
     { id: "theme-cycle",   group: "Action", icon: "🌓", title: "Cycle theme (system → light → dark)", hint: "",
@@ -3758,6 +4063,7 @@ function boot() {
   Router.register("approvals", ApprovalsView);
   Router.register("skills", SkillsView);
   Router.register("memory", MemoryView);
+  Router.register("mcp", MCPView);
   Router.register("config", ConfigView);
   Router.register("rpc", RpcLogView);
 

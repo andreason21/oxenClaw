@@ -54,13 +54,18 @@ from oxenclaw.gateway.chat_methods import register_chat_methods
 from oxenclaw.gateway.config_methods import register_config_methods
 from oxenclaw.gateway.cron_methods import register_cron_methods
 from oxenclaw.gateway.isolation_methods import register_isolation_methods
+from oxenclaw.gateway.mcp_methods import register_mcp_methods
 from oxenclaw.gateway.memory_methods import register_memory_methods
 from oxenclaw.gateway.plan_methods import register_plan_methods
+from oxenclaw.gateway.sessions_methods import register_sessions_methods
 from oxenclaw.gateway.skills_methods import register_skills_methods
 from oxenclaw.gateway.usage_methods import register_usage_methods
 from oxenclaw.gateway.wiki_methods import register_wiki_methods
 from oxenclaw.memory import MemoryRetriever, build_embedder
 from oxenclaw.memory.walker import WalkerConfig
+from oxenclaw.pi.lifecycle import LifecycleBus
+from oxenclaw.pi.persistence import SQLiteSessionManager
+from oxenclaw.pi.session import SessionManager
 from oxenclaw.plugin_sdk.channel_contract import (
     ChannelTarget,
     InboundEnvelope,
@@ -97,16 +102,21 @@ def start(
     port: int = typer.Option(7331, help="Bind port."),
     agent_id: str = typer.Option("assistant", help="Agent id."),
     provider: str = typer.Option(
-        "ollama",
+        "auto",
         "--provider",
         help=(
-            "Catalog provider id (openclaw-style). One of: ollama (default), "
-            "anthropic, openai, google, vllm, lmstudio, llamacpp, openrouter, "
-            "groq, deepseek, mistral, together, fireworks, kilocode, moonshot, "
-            "zai, minimax, bedrock, vertex-ai, openai-compatible, proxy, "
-            "litellm, anthropic-vertex, or 'echo' (test). Provider determines "
-            "the transport — model is picked separately via --model. "
-            "Pre-rc.15 names ('local', 'pi') are accepted as legacy aliases."
+            "Local-inference provider. oxenClaw's catalog is on-host "
+            "only — five choices: 'ollama' (Ollama daemon), "
+            "'llamacpp-direct' (oxenClaw spawns its own llama-server, "
+            "fastest), 'llamacpp' (external llama-server you started), "
+            "'vllm' (vLLM serve), 'lmstudio' (LM Studio server). The "
+            "default 'auto' picks 'llamacpp-direct' when "
+            "$OXENCLAW_LLAMACPP_GGUF is set and a llama-server binary "
+            "is on $PATH (~3x faster decode than Ollama on the same "
+            "GGUF), and falls back to 'ollama' otherwise. Pre-rc.15 "
+            "names ('local', 'pi') are accepted as legacy aliases and "
+            "route through 'auto'. Use 'echo' for a no-LLM test "
+            "backend."
         ),
     ),
     model: str | None = typer.Option(
@@ -529,7 +539,20 @@ async def _run_gateway(
         logger.exception("invalid clawhub config; falling back to defaults")
         registries_cfg = ClawHubRegistries()
     clawhub_client = MultiRegistryClient(registries_cfg)
-    skill_installer = SkillInstaller(clawhub_client, paths=paths)
+    # Reuse the primary chat model + auth so the installer can call the
+    # LLM once after each skill install to derive WHEN TO USE / WHEN NOT
+    # TO USE / ALTERNATIVES routing hints. Best-effort: when the agent
+    # doesn't expose `_model`/`_auth` (e.g. EchoAgent in tests) we just
+    # skip enrichment and rely on the SKILL.md description as before.
+    primary_agent = agents.get(agent_id)
+    enrich_model = getattr(primary_agent, "_model", None)
+    enrich_auth = getattr(primary_agent, "_auth", None)
+    skill_installer = SkillInstaller(
+        clawhub_client,
+        paths=paths,
+        enrich_model=enrich_model,
+        enrich_auth=enrich_auth,
+    )
 
     # Register the skill_resolver tool so the LLM can locate + install skills
     # by intent at runtime. Uses the same MultiRegistryClient + SkillInstaller
@@ -570,6 +593,10 @@ async def _run_gateway(
     tool_registry.register(wiki_get_tool(wiki_vault))
     tool_registry.register(wiki_save_tool(wiki_vault, approval_manager=approvals))
 
+    paths.ensure_home()
+    session_manager: SessionManager = SQLiteSessionManager(paths.home / "sessions.db")
+    lifecycle_bus = LifecycleBus()
+
     router = _build_router(
         agents=agents,
         dispatcher=dispatcher,
@@ -582,6 +609,8 @@ async def _run_gateway(
         skill_installer=skill_installer,
         memory_retriever=memory_retriever,
         wiki_vault=wiki_vault,
+        session_manager=session_manager,
+        lifecycle_bus=lifecycle_bus,
     )
     readiness = build_default_readiness(
         channel_router=channel_router,
@@ -749,6 +778,8 @@ def _build_router(
     skill_installer: SkillInstaller | None = None,
     memory_retriever: MemoryRetriever | None = None,
     wiki_vault=None,  # WikiVaultStore | None  # type: ignore[no-untyped-def]
+    session_manager: SessionManager | None = None,
+    lifecycle_bus: LifecycleBus | None = None,
 ) -> Router:
     router = Router()
 
@@ -811,7 +842,7 @@ def _build_router(
     register_plan_methods(router, paths=paths_home)
     register_config_methods(router)
     register_cron_methods(router, cron_scheduler, run_store=cron_run_store)
-    register_approval_methods(router, approvals)
+    register_approval_methods(router, approvals, agents=agents)
     register_isolation_methods(router)
     register_canvas_methods(
         router,
@@ -829,6 +860,15 @@ def _build_router(
             installer=skill_installer,
             paths=paths_home,
         )
+    if session_manager is not None:
+        register_sessions_methods(
+            router,
+            session_manager,
+            archive_dir=paths_home.home / "archives",
+            bus=lifecycle_bus,
+            paths=paths_home,
+        )
+    register_mcp_methods(router, paths=paths_home)
     return router
 
 

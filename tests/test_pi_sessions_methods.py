@@ -60,6 +60,27 @@ async def test_sessions_list_filters_by_agent(tmp_path: Path) -> None:
     sm.close()
 
 
+async def test_sessions_list_includes_dashboard_compat_fields(tmp_path: Path) -> None:
+    """Dashboard reads `session_key`, `archived`, and previews — list must populate them."""
+    sm = SQLiteSessionManager(tmp_path / "s.db")
+    ids = await _seed(sm, n=1)
+    router = Router()
+    register_sessions_methods(router, sm)
+
+    resp = await router.dispatch(
+        {"jsonrpc": "2.0", "id": 1, "method": "sessions.list", "params": {}}
+    )
+    assert resp.error is None
+    assert len(resp.result) == 1
+    row = resp.result[0]
+    assert row["id"] == ids[0]
+    assert row["session_key"] == ids[0]
+    assert row["archived"] is False
+    assert row["first_preview"].startswith("u0 ")
+    assert row["last_preview"].endswith("answer")
+    sm.close()
+
+
 async def test_sessions_get_returns_full_payload(tmp_path: Path) -> None:
     sm = SQLiteSessionManager(tmp_path / "s.db")
     ids = await _seed(sm, n=1)

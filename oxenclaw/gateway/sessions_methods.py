@@ -106,12 +106,16 @@ class _CompactParams(BaseModel):
 def _entry_to_dict(e) -> dict[str, Any]:  # type: ignore[no-untyped-def]
     return {
         "id": e.id,
+        "session_key": e.id,
         "title": e.title,
         "agent_id": e.agent_id,
         "model_id": e.model_id,
         "message_count": e.message_count,
         "created_at": e.created_at,
         "updated_at": e.updated_at,
+        "archived": False,
+        "first_preview": None,
+        "last_preview": None,
     }
 
 
@@ -188,7 +192,17 @@ def register_sessions_methods(
     @router.method("sessions.list", _ListParams)
     async def _list(p: _ListParams) -> list[dict[str, Any]]:
         rows = await sm.list(agent_id=p.agent_id)
-        return [_entry_to_dict(r) for r in rows]
+        out: list[dict[str, Any]] = []
+        for r in rows:
+            d = _entry_to_dict(r)
+            if r.message_count > 0:
+                s = await sm.get(r.id)
+                if s is not None:
+                    pv = _preview(s, head=120, tail=120)
+                    d["first_preview"] = pv.get("first_user")
+                    d["last_preview"] = pv.get("last_assistant")
+            out.append(d)
+        return out
 
     @router.method("sessions.get", _GetParams)
     async def _get(p: _GetParams) -> dict[str, Any] | None:

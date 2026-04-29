@@ -274,6 +274,7 @@ def build_agent(
     session_manager: SessionManager | None = None,
     approval_manager=None,  # type: ignore[no-untyped-def]
     active_memory=None,  # type: ignore[no-untyped-def]
+    turn_dream=None,  # type: ignore[no-untyped-def]
 ) -> Agent:
     """Build an agent. All catalog providers route through `PiAgent`.
 
@@ -355,6 +356,8 @@ def build_agent(
         kwargs["memory"] = memory
     if active_memory is not None:
         kwargs["active_memory"] = active_memory
+    if turn_dream is not None:
+        kwargs["turn_dream"] = turn_dream
 
     return PiAgent(**kwargs)
 

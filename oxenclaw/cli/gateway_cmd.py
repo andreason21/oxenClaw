@@ -278,6 +278,7 @@ def build_agent(
     memory: MemoryRetriever | None = None,
     tools: ToolRegistry | None = None,  # noqa: F821 — forward ref
     active_memory: Any | None = None,
+    turn_dream: Any | None = None,
 ) -> Agent:
     """Typer-friendly wrapper around the shared agent factory."""
     try:
@@ -291,6 +292,7 @@ def build_agent(
             memory=memory,
             tools=tools,
             active_memory=active_memory,
+            turn_dream=turn_dream,
         )
     except UnknownProvider as exc:
         raise typer.BadParameter(str(exc)) from exc
@@ -441,6 +443,29 @@ async def _run_gateway(
             active_memory_cfg.model_id or "(main)",
         )
 
+    # Per-turn LLM-based dreamer — extracts free-form durable facts
+    # from each user message after the regex backstop runs. Default
+    # OFF (adds an LLM call per turn). Operators opt in when the
+    # local model can absorb the latency.
+    from oxenclaw.memory.turn_dream import TurnDreamConfig
+
+    turn_dream_cfg: TurnDreamConfig | None = None
+    if memory_retriever is not None and os.environ.get("OXENCLAW_TURN_DREAM", "0") == "1":
+        turn_dream_cfg = TurnDreamConfig(
+            enabled=True,
+            timeout_seconds=float(os.environ.get("OXENCLAW_TURN_DREAM_TIMEOUT", "8")),
+            min_chars=int(os.environ.get("OXENCLAW_TURN_DREAM_MIN_CHARS", "8")),
+            min_confidence=float(os.environ.get("OXENCLAW_TURN_DREAM_MIN_CONF", "0.5")),
+            model_id=os.environ.get("OXENCLAW_TURN_DREAM_MODEL") or None,
+        )
+        logger.info(
+            "turn-dream enabled: timeout=%.1fs min_chars=%d min_conf=%.2f model=%s",
+            turn_dream_cfg.timeout_seconds,
+            turn_dream_cfg.min_chars,
+            turn_dream_cfg.min_confidence,
+            turn_dream_cfg.model_id or "(main)",
+        )
+
     agents = AgentRegistry()
     agents.register(
         build_agent(
@@ -453,6 +478,7 @@ async def _run_gateway(
             memory=memory_retriever,
             tools=tool_registry,
             active_memory=active_memory_cfg,
+            turn_dream=turn_dream_cfg,
         )
     )
 

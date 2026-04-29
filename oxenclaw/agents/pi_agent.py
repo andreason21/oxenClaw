@@ -46,6 +46,7 @@ from oxenclaw.memory.retriever import (
     format_memories_as_prelude,
     format_memories_for_prompt,
 )
+from oxenclaw.memory.turn_dream import TurnDreamConfig
 from oxenclaw.pi import (
     AssistantMessage,
     AuthStorage,
@@ -203,6 +204,7 @@ class PiAgent:
         memory_weak_threshold: float = 0.30,
         memory_inject_into_user: bool = True,
         active_memory: ActiveMemoryConfig | None = None,
+        turn_dream: TurnDreamConfig | None = None,
         include_skills: bool = True,
         include_execution_bias: bool = True,
         project_context_dir: Path | str | None = None,
@@ -225,6 +227,11 @@ class PiAgent:
         self._memory_inject_into_user = memory_inject_into_user
         self._active_memory_config = active_memory or ActiveMemoryConfig(enabled=False)
         self._active_runner: ActiveMemoryRunner | None = None
+        # Per-turn LLM-based fact extractor — fills the gaps left by
+        # the regex backstop in `oxenclaw.memory.auto_extract`.
+        # Default off (adds an LLM call per turn); operators opt in
+        # via OXENCLAW_TURN_DREAM=1 in gateway_cmd.
+        self._turn_dream_config = turn_dream or TurnDreamConfig(enabled=False)
         self._include_skills = include_skills
         self._include_execution_bias = include_execution_bias
         self._project_context_dir: Path | None = (
@@ -783,15 +790,16 @@ class PiAgent:
         # re-embed don't add latency to the current turn. The model
         # can still call `memory_save` for free-form facts the regex
         # doesn't catch.
+        regex_facts: list[str] = []
         if self._memory is not None and sanitized_text:
             try:
                 from oxenclaw.memory.auto_extract import extract_personal_facts
 
-                facts = extract_personal_facts(sanitized_text)
+                regex_facts = extract_personal_facts(sanitized_text)
             except Exception:
-                facts = []
-            if facts:
-                logger.info("auto-extract: %d fact(s) from user message", len(facts))
+                regex_facts = []
+            if regex_facts:
+                logger.info("auto-extract: %d fact(s) from user message", len(regex_facts))
 
                 async def _save_facts(retriever, items: list[str]) -> None:
                     for f in items:
@@ -800,7 +808,47 @@ class PiAgent:
                         except Exception:
                             logger.exception("auto-extract save failed: %r", f[:80])
 
-                asyncio.create_task(_save_facts(self._memory, facts))
+                asyncio.create_task(_save_facts(self._memory, regex_facts))
+
+        # Per-turn LLM dream extractor — catches free-form durable
+        # facts the regex backstop above can't pattern-match
+        # (preferences, deadlines, project context, decisions). Off
+        # by default; operators opt in via OXENCLAW_TURN_DREAM=1.
+        # Fire-and-forget so the LLM call never blocks the user's
+        # response; the worst that can happen on failure is no save.
+        if self._memory is not None and self._turn_dream_config.enabled and sanitized_text:
+            try:
+                from oxenclaw.memory.turn_dream import dream_turn
+
+                async def _run_turn_dream(
+                    text: str, already: list[str], cfg: TurnDreamConfig
+                ) -> None:
+                    sub_model = self._model
+                    if cfg.model_id:
+                        try:
+                            sub_model = self._registry.require(cfg.model_id)
+                        except KeyError:
+                            logger.warning(
+                                "turn-dream model %r not registered; using main",
+                                cfg.model_id,
+                            )
+                    try:
+                        await dream_turn(
+                            user_text=text,
+                            memory=self._memory,
+                            sub_model=sub_model,
+                            api_resolver=lambda m: resolve_api(m, self._auth),
+                            config=cfg,
+                            already_saved=already,
+                        )
+                    except Exception:
+                        logger.exception("turn-dream failed")
+
+                asyncio.create_task(
+                    _run_turn_dream(sanitized_text, regex_facts, self._turn_dream_config)
+                )
+            except Exception:
+                logger.exception("turn-dream scheduling failed")
 
         # Active memory sub-agent — produces a one-line natural-language
         # summary that small models actually attend to (vs raw chunks

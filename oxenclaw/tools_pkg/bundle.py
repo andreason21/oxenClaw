@@ -35,6 +35,7 @@ def default_bundled_tools() -> list[Tool]:
     from oxenclaw.tools_pkg.acp_tool import acp_spawn_tool
     from oxenclaw.tools_pkg.github import github_tool
     from oxenclaw.tools_pkg.skill_creator import skill_creator_tool
+    from oxenclaw.tools_pkg.skill_run import skill_run_tool
     from oxenclaw.tools_pkg.weather import _wttr, weather_tool
     from oxenclaw.tools_pkg.web import web_fetch_tool, web_search_tool
 
@@ -111,6 +112,13 @@ def default_bundled_tools() -> list[Tool]:
         web_search_tool(redirect_handlers=web_redirect_handlers),
         github_tool(),
         skill_creator_tool(),
+        # Without skill_run the model can SEE installed skills in the
+        # <available_skills> block but has no way to actually execute
+        # the documented scripts (no shell tool in the default
+        # bundle). skill_run is the missing executor — picks an
+        # interpreter from the script extension, runs in the skill's
+        # cwd, and returns truncated stdout/stderr.
+        skill_run_tool(),
         acp_spawn_tool(),
         # Primary ACP value: PiAgent can hand a hard sub-task to a
         # frontier ACP server (claude/codex/gemini) when the local
@@ -127,10 +135,19 @@ def bundled_tools_with_deps(
     cron_scheduler: Any | None = None,
     sessions: Any | None = None,
     memory: Any | None = None,
+    cron_defaults: dict[str, str] | None = None,
 ) -> list[Tool]:
     """Tools that need runtime handles. Each is added only if its
     dependency is present, so callers can pass a partial set without
-    branching."""
+    branching.
+
+    `cron_defaults` (when provided) seeds the cron tool's
+    `default_agent_id` / `default_channel` / `default_account_id` /
+    `default_chat_id`. Without them the LLM-driven `cron(action="add")`
+    path always fails with "no defaults configured" because the model
+    has no way to know which channel/account/chat to wire the job to.
+    Operators set them via `gateway_cmd` from env vars.
+    """
     from oxenclaw.tools_pkg.cron_tool import cron_tool
     from oxenclaw.tools_pkg.healthcheck import healthcheck_tool
     from oxenclaw.tools_pkg.message_tool import message_tool
@@ -140,7 +157,16 @@ def bundled_tools_with_deps(
     if channel_router is not None:
         tools.append(message_tool(channel_router))
     if cron_scheduler is not None:
-        tools.append(cron_tool(cron_scheduler))
+        cd = cron_defaults or {}
+        tools.append(
+            cron_tool(
+                cron_scheduler,
+                default_agent_id=cd.get("agent_id"),
+                default_channel=cd.get("channel"),
+                default_account_id=cd.get("account_id"),
+                default_chat_id=cd.get("chat_id"),
+            )
+        )
     if sessions is not None:
         tools.append(session_logs_tool(sessions))
     # healthcheck takes everything optionally — register it so users can

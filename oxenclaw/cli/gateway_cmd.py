@@ -432,7 +432,10 @@ async def _run_gateway(
     if memory_retriever is not None and os.environ.get("OXENCLAW_ACTIVE_MEMORY", "1") != "0":
         active_memory_cfg = ActiveMemoryConfig(
             enabled=True,
-            timeout_seconds=float(os.environ.get("OXENCLAW_ACTIVE_MEMORY_TIMEOUT", "8")),
+            # 4s mirrors `ActiveMemoryConfig.timeout_seconds` default.
+            # Pre-fix the CLI hard-coded "8" which overrode the dataclass
+            # → every chat turn paid an 8s pre-roll on slow local models.
+            timeout_seconds=float(os.environ.get("OXENCLAW_ACTIVE_MEMORY_TIMEOUT", "4")),
             prompt_style=os.environ.get("OXENCLAW_ACTIVE_MEMORY_STYLE", "balanced"),  # type: ignore[arg-type]
             model_id=os.environ.get("OXENCLAW_ACTIVE_MEMORY_MODEL") or None,
         )
@@ -444,16 +447,21 @@ async def _run_gateway(
         )
 
     # Per-turn LLM-based dreamer — extracts free-form durable facts
-    # from each user message after the regex backstop runs. Default
-    # OFF (adds an LLM call per turn). Operators opt in when the
-    # local model can absorb the latency.
+    # from each user message that the regex backstop in
+    # `oxenclaw.memory.auto_extract` can't pattern-match. Default ON:
+    # without it, only the handful of shapes the regex layer covers
+    # (KO/EN family, self-name, location) ever reach memory, and the
+    # agent looks like it forgot most of what the user said. Set
+    # `OXENCLAW_TURN_DREAM=0` to opt out when local-model latency
+    # makes the per-turn LLM call too expensive.
     from oxenclaw.memory.turn_dream import TurnDreamConfig
 
     turn_dream_cfg: TurnDreamConfig | None = None
-    if memory_retriever is not None and os.environ.get("OXENCLAW_TURN_DREAM", "0") == "1":
+    if memory_retriever is not None and os.environ.get("OXENCLAW_TURN_DREAM", "1") != "0":
         turn_dream_cfg = TurnDreamConfig(
             enabled=True,
-            timeout_seconds=float(os.environ.get("OXENCLAW_TURN_DREAM_TIMEOUT", "8")),
+            # 4s — see ActiveMemoryConfig comment above; same rationale.
+            timeout_seconds=float(os.environ.get("OXENCLAW_TURN_DREAM_TIMEOUT", "4")),
             min_chars=int(os.environ.get("OXENCLAW_TURN_DREAM_MIN_CHARS", "8")),
             min_confidence=float(os.environ.get("OXENCLAW_TURN_DREAM_MIN_CONF", "0.5")),
             model_id=os.environ.get("OXENCLAW_TURN_DREAM_MODEL") or None,
@@ -490,11 +498,24 @@ async def _run_gateway(
 
     # Now that scheduler + channel_router exist, register the
     # dependency-bound tools (cron, message, healthcheck, session_logs).
+    # The cron tool needs default agent/channel/account/chat ids so the
+    # LLM can invoke `cron(action="add", schedule=..., prompt=...)`
+    # without threading routing boilerplate through every call. Operators
+    # override per env var; the fallbacks match the dashboard's default
+    # session shape ("dashboard:main:demo" with agent_id="assistant"),
+    # which is the right answer for the single-user default install.
+    cron_defaults = {
+        "agent_id": os.environ.get("OXENCLAW_CRON_DEFAULT_AGENT_ID", "assistant"),
+        "channel": os.environ.get("OXENCLAW_CRON_DEFAULT_CHANNEL", "dashboard"),
+        "account_id": os.environ.get("OXENCLAW_CRON_DEFAULT_ACCOUNT_ID", "main"),
+        "chat_id": os.environ.get("OXENCLAW_CRON_DEFAULT_CHAT_ID", "demo"),
+    }
     tool_registry.register_all(
         bundled_tools_with_deps(
             channel_router=channel_router,
             cron_scheduler=cron_scheduler,
             memory=getattr(memory_retriever, "store", None),
+            cron_defaults=cron_defaults,
         )
     )
     approvals = ApprovalManager(state_path=paths.home / "approvals.json")

@@ -33,6 +33,20 @@ from oxenclaw.agents.base import AgentContext
 from oxenclaw.agents.history import ConversationHistory
 from oxenclaw.agents.incomplete_turn import repair_incomplete_turn
 from oxenclaw.agents.message_merge import merge_consecutive_same_role
+from oxenclaw.agents.pending_action import (
+    extract_unfulfilled_promise,
+    looks_like_short_affirmation,
+    render_pending_action_prelude,
+)
+from oxenclaw.agents.cron_suggest import (
+    detect_cron_request,
+    render_cron_suggestion_prelude,
+)
+from oxenclaw.agents.pseudo_tool import extract_pseudo_tool_call
+from oxenclaw.agents.skill_suggest import (
+    render_skill_suggestion_prelude,
+    suggest_skill_for,
+)
 from oxenclaw.agents.tools import ToolRegistry
 from oxenclaw.clawhub.loader import format_skills_for_prompt, load_installed_skills
 from oxenclaw.config.paths import OxenclawPaths, default_paths
@@ -57,6 +71,8 @@ from oxenclaw.pi import (
     ModelRegistry,
     SessionManager,
     TextContent,
+    ToolResultBlock,
+    ToolResultMessage,
     ToolUseBlock,
     UserMessage,
     default_registry,
@@ -98,6 +114,11 @@ DEFAULT_SYSTEM_PROMPT = (
     "You are oxenClaw, a helpful assistant reached via chat channels. "
     "Be concise. Use tools when helpful.\n"
     "\n"
+    "Tool calls: emit a real `tool_use` block — do NOT write the tool\n"
+    "call as JSON in your reply text (the runtime auto-fires such\n"
+    "pseudo-calls as a best-effort safety net, but rely on real\n"
+    "tool_use blocks).\n"
+    "\n"
     "Time + freshness. You do NOT know the current date or time without\n"
     'calling a tool. If the user asks about "now", "today", "이번 주",\n'
     '"지금", or any question whose answer depends on the current\n'
@@ -134,13 +155,35 @@ DEFAULT_SYSTEM_PROMPT = (
     "    `short_term` with a confidence score + tags. Operators see\n"
     "    promoted facts highlighted in the Memory dashboard tab.\n"
     "\n"
-    "Skill discovery. The system prompt's `<available_skills>` block\n"
-    "lists installed skills as documentation, not callable tools. If\n"
-    "the user's request implies a domain you have no listed skill for\n"
-    "(weather / stock prices / calendar / etc.), call\n"
-    '`skill_resolver(query="...")` — it searches ClawHub, installs the\n'
-    "best match, and returns the SKILL.md path + how to invoke it via\n"
-    "the shell tool. Don't refuse before trying skill_resolver.\n"
+    "Skill discovery + execution. The system prompt's\n"
+    "`<available_skills>` block lists installed skills with their\n"
+    "SKILL.md `<usage>` excerpt (first ~1500 chars: scripts + sample\n"
+    "args). To run an installed skill's documented script, call the\n"
+    '`skill_run` tool — e.g. for stock-analysis on Samsung Electronics:\n'
+    '  `skill_run(skill=\"stock-analysis\", script=\"analyze_stock.py\",\n'
+    '            args=[\"005930.KS\"])`\n'
+    "(Korean tickers use the `<6-digit>.KS` (KOSPI) / `.KQ` (KOSDAQ)\n"
+    "Yahoo suffix.) Pick the right script + args from the `<usage>`\n"
+    "excerpt; do NOT emit a tool_use block named after the skill —\n"
+    "the registry has no such function and the call will fail.\n"
+    "\n"
+    "ANTI-REFUSAL RULE — strict: when an installed skill in\n"
+    "`<available_skills>` covers the user's domain (stocks/주식/주가\n"
+    "→ stock-analysis, weather → weather tool, code search → repo\n"
+    "skills, etc.), DO NOT reply 'I can't access real-time data /\n"
+    "current prices / live information / external services'. Those\n"
+    "refusals are wrong when the relevant skill is installed — the\n"
+    "skill IS your access. Call `skill_run` with the appropriate\n"
+    "script; if you don't know the right script, call it with your\n"
+    "best guess and read the error message (the tool lists every\n"
+    "available script when you guess wrong). The auto-injected\n"
+    "[INSTALLED SKILL DETECTED] prelude on the user message names\n"
+    "the matching skill + a sample call shape — follow it.\n"
+    "\n"
+    "If the user's request implies a domain no installed skill covers,\n"
+    'call `skill_resolver(query="...")` — it searches ClawHub,\n'
+    "installs the best match, then call `skill_run` afterwards.\n"
+    "Don't refuse before trying skill_resolver.\n"
     "\n"
     "Weather playbook. For weather / temperature / forecast questions\n"
     '("날씨", "weather", "temperature", "forecast", "비 와?")\n'
@@ -228,9 +271,11 @@ class PiAgent:
         self._active_memory_config = active_memory or ActiveMemoryConfig(enabled=False)
         self._active_runner: ActiveMemoryRunner | None = None
         # Per-turn LLM-based fact extractor — fills the gaps left by
-        # the regex backstop in `oxenclaw.memory.auto_extract`.
-        # Default off (adds an LLM call per turn); operators opt in
-        # via OXENCLAW_TURN_DREAM=1 in gateway_cmd.
+        # the regex backstop in `oxenclaw.memory.auto_extract`. The
+        # constructor fallback stays disabled so direct PiAgent
+        # callers (tests, library use) never get a surprise LLM call;
+        # production opts in via `gateway_cmd.OXENCLAW_TURN_DREAM=1`,
+        # which is the default in the env so end users do see it on.
         self._turn_dream_config = turn_dream or TurnDreamConfig(enabled=False)
         self._include_skills = include_skills
         self._include_execution_bias = include_execution_bias
@@ -694,6 +739,132 @@ class PiAgent:
         self._session_ids[key] = s.id
         return s
 
+    # ─── pseudo-tool auto-fire ──────────────────────────────────────
+
+    async def _maybe_auto_fire_pseudo_tool(
+        self,
+        *,
+        result: Any,
+        history: list,
+        system: str,
+        api: Any,
+        turn_runtime: RuntimeConfig,
+    ) -> Any:
+        """When the model wrote a tool call as JSON in its reply text
+        instead of issuing a real tool_use block, parse it, execute
+        the tool, and run one more turn so the model can summarise
+        the actual result. Returns the (possibly replaced) TurnResult.
+
+        No-op when:
+          * the final message already contains a real tool_use block
+            (the runtime's normal path handled it);
+          * no parseable + name-matching pseudo call is present;
+          * the resolved tool raises a non-recoverable error
+            (logged; original `result` returned unchanged).
+        """
+        import uuid
+
+        final = getattr(result, "final_message", None)
+        if not isinstance(final, AssistantMessage):
+            return result
+        if any(isinstance(b, ToolUseBlock) for b in final.content):
+            return result  # real tool_use already present
+
+        text = "".join(b.text for b in final.content if isinstance(b, TextContent))
+        pseudo = extract_pseudo_tool_call(
+            text,
+            is_known_tool=lambda n: self._tools.get(n) is not None,
+        )
+        if pseudo is None:
+            return result
+        tool = self._tools.get(pseudo.name)
+        if tool is None:
+            return result  # extractor said yes but registry shifted under us
+
+        logger.info(
+            "pseudo-tool auto-fire: name=%s args=%s raw=%r",
+            tool.name,
+            sorted(pseudo.args.keys()),
+            pseudo.raw_block[:120],
+        )
+
+        try:
+            output = await tool.execute(pseudo.args)
+        except Exception as exc:
+            logger.warning("pseudo-tool execute failed: %s", exc)
+            output = f"(auto-fire error: {exc})"
+            is_error = True
+        else:
+            is_error = False
+
+        # Build a synthetic ToolUseBlock + ToolResultMessage round so
+        # the rerun sees a normal tool conversation. The original text
+        # the model produced is preserved alongside the tool_use block
+        # in the synthetic assistant message — it's the model's own
+        # commentary and may still be useful context.
+        fake_id = f"pseudo_{uuid.uuid4().hex[:12]}"
+        synthetic_assistant = AssistantMessage(
+            content=[
+                TextContent(text=text or "(pseudo-tool auto-fired)"),
+                ToolUseBlock(id=fake_id, name=tool.name, input=pseudo.args),
+            ],
+            stop_reason="tool_use",
+        )
+        synthetic_result = ToolResultMessage(
+            results=[
+                ToolResultBlock(
+                    tool_use_id=fake_id, content=output, is_error=is_error
+                )
+            ],
+        )
+
+        # The original turn appended its text-only assistant message
+        # to `appended_messages`. Replace that tail with the synthetic
+        # round before passing the augmented history into the rerun.
+        original_appended = list(getattr(result, "appended_messages", []) or [])
+        if original_appended and original_appended[-1] is final:
+            original_appended = original_appended[:-1]
+        retry_history = list(history) + original_appended + [
+            synthetic_assistant,
+            synthetic_result,
+        ]
+
+        try:
+            rerun = await run_agent_turn(
+                model=self._model,
+                api=api,
+                system=system,
+                history=retry_history,
+                tools=list(self._tools._tools.values()),
+                config=turn_runtime,
+            )
+        except Exception:
+            logger.exception("pseudo-tool rerun failed; keeping original result")
+            return result
+
+        # Stitch the synthetic round + rerun output into a single
+        # cohesive TurnResult so downstream persistence / dashboard
+        # walking sees a normal tool round-trip.
+        rerun.appended_messages = [
+            *original_appended,
+            synthetic_assistant,
+            synthetic_result,
+            *list(getattr(rerun, "appended_messages", []) or []),
+        ]
+        # Carry forward usage + executions so cost telemetry isn't
+        # silently halved.
+        prior_usage = getattr(result, "usage_total", None) or {}
+        rerun_usage = getattr(rerun, "usage_total", None) or {}
+        merged: dict[str, int] = dict(prior_usage)
+        for k, v in rerun_usage.items():
+            if isinstance(v, (int, float)):
+                merged[k] = int(merged.get(k, 0) + v)
+        rerun.usage_total = merged
+        rerun.tool_executions = list(getattr(result, "tool_executions", None) or []) + list(
+            getattr(rerun, "tool_executions", None) or []
+        )
+        return rerun
+
     # ─── Agent Protocol ─────────────────────────────────────────────
 
     async def handle(
@@ -812,8 +983,8 @@ class PiAgent:
 
         # Per-turn LLM dream extractor — catches free-form durable
         # facts the regex backstop above can't pattern-match
-        # (preferences, deadlines, project context, decisions). Off
-        # by default; operators opt in via OXENCLAW_TURN_DREAM=1.
+        # (preferences, deadlines, project context, decisions). On
+        # by default; operators opt out via OXENCLAW_TURN_DREAM=0.
         # Fire-and-forget so the LLM call never blocks the user's
         # response; the worst that can happen on failure is no save.
         if self._memory is not None and self._turn_dream_config.enabled and sanitized_text:
@@ -879,6 +1050,79 @@ class PiAgent:
                 inject_prelude = ""
             if inject_prelude:
                 user_text_for_model = f"{inject_prelude}\n\n{user_text_for_model}"
+
+        # Skill-suggestion prelude — small local models routinely
+        # ignore the `<available_skills>` system block and fall back
+        # to a generic "I can't do that" refusal when asked about a
+        # domain a skill clearly covers (e.g. asking about a Korean
+        # stock with `stock-analysis` installed). When the user's
+        # tokens overlap an installed skill's description, prepend a
+        # tight directive to the user message naming the skill, the
+        # `skill_run` call shape, and forbidding the refusal. Cheap
+        # token heuristic, fail-open.
+        if text:
+            try:
+                installed_skills = (
+                    load_installed_skills(self._paths)
+                    if self._include_skills
+                    else []
+                )
+                suggestion = suggest_skill_for(text, installed_skills)
+            except Exception:
+                logger.exception("skill-suggest probe failed")
+                suggestion = None
+            if suggestion is not None:
+                skill_prelude = render_skill_suggestion_prelude(suggestion, text)
+                user_text_for_model = f"{skill_prelude}\n\n{user_text_for_model}"
+                logger.info(
+                    "skill-suggest prelude injected: skill=%s matched=%s",
+                    suggestion.slug,
+                    suggestion.matched_terms,
+                )
+
+        # Cron / schedule request prelude — when the user asks to
+        # register a recurring task ("매일 아침 8시 50분에 ... 알려줘"),
+        # small local models reply with a markdown howto about
+        # `crontab` instead of calling the registered `cron` tool. The
+        # detector requires both an interval keyword AND a parseable
+        # time-of-day to fire — high-precision, fail-open. Cheap regex,
+        # fail-open.
+        if text:
+            try:
+                cron_hint = detect_cron_request(text)
+            except Exception:
+                logger.exception("cron-suggest probe failed")
+                cron_hint = None
+            if cron_hint is not None:
+                cron_prelude = render_cron_suggestion_prelude(cron_hint, text)
+                user_text_for_model = f"{cron_prelude}\n\n{user_text_for_model}"
+                logger.info(
+                    "cron-suggest prelude injected: schedule=%r matched=%s",
+                    cron_hint.schedule,
+                    cron_hint.matched_keywords,
+                )
+
+        # Pending-action recovery — when the user replies with a short
+        # affirmation ("진행해" / "yes" / "ok") and the prior assistant
+        # turn promised to do something but never actually fired a
+        # tool, prepend a nudge so the model picks the dropped action
+        # back up. Cheap text heuristic, fail-open. Complements the
+        # post-stream pseudo-tool auto-fire below — that path catches
+        # the case where the model wrote the call as JSON in text;
+        # this one catches the case where it only narrated an intent.
+        if text and looks_like_short_affirmation(text):
+            try:
+                session_for_pending = await self._ensure_session(ctx.session_key)
+                promise = extract_unfulfilled_promise(session_for_pending.messages)
+            except Exception:
+                logger.exception("pending-action lookup failed")
+                promise = None
+            if promise:
+                pending_prelude = render_pending_action_prelude(promise)
+                user_text_for_model = f"{pending_prelude}\n\n{user_text_for_model}"
+                logger.info(
+                    "pending-action prelude injected: promise_snippet=%r", promise[:80]
+                )
 
         # Build the user message content. Pure-text turns keep the
         # `content: str` shape (smaller payload, identical semantics);
@@ -982,6 +1226,23 @@ class PiAgent:
             tools=list(self._tools._tools.values()),
             config=turn_runtime,
         )
+
+        # Pseudo-tool auto-fire — when the model wrote a tool call as
+        # JSON in its reply text instead of emitting a real tool_use
+        # block (a frequent small-local-model failure), parse it,
+        # execute the tool for real, and run one more round so the
+        # final answer is grounded in the actual tool output. Capped
+        # at one retry per user turn to avoid infinite loops.
+        try:
+            result = await self._maybe_auto_fire_pseudo_tool(
+                result=result,
+                history=history,
+                system=system,
+                api=api,
+                turn_runtime=turn_runtime,
+            )
+        except Exception:
+            logger.exception("pseudo-tool auto-fire failed (non-fatal)")
 
         # Persist the appended messages back to the session.
         session.messages.extend(result.appended_messages)

@@ -103,15 +103,18 @@ def test_prelude_does_not_paste_python_call_template() -> None:
     assert 'action="' not in out
 
 
-def test_prelude_explains_prompt_field() -> None:
-    """The cron tool's `prompt` field carries the user's original text;
-    the prelude has to make that explicit so the model doesn't
-    paraphrase or omit it."""
+def test_prelude_tells_model_to_strip_temporal_phrase_from_prompt() -> None:
+    """Critical for breaking the cron-fire feedback loop: the `prompt`
+    field must NOT carry the schedule phrase. Otherwise every fire
+    re-registers a duplicate job (the registered prompt itself trips
+    `detect_cron_request` on the next turn)."""
     s = detect_cron_request("매일 아침 8시 50분에 리포트 알려줘")
     assert s is not None
     out = render_cron_suggestion_prelude(s, "매일 아침 8시 50분에 리포트 알려줘")
     assert "prompt" in out
-    assert "verbatim" in out or "원본" in out
+    assert "loops the scheduler" in out
+    # The example must show the cleaned prompt, not the verbatim text.
+    assert "시장 리포트 알려줘" in out
 
 
 def test_prelude_describes_blank_schedule_when_unparseable() -> None:

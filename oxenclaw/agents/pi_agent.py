@@ -1094,9 +1094,16 @@ class PiAgent:
         # small local models reply with a markdown howto about
         # `crontab` instead of calling the registered `cron` tool. The
         # detector requires both an interval keyword AND a parseable
-        # time-of-day to fire — high-precision, fail-open. Cheap regex,
-        # fail-open.
-        if text:
+        # time-of-day to fire — high-precision, fail-open.
+        #
+        # Hard skip when the inbound is a synthetic cron fire (sender
+        # `cron:<job_id>`). Otherwise the registered prompt's own time
+        # phrase ("매일 아침 8시 50분에 …") triggers a fresh registration
+        # on every fire — observed as the duplicate-job feedback loop.
+        is_cron_fire = bool(
+            inbound.sender_id and inbound.sender_id.startswith("cron:")
+        )
+        if text and not is_cron_fire:
             try:
                 cron_hint = detect_cron_request(text)
             except Exception:

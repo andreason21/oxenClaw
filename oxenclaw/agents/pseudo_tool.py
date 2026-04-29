@@ -41,7 +41,7 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -62,12 +62,23 @@ def extract_pseudo_tool_call(
     text: str,
     *,
     is_known_tool: Callable[[str], bool],
+    tool_schemas: Mapping[str, dict[str, Any]] | None = None,
 ) -> PseudoToolCall | None:
     """Return the first parseable + tool-resolving pseudo call, or None.
 
     `is_known_tool(name)` should return True iff `name` (after the
     caller's own canonicalisation) maps to a registered tool. We
     delegate the lookup so this module stays free of agent imports.
+
+    `tool_schemas` (name → JSON input_schema) opts into a second-stage
+    fallback: when a candidate JSON object has no `tool`/`name`/etc.
+    field but its key set uniquely matches one tool's input schema
+    (every required key present, no unknown extras), we infer that
+    tool. Models served by the prelude system frequently emit the
+    arguments alone — `{"action":"add","schedule":"...","prompt":"..."}` —
+    expecting the runtime to know which tool they meant. This rescues
+    that case without losing the safety of a strict caller-side
+    `is_known_tool` predicate (we still gate on it).
     """
     if not text or not text.strip():
         return None
@@ -93,13 +104,61 @@ def extract_pseudo_tool_call(
         # emit a list; normalize to a dict.
         for obj in _flatten_call_candidates(parsed):
             call = _coerce_to_call(obj)
-            if call is None:
+            if call is not None:
+                name, args = call
+                if is_known_tool(name):
+                    return PseudoToolCall(name=name, args=args, raw_block=raw[:200])
                 continue
-            name, args = call
-            if not is_known_tool(name):
+            # No name field on this candidate. Fall back to
+            # schema-shape matching when the caller opted in.
+            if not isinstance(obj, dict) or not tool_schemas:
                 continue
-            return PseudoToolCall(name=name, args=args, raw_block=raw[:200])
+            inferred = _match_to_schema(obj, tool_schemas)
+            if inferred is None or not is_known_tool(inferred):
+                continue
+            return PseudoToolCall(name=inferred, args=obj, raw_block=raw[:200])
     return None
+
+
+def _match_to_schema(
+    obj: dict[str, Any], schemas: Mapping[str, dict[str, Any]]
+) -> str | None:
+    """Return the unique tool name whose schema matches `obj`, or None.
+
+    Match criteria:
+      - every key in the schema's `required` list is present in `obj`;
+      - every key in `obj` is either declared in `properties` or
+        the schema's `additionalProperties` is truthy.
+    Ambiguity (two or more schemas tie) returns None — we prefer to
+    fall through silently than auto-fire the wrong tool.
+    """
+    if not obj:
+        return None
+    obj_keys = set(obj.keys())
+    best: tuple[int, str] | None = None  # (specificity, name)
+    for name, schema in schemas.items():
+        if not isinstance(schema, dict):
+            continue
+        properties = set((schema.get("properties") or {}).keys())
+        required = set(schema.get("required") or [])
+        if not required:
+            # Schemas without required fields would match almost any
+            # blob — too permissive to anchor on.
+            continue
+        if not required.issubset(obj_keys):
+            continue
+        allow_extras = bool(schema.get("additionalProperties"))
+        if not allow_extras and not obj_keys.issubset(properties):
+            continue
+        specificity = len(required) + len(obj_keys & properties)
+        if best is None or specificity > best[0]:
+            best = (specificity, name)
+        elif specificity == best[0]:
+            # Tie → ambiguous. Refuse to guess.
+            best = (specificity, "")
+    if best is None or not best[1]:
+        return None
+    return best[1]
 
 
 def _safe_load_json(s: str) -> Any | None:
@@ -209,3 +268,7 @@ def _coerce_to_call(obj: Any) -> tuple[str, dict[str, Any]] | None:
 
 
 __all__ = ["PseudoToolCall", "extract_pseudo_tool_call"]
+
+
+# Exposed for unit tests of the schema-shape matcher.
+_match_to_schema_for_tests = _match_to_schema

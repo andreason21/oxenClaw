@@ -771,9 +771,18 @@ class PiAgent:
             return result  # real tool_use already present
 
         text = "".join(b.text for b in final.content if isinstance(b, TextContent))
+        # Surface every registered tool's input_schema so the
+        # extractor's schema-shape fallback can rescue model output
+        # that emits arguments without naming the tool — e.g. the
+        # bare `{"action":"add","schedule":"...","prompt":"..."}`
+        # JSON the cron prelude provokes.
+        tool_schemas = {
+            t.name: t.input_schema for t in self._tools._tools.values()
+        }
         pseudo = extract_pseudo_tool_call(
             text,
             is_known_tool=lambda n: self._tools.get(n) is not None,
+            tool_schemas=tool_schemas,
         )
         if pseudo is None:
             return result

@@ -248,7 +248,11 @@ def render_skill_suggestion_prelude(
         f"  - args: {args_hint}\n"
         "For Korean stock tickers use the Yahoo Finance form "
         "<6-digit>.KS (KOSPI) / .KQ (KOSDAQ) — 삼성전자 = 005930.KS, "
-        "SK하이닉스 = 000660.KS."
+        "SK하이닉스 = 000660.KS.\n"
+        "If you fall back to writing the call as JSON in your reply "
+        "text instead of a structured tool_use block, include the tool "
+        "name as a `tool` field alongside the arguments so the autofire "
+        "backstop can route it correctly."
     )
 
 

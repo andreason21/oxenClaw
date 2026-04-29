@@ -237,7 +237,11 @@ def render_cron_suggestion_prelude(
         "  - description: a short label summarising what the job does "
         "(e.g. \"daily market report\")\n"
         "Leave agent_id / channel / account_id / chat_id unset — the "
-        "tool fills those from the calling context."
+        "tool fills those from the calling context.\n"
+        "If you fall back to writing the call as JSON in your reply "
+        "text instead of a structured tool_use block, include the tool "
+        "name as a `tool` field alongside the arguments so the autofire "
+        "backstop can route it correctly."
     )
 
 

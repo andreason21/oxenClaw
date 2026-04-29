@@ -20,11 +20,13 @@ The wrapper translates each SSE chunk to the pi event union:
 from __future__ import annotations
 
 import json
+import time
 from collections.abc import AsyncIterator, Callable
 from typing import Any
 
 import aiohttp
 
+from oxenclaw.observability import llm_trace
 from oxenclaw.pi.messages import (
     AssistantMessage,
     ImageContent,
@@ -226,6 +228,25 @@ async def stream_openai_compatible(
 
     url = ctx.api.base_url.rstrip("/") + path
 
+    # Wire-level trace (no-op unless OXENCLAW_LLM_TRACE=1). Captures the
+    # *final* payload after every patch + the assembled response.
+    trace_id = llm_trace.new_request_id()
+    trace_provider = getattr(ctx.model, "provider", "openai-compatible") or "openai-compatible"
+    trace_model = getattr(ctx.model, "id", "?")
+    trace_t0 = time.monotonic()
+    llm_trace.log_request(
+        request_id=trace_id,
+        provider=trace_provider,
+        model_id=trace_model,
+        url=url,
+        payload=payload,
+    )
+    # Aggregators for the `response` event.
+    _trace_text_parts: list[str] = []
+    _trace_tool_calls: dict[int, dict[str, Any]] = {}
+    _trace_finish_reason: str | None = None
+    _trace_usage: dict[str, Any] | None = None
+
     # Per-stream session — runner can pool externally if needed.
     timeout = aiohttp.ClientTimeout(total=opts.timeout_seconds)
     async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -233,6 +254,14 @@ async def stream_openai_compatible(
             async with session.post(url, json=payload, headers=headers) as resp:
                 if resp.status >= 400:
                     body = await resp.text()
+                    llm_trace.log_error(
+                        request_id=trace_id,
+                        provider=trace_provider,
+                        model_id=trace_model,
+                        status=resp.status,
+                        message=body,
+                        duration_ms=(time.monotonic() - trace_t0) * 1000.0,
+                    )
                     yield ErrorEvent(
                         message=f"HTTP {resp.status}: {body[:300]}",
                         retryable=resp.status in RETRYABLE_STATUS,
@@ -260,6 +289,7 @@ async def stream_openai_compatible(
 
                     usage = event.get("usage")
                     if isinstance(usage, dict):
+                        _trace_usage = usage
                         yield UsageEvent(usage=usage)
 
                     choices = event.get("choices") or []
@@ -275,18 +305,27 @@ async def stream_openai_compatible(
 
                     content = delta.get("content")
                     if isinstance(content, str) and content:
+                        _trace_text_parts.append(content)
                         yield TextDeltaEvent(delta=content)
 
                     for tc in delta.get("tool_calls") or []:
                         idx = tc.get("index", 0)
                         slot = tool_buf.setdefault(idx, {"id": "", "name": "", "arguments": ""})
+                        trace_slot = _trace_tool_calls.setdefault(
+                            idx, {"id": "", "name": "", "arguments": ""}
+                        )
                         if tc.get("id"):
                             slot["id"] = tc["id"]
+                            trace_slot["id"] = tc["id"]
                         fn_delta = tc.get("function") or {}
                         if fn_delta.get("name"):
                             slot["name"] += fn_delta["name"]
+                            trace_slot["name"] = (trace_slot.get("name") or "") + fn_delta["name"]
                         if fn_delta.get("arguments"):
                             slot["arguments"] += fn_delta["arguments"]
+                            trace_slot["arguments"] = (
+                                trace_slot.get("arguments") or ""
+                            ) + fn_delta["arguments"]
                         if idx not in tool_started and slot["id"] and slot["name"]:
                             tool_started.add(idx)
                             yield ToolUseStartEvent(id=slot["id"], name=slot["name"])
@@ -297,6 +336,7 @@ async def stream_openai_compatible(
 
                     finish = choice.get("finish_reason")
                     if finish:
+                        _trace_finish_reason = finish
                         # Close any open tool_use blocks before stop.
                         for idx in sorted(tool_started):
                             yield ToolUseEndEvent(id=tool_buf[idx]["id"])
@@ -307,7 +347,27 @@ async def stream_openai_compatible(
                     for idx in sorted(tool_started):
                         yield ToolUseEndEvent(id=tool_buf[idx]["id"])
                     yield StopEvent(reason="end_turn")
+                    if _trace_finish_reason is None:
+                        _trace_finish_reason = "end_turn"
+            llm_trace.log_response(
+                request_id=trace_id,
+                provider=trace_provider,
+                model_id=trace_model,
+                content="".join(_trace_text_parts),
+                tool_calls=[_trace_tool_calls[i] for i in sorted(_trace_tool_calls)],
+                finish_reason=_trace_finish_reason,
+                usage=_trace_usage,
+                duration_ms=(time.monotonic() - trace_t0) * 1000.0,
+            )
         except (TimeoutError, aiohttp.ClientConnectionError) as exc:
+            llm_trace.log_error(
+                request_id=trace_id,
+                provider=trace_provider,
+                model_id=trace_model,
+                status=None,
+                message=f"connection error: {exc}",
+                duration_ms=(time.monotonic() - trace_t0) * 1000.0,
+            )
             yield ErrorEvent(message=f"connection error: {exc}", retryable=True, error=exc)
 
 

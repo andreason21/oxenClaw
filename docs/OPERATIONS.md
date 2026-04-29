@@ -442,6 +442,8 @@ Recommended cadence: run a 4h soak in CI before each release.
 | `OXENCLAW_ENABLE_CANVAS=1` | Register the CV-1 canvas tools (`canvas_present`, `canvas_hide`) on every new agent. The dashboard panel + RPCs are always wired; this env-var only governs *agent-side* tool injection. | [`CANVAS.md`](./CANVAS.md) |
 | `OXENCLAW_NET_ALLOW_HOSTS` | Comma-separated host allowlist for the shared `NetPolicy` (used by web tool, browser tool, MCP HTTP transports). | [`SECURITY.md`](./SECURITY.md) |
 | `OXENCLAW_AUDIT_OUTBOUND=1` | Log every outbound HTTP from `aiohttp` *and* the browser route handler into `~/.oxenclaw/outbound-audit.db`. | [`SECURITY.md`](./SECURITY.md) |
+| `OXENCLAW_LLM_TRACE=1` | Wire-level LLM trace: every provider request/response/error is appended to `~/.oxenclaw/logs/llm-trace.jsonl` (override sink with `OXENCLAW_LLM_TRACE_FILE`, body cap with `OXENCLAW_LLM_TRACE_MAX_BODY`). Captures the *final* payload after every patch + the assembled `tool_calls` / `usage` / `finish_reason` — the byte-level evidence needed to diagnose "why didn't the model call the tool?" | — |
+| `OXENCLAW_OLLAMA_NUM_CTX=N` | Override the `num_ctx` (default 16384) the native Ollama provider sends in every `/api/chat` request. Larger values fit bigger memory + skill manifest blobs at the cost of more KV cache RAM on the Ollama server. | [`ARCHITECTURE.md`](./ARCHITECTURE.md) |
 
 ### First-run token bootstrap
 

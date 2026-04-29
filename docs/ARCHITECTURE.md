@@ -343,6 +343,8 @@ TelegramChannelConfigSchema = {
 
 **vLLM provider (added 2026-04-26):** `--provider vllm` is a thin alias of `local` with strict-OpenAI payload (no Ollama-specific `num_predict`) and warmup off; defaults to `http://127.0.0.1:8000/v1`. See README "Internal vLLM server" section.
 
+**Ollama native provider (added 2026-04-29):** `oxenclaw/pi/providers/ollama.py` posts to Ollama's native `/api/chat` instead of the OpenAI compatibility shim at `/v1/chat/completions`. The shim silently caps `options.num_ctx` at 4096, truncating memory + skill manifests so the model never sees the tool schemas; native honours the full options surface (`num_ctx` defaults to 16384, override via `OXENCLAW_OLLAMA_NUM_CTX`). Tool-using rounds run non-stream because native batches `tool_calls` into the final `done` frame anyway. Trace events flow through `OXENCLAW_LLM_TRACE` exactly like the OpenAI path.
+
 **Guiding principles:**
 - Preserve manifest-first plugin loading.
 - Keep SDK contract in its own package.

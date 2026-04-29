@@ -9,9 +9,11 @@ Importing `oxenclaw.pi.providers` registers all bundled wrappers. Operators
 that don't want a wrapper loaded can import individual modules selectively.
 
 Bundled providers:
-- `openai`         (also covers ollama / lmstudio / vllm / llamacpp / litellm
-                    / openai-compatible / proxy via the same OpenAI-style
+- `openai`         (also covers lmstudio / vllm / llamacpp / litellm /
+                    openai-compatible / proxy via the OpenAI-style
                     chat-completions SSE shape)
+- `ollama`         (native /api/chat — bypasses Ollama's OpenAI shim
+                    because the shim drops num_ctx and tool_call deltas)
 - `anthropic`      (Anthropic native SSE with cache_control + thinking)
 - `google`         (Gemini generateContent SSE with thinking config)
 - `bedrock`        (AWS Bedrock invoke-model — wraps anthropic family
@@ -28,6 +30,7 @@ from oxenclaw.pi.providers import (  # noqa: F401  (registers via side effect)
     google,
     minimax,
     moonshot,
+    ollama,
     openai,
     openrouter,
     zai,

@@ -7,8 +7,6 @@ alongside the registration as `payload_patch` callables.
 
 from __future__ import annotations
 
-from typing import Any
-
 from oxenclaw.pi.providers._openai_shared import (
     PayloadPatch,
     stream_openai_compatible,
@@ -22,14 +20,6 @@ def _make_streamfn(payload_patch: PayloadPatch | None = None):  # type: ignore[n
             yield ev
 
     return _fn
-
-
-def _ollama_payload_patch(payload: dict[str, Any]) -> dict[str, Any]:
-    """Ollama's OpenAI shim ignores some fields; lift max_tokens onto
-    the `options` dict it actually inspects."""
-    if "max_tokens" in payload and "options" not in payload:
-        payload["options"] = {"num_predict": payload["max_tokens"]}
-    return payload
 
 
 # Plain OpenAI / OpenAI-compat providers — no payload tweak.
@@ -47,5 +37,7 @@ register_provider_stream("together", _make_streamfn())
 register_provider_stream("fireworks", _make_streamfn())
 register_provider_stream("kilocode", _make_streamfn())
 
-# Ollama: lift max_tokens → options.num_predict.
-register_provider_stream("ollama", _make_streamfn(_ollama_payload_patch))
+# Note: provider id "ollama" is registered by `oxenclaw.pi.providers.ollama`
+# against the native /api/chat endpoint. The OpenAI shim path is unusable
+# for Ollama because it silently caps num_ctx at 4096 regardless of
+# `options.num_ctx`, truncating memory + skill manifests.

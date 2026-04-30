@@ -31,7 +31,6 @@ from oxenclaw.clawhub.desc_enricher import (
     render_for_prompt,
 )
 
-
 # ────────────────────────────────────────────────────────────────────────────
 # render_for_prompt
 # ────────────────────────────────────────────────────────────────────────────
@@ -208,9 +207,9 @@ def test_enrich_cache_hit_skips_llm(
     cache_dir.mkdir()
     h = content_hash("thing", "desc", "body")
     record = (
-        '{"content_hash": "%s", "model_id": "stub", '
+        f'{{"content_hash": "{h}", "model_id": "stub", '
         '"enriched": {"when_use":["cached!"],"when_skip":[],"alternatives":{}}}'
-    ) % h
+    )
     (cache_dir / desc_enricher.ENRICHED_FILE_NAME).write_text(record)
 
     # If the cache miss path runs we'd hit a non-existent pi.auth path

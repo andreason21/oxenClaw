@@ -13,10 +13,7 @@ behaviour everywhere.
 
 from __future__ import annotations
 
-import os
-
 import pytest
-
 
 _OXENCLAW_HOST_ENV_KEYS = (
     "OXENCLAW_LLAMACPP_BIN",

@@ -34,7 +34,6 @@ from oxenclaw.pi.streaming import (
     ToolUseEndEvent,
     ToolUseInputDeltaEvent,
     ToolUseStartEvent,
-    UsageEvent,
 )
 
 # ─── Registration ────────────────────────────────────────────────────

@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-import pytest
-
 from oxenclaw.agents.cron_suggest import (
     detect_cron_request,
     render_cron_suggestion_prelude,
 )
-
 
 # ─── detect_cron_request ──────────────────────────────────────────────
 

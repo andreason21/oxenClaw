@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -17,9 +16,7 @@ import pytest
 from oxenclaw.flows.doctor import DoctorReport, _probe_llamacpp_direct
 from oxenclaw.flows.llamacpp_setup import (
     LlamaCppSetupWizard,
-    SetupResult,
 )
-
 
 # ─── Doctor probe ────────────────────────────────────────────────────
 

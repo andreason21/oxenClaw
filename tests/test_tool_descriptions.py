@@ -13,12 +13,8 @@ the test never touches the gateway runtime.
 
 from __future__ import annotations
 
-import asyncio
-from collections.abc import Callable
 from pathlib import Path
 from typing import Any
-
-import pytest
 
 from oxenclaw.tools_pkg._desc import hermes_desc
 

@@ -75,6 +75,11 @@ class RuntimeConfig:
     # Optional model registry handle for failover model resolution.
     # PiAgent injects its registry; standalone callers leave None.
     failover_registry: Any = None
+    # When True, a failover at the chain tail wraps back to the head and
+    # walks the chain at most once more. Bounded by chain length so a
+    # permanently-broken set of models can't loop forever. Default False
+    # preserves current "stop at chain tail" semantics.
+    failover_cycle: bool = False
 
     # Compaction
     compaction_callback: Callable[..., Any] | None = None

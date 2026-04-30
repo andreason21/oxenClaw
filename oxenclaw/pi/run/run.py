@@ -407,6 +407,7 @@ async def run_agent_turn(
     failover_chain_full = [model.id, *failover_chain] if failover_chain else [model.id]
     failover_cursor = 0
     failover_empty_streak = 0
+    failover_cycles_used = 0  # bumped each time we wrap from tail back to head
     active_model = model
 
     for _iteration in range(config.max_tool_iterations):
@@ -566,18 +567,28 @@ async def run_agent_turn(
                     chain_cursor=failover_cursor,
                     empty_streak=failover_empty_streak,
                     empty_streak_threshold=config.failover_empty_streak_threshold,
+                    cycle=getattr(config, "failover_cycle", False),
+                    cycles_used=failover_cycles_used,
                 )
                 if decision.failover or classified.should_fallback:
                     next_model, new_cursor = resolve_next_model(
-                        failover_chain_full, failover_cursor, config.failover_registry
+                        failover_chain_full,
+                        failover_cursor,
+                        config.failover_registry,
+                        cycle=getattr(config, "failover_cycle", False),
+                        cycles_used=failover_cycles_used,
                     )
                     if next_model is not None:
+                        # Detect a tail→head wrap: new_cursor < old cursor.
+                        if new_cursor < failover_cursor:
+                            failover_cycles_used += 1
                         logger.warning(
-                            "failover: %s → %s reason=%s classifier=%s",
+                            "failover: %s → %s reason=%s classifier=%s cycles_used=%d",
                             active_model.id,
                             next_model.id,
                             decision.reason,
                             classified.reason.value,
+                            failover_cycles_used,
                         )
                         active_model = next_model
                         failover_cursor = new_cursor

@@ -57,11 +57,23 @@ def should_failover(
     empty_streak: int,
     empty_streak_threshold: int = 3,
     custom_predicate: Callable[[AttemptResult], bool] | None = None,
+    cycle: bool = False,
+    cycles_used: int = 0,
 ) -> FailoverDecision:
-    """Decide whether to swap to the next model in `chain`."""
+    """Decide whether to swap to the next model in `chain`.
+
+    When `cycle=True` and we're at the tail, the next model wraps back
+    to chain[0] — but only if `cycles_used` is below the chain length
+    so a permanently-broken set of models can't loop forever.
+    """
     if chain_cursor + 1 >= len(chain):
-        return FailoverDecision(failover=False, reason="end_of_chain")
-    next_id = chain[chain_cursor + 1]
+        if not cycle or cycles_used >= len(chain):
+            return FailoverDecision(failover=False, reason="end_of_chain")
+        # Wrap to head; cyclic_resolve_next_model below picks chain[0]
+        # and bumps cycles_used in the run loop.
+        next_id = chain[0]
+    else:
+        next_id = chain[chain_cursor + 1]
 
     # Custom hook always wins.
     if custom_predicate is not None and custom_predicate(result):
@@ -98,15 +110,39 @@ def should_failover(
     return FailoverDecision(failover=False, reason="model_ok")
 
 
-def resolve_next_model(chain: list[str], cursor: int, registry: Any) -> tuple[Any | None, int]:
+def resolve_next_model(
+    chain: list[str],
+    cursor: int,
+    registry: Any,
+    *,
+    cycle: bool = False,
+    cycles_used: int = 0,
+) -> tuple[Any | None, int]:
     """Walk the chain forward from `cursor` until we find a registered
     model. Returns `(model_or_None, new_cursor)`. Skips entries that
-    aren't in the registry (operator typo / removed alias)."""
+    aren't in the registry (operator typo / removed alias).
+
+    When `cycle=True` and we run off the tail, wraps back to chain[0]
+    once per cycle. `cycles_used >= len(chain)` is the hard stop —
+    every position has had its turn at least once per cycle and the
+    operator-configured chain length bounds total attempts.
+    """
     n = len(chain)
-    for offset in range(1, n):
+    if n == 0:
+        return None, 0
+    # Visit up to n-1 forward positions; when cycle=True allow wrapping
+    # to also visit positions before the cursor, totalling n attempts so
+    # every entry gets a chance once.
+    max_offset = n if cycle and cycles_used < n else n - 1
+    for offset in range(1, max_offset + 1):
         idx = cursor + offset
         if idx >= n:
-            return None, n
+            if not cycle or cycles_used >= n:
+                return None, n
+            idx = idx - n  # wrap
+            if idx == cursor:
+                # Came all the way around to where we started.
+                return None, n
         model_id = chain[idx]
         try:
             model = registry.require(model_id)

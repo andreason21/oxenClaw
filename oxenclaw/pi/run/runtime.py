@@ -39,25 +39,26 @@ class RuntimeConfig:
     backoff_max: float = 8.0
 
     # Tool loop
-    # Default 25 (openclaw `runMaxIterations`) — small models doing
-    # multi-hop chains (web_search → web_fetch ×N → summarise) need
-    # headroom; a soft cap below this would clip the answer.
+    # 25 — bumped from the previous 8 to give multi-hop chains
+    # (web_search → web_fetch ×N → summarise) the headroom small
+    # models need. openclaw doesn't expose a single equivalent
+    # constant; this is an oxenClaw choice tuned for our usage.
     max_tool_iterations: int = 25
     parallel_tools: bool = True
     # If True, on max_tool_iterations the loop appends a synthetic message
     # asking the model to wrap up rather than just terminating.
     soft_iteration_cap: bool = True
-    # Loop-detection: if the model calls unknown tools this many times in
-    # a row (e.g. gemma4 hammering `web_search` after 0 hits), abort the
-    # turn with a structured error so the user sees something instead of
-    # a silent stuck loop. Mirrors openclaw `loopDetection.unknownToolThreshold`.
-    # Bumped to 5 (was 3) to align with openclaw and to give the
-    # tool-list reinjection nudge a chance before structural abort.
-    unknown_tool_threshold: int = 5
+    # Loop-detection threshold for unknown-tool spam. Aligned with
+    # openclaw `UNKNOWN_TOOL_THRESHOLD = 10`
+    # (src/agents/tool-loop-detection.ts). Combined with the one-shot
+    # tool-list reinjection nudge below, the model gets up to 2N
+    # opportunities before the structured abort.
+    unknown_tool_threshold: int = 10
     # Same-arg loop detection threshold: if the model calls the SAME
     # (tool_name, args_digest) this many times in a row, treat as stuck
-    # and abort with a structured error. Mirrors openclaw
-    # `argDigestLoopDetector`.
+    # and abort. This is an oxenClaw addition (no direct upstream
+    # equivalent) to catch the "0-hit web_search re-emit" symptom
+    # specific to small local models.
     arg_loop_threshold: int = 4
     # Stop-reason recovery: when the model returns refusal / safety /
     # sensitive (or end_turn with empty content), retry once with a
@@ -99,8 +100,9 @@ class RuntimeConfig:
     # Compress-then-retry self-heal cap per turn. The run loop tries up
     # to this many compress-and-retry cycles when the classifier says
     # the failure was a context-overflow / payload-too-large.
-    # Bumped to 3 (was 2) to match openclaw `compressionSelfHealMax`
-    # — first cheap trim, then aggressive trim, then full compaction.
+    # 3 lets us do "cheap trim → aggressive trim → full compaction"
+    # before giving up. (oxenClaw choice; openclaw doesn't expose an
+    # equivalent named constant.)
     max_compression_self_heals: int = 3
 
     # Abort

@@ -1,11 +1,13 @@
 """Model-aware token-count estimator.
 
-The legacy `chars_per_token=3.5` works for English Anthropic but
-under-counts Korean (multi-byte chars often = 1 token each on the
-qwen/llama tokenizers) and over-counts gemma's SentencePiece BPE which
-splits aggressively. openclaw uses a per-family ratio dict so the
-preemptive compactor doesn't trigger spurious truncations on Korean
-sessions OR underestimate near the budget on gemma.
+oxenClaw original. openclaw uses a single
+`ESTIMATED_CHARS_PER_TOKEN = 4` constant
+(`src/agents/pi-embedded-runner/run/preemptive-compaction.ts`); we
+deliberately diverge to a per-family table so the preemptive
+compactor doesn't trigger spurious truncations on Korean sessions
+(qwen / llama tokenizers count multi-byte CJK chars more densely)
+and doesn't underestimate near the budget on gemma's aggressive
+SentencePiece splits.
 
 If `tiktoken` is installed and the model id matches a known tokenizer,
 we use real token counts. Otherwise we fall back to the per-family
@@ -16,10 +18,12 @@ from __future__ import annotations
 
 from typing import Final
 
-# Default ratio. Mirrors openclaw `tokenEstimator.fallback`.
+# Default fallback ratio when no family pattern matches. Same value
+# (3.5) the legacy oxenClaw estimator used pre-rc.21.
 _DEFAULT_RATIO: Final[float] = 3.5
 
-# Family-specific ratios. Empirically derived (openclaw `tokenizers.json`):
+# Family-specific ratios. Empirically tuned for KO+EN mixed sessions
+# we actually run; not derived from any upstream tokenizer dump.
 # - Anthropic SentencePiece: ~3.5 chars/token English, ~1.8 Korean. Average ~3.0.
 # - Qwen tokenizer (BBPE): ~3.0 English, ~1.5 Korean. Average ~2.5.
 # - Llama-3 tiktoken: ~3.5 English, ~2.0 Korean. Average ~3.0.

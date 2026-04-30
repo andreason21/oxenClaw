@@ -30,10 +30,11 @@ logger = get_logger("pi.run.history_image_prune")
 _PLACEHOLDER_TEXT = "(image attached earlier in the conversation — pruned to save context)"
 
 
-# Model-family vision context budgets. openclaw uses a similar table to
-# decide how many recent user turns can keep their images live before
-# pruning kicks in. Values reflect typical context windows + per-image
-# token cost (Claude ~1.6K tok/image, Qwen-VL ~600, Gemma 4 ~1.2K).
+# Model-family vision context budgets. oxenClaw addition — openclaw's
+# image retention is token-budget based (`keepRecentTokens`); ours is
+# user-turn based, a deliberate simplification. Values reflect
+# typical context windows + per-image token cost (Claude ~1.6K
+# tok/image, Qwen-VL ~600, Gemma 4 ~1.2K).
 _VISION_KEEP_TURNS: dict[str, int] = {
     "claude": 6,
     "anthropic": 6,

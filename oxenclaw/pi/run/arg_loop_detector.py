@@ -1,10 +1,13 @@
 """Argument-level loop detection.
 
-Mirrors openclaw `argDigestLoopDetector`. The unknown-tool detector
-catches the case where the model spams a non-existent name; this one
-catches the harder symptom where the model calls the SAME registered
-tool with the SAME (or near-identical) args repeatedly — e.g.
-`web_search(query="X")` returning 0 hits in a loop.
+oxenClaw original (no direct openclaw upstream port). The
+unknown-tool detector catches the case where the model spams a
+non-existent name; this one catches the harder symptom where the
+model calls the SAME registered tool with the SAME (or near-
+identical) args repeatedly — e.g. `web_search(query="X")` returning
+0 hits in a loop. openclaw's `tool-loop-detection.ts` has a
+conceptually adjacent `genericRepeat` detector with a different
+window/threshold shape; we did not port it 1:1.
 
 The detector keeps a small fixed-size deque of recent
 `(tool_name, args_digest)` pairs. When the most recent N entries are

@@ -1,7 +1,9 @@
 """OpenclawContextEngine — proactive trimming + active-memory ready.
 
-Drop-in replacement for `LegacyContextEngine` that adds the eager
-behavior openclaw's `pi-context-engine` exhibits by default:
+oxenClaw original despite the name; "openclaw-style" describes the
+*shape* of the behaviour (eager pre-call shaping rather than reactive
+post-call) rather than a 1:1 port. Drop-in replacement for
+`LegacyContextEngine` that adds:
 
   - `assemble()` checks the running token budget against the model
     window; when above `proactive_threshold_ratio` (default 0.80),

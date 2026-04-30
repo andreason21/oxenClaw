@@ -356,41 +356,53 @@ TelegramChannelConfigSchema = {
 
 ---
 
-## openclaw run-loop reliability parity (2026-04-30)
+## Run-loop reliability hardening (2026-04-30)
 
-A 17-item hardening pass brought the `pi/run` loop to byte-for-byte
-behavioural parity with openclaw's `pi-embedded-runner`. Highlights:
+A 17-item hardening pass tightened the `pi/run` loop. Some items
+match openclaw upstream constants exactly; others are oxenClaw
+additions inspired by openclaw's overall stance but without a direct
+upstream equivalent. Each entry below labels the lineage explicitly.
 
-**Defaults (openclaw alignment)**
-- `RuntimeConfig.max_tool_iterations` 8 → **25** (`runMaxIterations`).
-- `RuntimeConfig.unknown_tool_threshold` 3 → **5** (with one-shot
-  tool-list reinjection nudge before structural abort).
+**Defaults**
+- `RuntimeConfig.max_tool_iterations` 8 → **25**
+  (oxenClaw choice — no single upstream equivalent; tuned for
+  multi-hop chains under small local models).
+- `RuntimeConfig.unknown_tool_threshold` 3 → **10** (matches openclaw
+  `UNKNOWN_TOOL_THRESHOLD` in `src/agents/tool-loop-detection.ts`).
+  Combined with one-shot tool-list reinjection.
 - `RuntimeConfig.max_compression_self_heals` 2 → **3**
-  (`compressionSelfHealMax`).
-- New `RuntimeConfig.arg_loop_threshold=4` — same `(name, args_digest)`
-  repeated N times in a row triggers a `loop_detection` abort, even
-  when each individual call succeeded.
+  (oxenClaw choice — no upstream named constant).
+- New `RuntimeConfig.arg_loop_threshold=4` — oxenClaw addition: same
+  `(name, args_digest)` repeated N times in a row triggers a
+  `loop_detection` abort even when each call individually succeeded.
+  Targets the "0-hit web_search re-emit" symptom on small models.
 
 **Robustness**
 - `attempt.py`: `tool_buf` race guard — `input_delta` arriving before
   `tool_use_start` no longer surfaces a nameless tool; falls back to
   `_parse_error` so the model self-corrects.
 - `pi_agent._maybe_auto_fire_pseudo_tool`: pseudo-tool autofire now
-  iterates up to **3 rounds per turn** (openclaw
-  `pseudo-tool-recovery`), not 1.
+  iterates up to **3 rounds per turn**. (oxenClaw addition — openclaw
+  doesn't have a textual-pseudo-call autofire path; this exists
+  because small local models routinely emit tool calls as JSON in
+  reply text instead of real `tool_use` blocks.)
 - `_maybe_rotate_credential`: drops the `api_key[:8]` guess fallback —
-  log + skip when `current_key_id` is unavailable, matching
-  openclaw's "don't cool the wrong key" stance.
+  log + skip when `current_key_id` is unavailable. Matches the
+  general stance "don't cool the wrong key" rather than a specific
+  upstream call site.
 
-**Model-aware estimators**
+**Model-aware estimators (oxenClaw additions)**
 - New `oxenclaw/pi/run/token_estimator.py`: family-aware chars/token
   ratios (anthropic 3.0, qwen 2.5, gemma 2.8, llama 3.0, default 3.5)
-  with optional `tiktoken` passthrough for OpenAI models.
-  `preemptive_compaction.decide()` now consumes the per-model ratio.
+  with optional `tiktoken` passthrough for OpenAI models. openclaw
+  uses a single `ESTIMATED_CHARS_PER_TOKEN = 4` constant
+  (`preemptive-compaction.ts`); we deliberately diverge to better
+  fit Korean qwen / gemma sessions. `preemptive_compaction.decide()`
+  now consumes the per-model ratio.
 - New `vision_keep_turns_for(model_id)` in `history_image_prune.py`:
-  claude=6, gpt-4o=6, qwen/gemma=4, llava=3, default=2. PiAgent
-  wires it into the `prune_old_images` call so vision-strong models
-  retain more recent images automatically.
+  claude=6, gpt-4o=6, qwen/gemma=4, llava=3, default=2. openclaw's
+  retention is token-budget based (`keepRecentTokens`); ours is
+  user-turn based — a deliberate simplification.
 
 **Policy & engine wiring**
 - `RuntimeConfig.tool_policy` is now applied at the run-loop entry:
@@ -399,21 +411,24 @@ behavioural parity with openclaw's `pi-embedded-runner`. Highlights:
   result truncation. Previously the operator had to wire it
   themselves.
 - `pi/context_engine/openclaw_engine.py` (new): `OpenclawContextEngine`
-  is now the **PiAgent default**. Subclasses `LegacyContextEngine`
-  and overrides `assemble()` to proactively trim `ToolResultBlock`
+  is now the **PiAgent default**. Despite the name, this is an
+  oxenClaw original; the name reflects "openclaw-style eager trim"
+  rather than a direct port. Subclasses `LegacyContextEngine` and
+  overrides `assemble()` to proactively trim `ToolResultBlock`
   bodies when the running token estimate crosses 80 % of the budget.
   Below that threshold it's a no-op so legacy callers keep their
   byte-for-byte behaviour. Operators wanting strict pre-rc.16
   behaviour can inject `LegacyContextEngine()` explicitly.
 
-**Failover**
+**Failover (oxenClaw addition)**
 - `RuntimeConfig.failover_cycle: bool=False` (opt-in). When True,
   the chain wraps from tail back to head once it's exhausted; bounded
   by `failover_cycles_used >= len(chain)` so a permanently-broken
   set of models can't loop forever. `should_failover` /
   `resolve_next_model` accept `cycle` + `cycles_used` and the run
   loop tracks `failover_cycles_used`, incrementing on tail→head
-  wrap.
+  wrap. openclaw's failover-policy is single-pass with no equivalent
+  cycle option — this is an oxenClaw-only knob.
 
 **Concurrency hygiene**
 - `LaneRegistry`: drop `asyncio.Semaphore._value` private-attr
@@ -424,9 +439,12 @@ behavioural parity with openclaw's `pi-embedded-runner`. Highlights:
 - New `oxenclaw/pi/run/arg_loop_detector.py`: `ArgLoopDetector`
   keeps a SHA1-digested `(name, args_digest)` deque (length 16,
   threshold 4). Wired into the run loop's tool-result phase.
+  oxenClaw addition — openclaw's `tool-loop-detection.ts` has a
+  conceptually similar `genericRepeat` detector but a different
+  shape; we did not port it 1:1.
 - Unknown-tool abort path now sends a tool-list reinjection nudge
-  once before the structural `loop_detection` stop_reason, mirroring
-  openclaw's `tool-list reinjection` recovery.
+  once before the structural `loop_detection` stop_reason. (oxenClaw
+  addition; not a 1:1 port.)
 
 **Tests**: 2064 passed (8 new modules, 1 updated assertion).
 **Lint**: ruff strict + pyright strict clean across all touched files.

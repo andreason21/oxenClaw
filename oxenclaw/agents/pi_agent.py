@@ -87,7 +87,6 @@ from oxenclaw.pi.compaction import (
 from oxenclaw.pi.context_engine import (
     ContextEngine,
     ContextEngineRuntimeContext,
-    LegacyContextEngine,
     OpenclawContextEngine,
 )
 from oxenclaw.pi.hooks import HookContext, HookRunner
@@ -760,7 +759,9 @@ class PiAgent:
         instead of issuing a real tool_use block, parse it, execute
         the tool, and run more turns so the model can summarise the
         actual result. Up to `max_rounds` consecutive autofire rounds
-        per user turn — mirrors openclaw `pseudo-tool-recovery`.
+        per user turn. oxenClaw original; openclaw doesn't have an
+        equivalent textual-pseudo-call recovery path because its
+        provider mix doesn't see this small-local-model failure.
 
         No-op when:
           * the final message already contains a real tool_use block

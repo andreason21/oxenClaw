@@ -21,6 +21,7 @@ mechanical translation.
 
 from oxenclaw.pi.context_engine.delegate import delegate_compaction_to_runtime
 from oxenclaw.pi.context_engine.legacy import LegacyContextEngine, register_legacy_context_engine
+from oxenclaw.pi.context_engine.openclaw_engine import OpenclawContextEngine
 from oxenclaw.pi.context_engine.registry import (
     ContextEngineFactory,
     ContextEngineRegistrationResult,
@@ -68,6 +69,7 @@ __all__ = [
     "IngestBatchResult",
     "IngestResult",
     "LegacyContextEngine",
+    "OpenclawContextEngine",
     "PromptCacheInfo",
     "PromptCacheObservation",
     "PromptCacheObservationChange",

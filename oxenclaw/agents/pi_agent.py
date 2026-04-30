@@ -88,6 +88,7 @@ from oxenclaw.pi.context_engine import (
     ContextEngine,
     ContextEngineRuntimeContext,
     LegacyContextEngine,
+    OpenclawContextEngine,
 )
 from oxenclaw.pi.hooks import HookContext, HookRunner
 from oxenclaw.pi.run import RuntimeConfig, run_agent_turn
@@ -304,10 +305,14 @@ class PiAgent:
         # Keyed by (session_key) → frozen XML block string.
         self._recall_snapshots: dict[str, str] = {}
 
-        # Context engine — defaults to the pass-through `LegacyContextEngine`
-        # so behaviour matches pre-rc.16 PiAgent byte-for-byte. Operators
-        # opt into a custom strategy by injecting it here.
-        self._engine: ContextEngine = context_engine or LegacyContextEngine()
+        # Context engine — defaults to `OpenclawContextEngine` which adds
+        # proactive tool_result trimming when the running token estimate
+        # crosses 80% of the model window (matches openclaw's eager-trim
+        # default). Below that threshold it's a no-op so behaviour is
+        # byte-for-byte identical to LegacyContextEngine for short
+        # sessions. Operators wanting strict pre-rc.16 behaviour can
+        # inject `LegacyContextEngine()` explicitly.
+        self._engine: ContextEngine = context_engine or OpenclawContextEngine()
 
         # Hook runner — empty by default. Operators populate before/after
         # tool / on_empty_reply / on_turn_end callbacks via constructor.

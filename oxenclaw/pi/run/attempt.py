@@ -151,6 +151,25 @@ async def run_attempt(
         content.append(TextContent(text="".join(text_parts)))
     for tid in tool_order:
         slot = tool_buf[tid]
+        # Guard against an out-of-order delta race: if input_delta arrived
+        # before the start event, the slot was created via setdefault with
+        # an empty `name`. We can't dispatch to a nameless tool, so flag
+        # the args as parse-error so run.py feeds the model a structured
+        # nudge instead of silently registering an unknown-tool failure.
+        if not slot["name"]:
+            content.append(
+                ToolUseBlock(
+                    id=tid,
+                    name="_unknown",
+                    input={"_raw": slot["args"], "_parse_error": True},
+                )
+            )
+            logger.warning(
+                "tool_use frame race: input_delta arrived before tool_use_start id=%s args_len=%d",
+                tid,
+                len(slot["args"]),
+            )
+            continue
         if not slot["args"]:
             input_obj: Any = {}
         else:

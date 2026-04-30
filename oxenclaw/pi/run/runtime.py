@@ -39,7 +39,10 @@ class RuntimeConfig:
     backoff_max: float = 8.0
 
     # Tool loop
-    max_tool_iterations: int = 8
+    # Default 25 (openclaw `runMaxIterations`) — small models doing
+    # multi-hop chains (web_search → web_fetch ×N → summarise) need
+    # headroom; a soft cap below this would clip the answer.
+    max_tool_iterations: int = 25
     parallel_tools: bool = True
     # If True, on max_tool_iterations the loop appends a synthetic message
     # asking the model to wrap up rather than just terminating.
@@ -48,7 +51,14 @@ class RuntimeConfig:
     # a row (e.g. gemma4 hammering `web_search` after 0 hits), abort the
     # turn with a structured error so the user sees something instead of
     # a silent stuck loop. Mirrors openclaw `loopDetection.unknownToolThreshold`.
-    unknown_tool_threshold: int = 3
+    # Bumped to 5 (was 3) to align with openclaw and to give the
+    # tool-list reinjection nudge a chance before structural abort.
+    unknown_tool_threshold: int = 5
+    # Same-arg loop detection threshold: if the model calls the SAME
+    # (tool_name, args_digest) this many times in a row, treat as stuck
+    # and abort with a structured error. Mirrors openclaw
+    # `argDigestLoopDetector`.
+    arg_loop_threshold: int = 4
     # Stop-reason recovery: when the model returns refusal / safety /
     # sensitive (or end_turn with empty content), retry once with a
     # nudge prefix asking for the answer in plain language. Set to 0
@@ -84,7 +94,9 @@ class RuntimeConfig:
     # Compress-then-retry self-heal cap per turn. The run loop tries up
     # to this many compress-and-retry cycles when the classifier says
     # the failure was a context-overflow / payload-too-large.
-    max_compression_self_heals: int = 2
+    # Bumped to 3 (was 2) to match openclaw `compressionSelfHealMax`
+    # — first cheap trim, then aggressive trim, then full compaction.
+    max_compression_self_heals: int = 3
 
     # Abort
     abort_event: asyncio.Event | None = None
@@ -122,6 +134,12 @@ class RuntimeConfig:
     # The run loop itself does NOT auto-snapshot — the manager is
     # carried alongside config purely so downstream tools can reach it.
     checkpoint_manager: Any = None
+
+    # Optional EffectiveToolPolicy applied at run loop entry. When set,
+    # `policy.resolve(tools)` filters the tool list and `max_chars_for`
+    # drives per-tool result truncation. None → all registered tools
+    # exposed to the model (current behaviour).
+    tool_policy: Any = None
 
 
 __all__ = ["RuntimeConfig"]

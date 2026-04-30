@@ -83,6 +83,12 @@ class LaneRegistry:
         # Last "still busy" ack we surfaced for a lane — debounced to
         # avoid spamming the dashboard every 200 ms.
         self._last_busy_ack: dict[tuple[str, str], float] = {}
+        # Track our own in-flight count instead of reading the
+        # asyncio.Semaphore's private `_value` attribute (which can
+        # break across asyncio versions). Incremented inside `run`
+        # before the wrapped coroutine starts and decremented in the
+        # finally arm so exceptions don't leak the counter.
+        self._in_flight_count: int = 0
 
     @property
     def global_concurrency(self) -> int | None:
@@ -169,10 +175,18 @@ class LaneRegistry:
         if self._global_sem is None:
             async with state.lock:
                 state.queued_at = None
-                return await coro_factory()
+                self._in_flight_count += 1
+                try:
+                    return await coro_factory()
+                finally:
+                    self._in_flight_count -= 1
         async with self._global_sem, state.lock:
             state.queued_at = None
-            return await coro_factory()
+            self._in_flight_count += 1
+            try:
+                return await coro_factory()
+            finally:
+                self._in_flight_count -= 1
 
     def stats(self) -> dict[str, Any]:
         """Inspector view for an `agents.lanes` RPC or healthcheck."""
@@ -184,13 +198,12 @@ class LaneRegistry:
             "busy_policy": self._busy_policy,
         }
         if self._global_sem is not None and self._global_concurrency:
-            # asyncio.Semaphore exposes `_value` for read-only inspection;
-            # acceptable for diagnostics.
-            available = getattr(self._global_sem, "_value", None)
-            out["global_available"] = available
-            out["global_in_flight"] = (
-                self._global_concurrency - available if isinstance(available, int) else None
-            )
+            # Use our own counter rather than the asyncio.Semaphore's
+            # private `_value` attribute — guards against asyncio
+            # internals churn across Python versions.
+            in_flight = self._in_flight_count
+            out["global_in_flight"] = in_flight
+            out["global_available"] = max(0, self._global_concurrency - in_flight)
         return out
 
 

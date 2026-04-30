@@ -30,6 +30,38 @@ logger = get_logger("pi.run.history_image_prune")
 _PLACEHOLDER_TEXT = "(image attached earlier in the conversation — pruned to save context)"
 
 
+# Model-family vision context budgets. openclaw uses a similar table to
+# decide how many recent user turns can keep their images live before
+# pruning kicks in. Values reflect typical context windows + per-image
+# token cost (Claude ~1.6K tok/image, Qwen-VL ~600, Gemma 4 ~1.2K).
+_VISION_KEEP_TURNS: dict[str, int] = {
+    "claude": 6,
+    "anthropic": 6,
+    "gpt-4": 6,
+    "qwen": 4,
+    "gemma": 4,
+    "llava": 3,
+    "default": 2,
+}
+
+
+def vision_keep_turns_for(model_id: str | None) -> int:
+    """Return the recommended `keep_recent_user_turns` for a model.
+
+    Substring-matches the model id against the family table. Falls back
+    to 2 (legacy default) when nothing matches.
+    """
+    if not model_id:
+        return _VISION_KEEP_TURNS["default"]
+    mid = model_id.lower()
+    for family, n in _VISION_KEEP_TURNS.items():
+        if family == "default":
+            continue
+        if family in mid:
+            return n
+    return _VISION_KEEP_TURNS["default"]
+
+
 def prune_old_images(
     messages: list[Any],
     *,
@@ -109,4 +141,4 @@ def _replace_in_user_content(
     return new_blocks, removed
 
 
-__all__ = ["prune_old_images"]
+__all__ = ["prune_old_images", "vision_keep_turns_for"]

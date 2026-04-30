@@ -33,6 +33,8 @@ from oxenclaw.pi.messages import (
 )
 
 # Soft over-estimate; we'd rather compact one turn early than hit a 400.
+# Family-aware ratios live in `token_estimator.chars_per_token_for(model_id)`;
+# this constant remains as a safe default when the model id is unknown.
 DEFAULT_CHARS_PER_TOKEN = 3.5
 
 

@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import itertools
 import json
+import os
 import random
 import threading
 import time
@@ -23,8 +24,10 @@ from oxenclaw.pi.messages import (
     ToolResultBlock,
     ToolResultMessage,
     ToolUseBlock,
+    UserMessage,
 )
 from oxenclaw.pi.models import Model
+from oxenclaw.pi.run.arg_loop_detector import ArgLoopDetector
 from oxenclaw.pi.run.attempt import AttemptResult, run_attempt
 from oxenclaw.pi.run.error_classifier import (
     ClassifiedError,
@@ -44,6 +47,7 @@ from oxenclaw.pi.run.stop_recovery import (
     build_recovery_nudge,
     is_recoverable_empty,
 )
+from oxenclaw.pi.run.token_estimator import chars_per_token_for
 from oxenclaw.pi.tool_result_storage import (
     BudgetConfig,
     enforce_turn_budget,
@@ -53,6 +57,23 @@ from oxenclaw.pi.tools import AgentTool, ToolExecutionResult
 from oxenclaw.plugin_sdk.runtime_env import get_logger
 
 logger = get_logger("pi.run")
+
+
+def _retry_after_cap_seconds() -> float:
+    """Operator-tunable cap on `Retry-After` honoring.
+
+    Defaults to 1 hour (3600s). Set `OXENCLAW_RETRY_AFTER_MAX` to override
+    — e.g. clamp to 5 minutes during incident response so a broken
+    provider header doesn't park a turn.
+    """
+    raw = os.environ.get("OXENCLAW_RETRY_AFTER_MAX")
+    if not raw:
+        return 3600.0
+    try:
+        v = float(raw)
+        return v if v > 0 else 3600.0
+    except ValueError:
+        return 3600.0
 
 
 @dataclass
@@ -71,6 +92,11 @@ def _accumulate_usage(total: dict[str, int], delta: dict[str, Any] | None) -> No
     if not delta:
         return
     for key, value in delta.items():
+        # Exclude bool explicitly — `bool` is a subclass of `int` in
+        # Python so `isinstance(True, int)` is True; without this
+        # guard a stray usage flag would bump token counters by 1.
+        if isinstance(value, bool):
+            continue
         if isinstance(value, (int, float)):
             total[key] = int(total.get(key, 0) + value)
 
@@ -111,7 +137,7 @@ def _resolve_retry_delay(
     decorrelated jittered backoff.
     """
     if retry_after_seconds is not None and retry_after_seconds > 0:
-        return min(float(retry_after_seconds), 3600.0)
+        return min(float(retry_after_seconds), _retry_after_cap_seconds())
     return _backoff_delay(retry, initial=initial, cap=cap)
 
 
@@ -139,18 +165,22 @@ async def _maybe_rotate_credential(
         return
     # Without a key id we can't pin the failure; the pool's report_failure
     # iterates entries by key_id. Some adapters expose a "current key id"
-    # via `auth_adapter.current_key_id(provider)`.
+    # via `auth_adapter.current_key_id(provider)`. openclaw refuses to
+    # rotate when the key id is unknown rather than guess from a key
+    # prefix — guessing risked cooling the wrong key when two pool
+    # entries shared a vendor that re-issues similar prefixes.
     key_id: str | None = None
     if hasattr(auth_adapter, "current_key_id"):
         try:
             key_id = auth_adapter.current_key_id(provider)
         except Exception:
             key_id = None
-    if key_id is None and api_key:
-        # Fallback: short-prefix label, matches what the rate-limit
-        # tracker stores so observability lines up.
-        key_id = api_key[:8]
     if key_id is None:
+        logger.warning(
+            "auth pool report_failure skipped: provider=%s key_id unknown "
+            "(adapter has no current_key_id) — credential not rotated",
+            provider,
+        )
         return
     try:
         await pool.report_failure(
@@ -347,6 +377,13 @@ async def run_agent_turn(
     returns the new entries via `TurnResult.appended_messages` so callers
     can persist them (or roll back on error).
     """
+    # Apply EffectiveToolPolicy when configured — filters disabled / denied
+    # tools out of the model's view at the run-loop boundary.
+    if getattr(config, "tool_policy", None) is not None:
+        try:
+            tools = list(config.tool_policy.resolve(tools))
+        except Exception:
+            logger.exception("tool_policy.resolve failed; using unfiltered tools")
     tools_by_name: dict[str, AgentTool] = {t.name: t for t in tools}
     working: list[Any] = list(history)
     appended: list[Any] = []
@@ -355,6 +392,8 @@ async def run_agent_turn(
     usage_total: dict[str, int] = {}
     stop_reason = "end_turn"
     consecutive_unknown_tools = 0  # loop-detection counter
+    unknown_tool_reinject_used = False  # one-shot tool-list nudge before abort
+    arg_loop = ArgLoopDetector(threshold=getattr(config, "arg_loop_threshold", 4))
     recoveries_used = 0  # stop-reason recovery counter
     # Compress-then-retry self-heal counter (per turn). Context-overflow
     # / payload-too-large failures break to the outer iteration so the
@@ -414,8 +453,9 @@ async def run_agent_turn(
             decision = decide_compaction(
                 system=system,
                 messages=working,
-                context_window=getattr(model, "context_window", 8192) or 8192,
+                context_window=getattr(active_model, "context_window", 8192) or 8192,
                 threshold_ratio=config.compaction_threshold_ratio,
+                chars_per_token=chars_per_token_for(getattr(active_model, "id", None)),
             )
             if decision.route == CompactionRoute.TRUNCATE_TOOL_RESULTS:
                 removed = truncate_tool_results(working)
@@ -672,6 +712,34 @@ async def run_agent_turn(
             hook_runner=config.hook_runner,
             hook_context=config.hook_context,
         )
+        # Apply per-tool result truncation from EffectiveToolPolicy when set.
+        # Mirrors openclaw's `effective-tool-policy.maxResultCharsFor` —
+        # operators can clamp noisy tools (web_fetch, fs_read) without
+        # touching the global default.
+        if getattr(config, "tool_policy", None) is not None:
+            from oxenclaw.pi.tool_runtime import truncate_tool_result
+
+            policy = config.tool_policy
+            new_results: list[ToolExecutionResult] = []
+            for r in results:
+                try:
+                    cap = policy.max_chars_for(r.name)
+                except Exception:
+                    cap = None
+                if cap and r.output and len(r.output) > cap:
+                    new_text, _ = truncate_tool_result(r.output, max_chars=cap)
+                    new_results.append(
+                        ToolExecutionResult(
+                            id=r.id,
+                            name=r.name,
+                            output=new_text,
+                            is_error=r.is_error,
+                            duration_seconds=r.duration_seconds,
+                        )
+                    )
+                else:
+                    new_results.append(r)
+            results = new_results
         # Layer-2/3 tool-result persistence: when a storage dir is wired,
         # walk the freshly-returned results and spill any oversize outputs
         # to disk before they enter the context. If the aggregate of this
@@ -734,6 +802,36 @@ async def run_agent_turn(
             consecutive_unknown_tools = 0
         if consecutive_unknown_tools >= config.unknown_tool_threshold:
             unknown_names = sorted({r.name for r in results if r.is_error})
+            # One-shot reinject: before structurally aborting, give the
+            # model a single nudge with the actual tool list. Mirrors
+            # openclaw's "tool-list reinjection" recovery — frequently
+            # rescues a model that drifted the tool name.
+            if not unknown_tool_reinject_used:
+                unknown_tool_reinject_used = True
+                consecutive_unknown_tools = 0  # reset streak — give one more shot
+                tr_msg = ToolResultMessage(
+                    results=[
+                        ToolResultBlock(tool_use_id=r.id, content=r.output, is_error=r.is_error)
+                        for r in results
+                    ]
+                )
+                appended.append(tr_msg)
+                working.append(tr_msg)
+                nudge_text = (
+                    f"You called unknown tool(s) {unknown_names!r}. The exact "
+                    "registered tool names are: "
+                    f"{sorted(tools_by_name.keys())}. Re-emit the call using "
+                    "ONE of those names exactly as written, or answer in plain "
+                    "language if no tool fits."
+                )
+                nudge = UserMessage(content=nudge_text)
+                appended.append(nudge)
+                working.append(nudge)
+                logger.warning(
+                    "unknown-tool reinjection: streak hit %d, sending tool-list nudge",
+                    config.unknown_tool_threshold,
+                )
+                continue
             abort_text = (
                 "(loop-detection abort: model called unknown tool(s) "
                 f"{unknown_names!r} {consecutive_unknown_tools} times in a row. "
@@ -757,6 +855,51 @@ async def run_agent_turn(
                 ]
             )
             appended.append(tr_msg)
+            appended.append(abort_msg)
+            return TurnResult(
+                final_message=abort_msg,
+                appended_messages=appended,
+                attempts=attempts,
+                tool_executions=executions,
+                usage_total=usage_total,
+                stopped_reason="loop_detection",
+            )
+
+        # Arg-level loop detection: same (name, args_digest) repeated ≥
+        # threshold times in a row triggers structural abort even when
+        # each call individually succeeded. Catches the "0-hit web_search
+        # re-emit" and "memory_search same query" hard-stuck symptoms.
+        arg_loop_hit = False
+        for tu in tool_uses:
+            if arg_loop.observe(tu.name, tu.input if isinstance(tu.input, dict) else None):
+                arg_loop_hit = True
+                break
+        if arg_loop_hit and arg_loop.last_key is not None:
+            stuck_name, stuck_digest = arg_loop.last_key
+            tr_msg = ToolResultMessage(
+                results=[
+                    ToolResultBlock(tool_use_id=r.id, content=r.output, is_error=r.is_error)
+                    for r in results
+                ]
+            )
+            appended.append(tr_msg)
+            abort_text = (
+                f"(loop-detection abort: tool {stuck_name!r} called with the "
+                f"same arguments (digest={stuck_digest}) {arg_loop.streak} "
+                "times in a row. Vary the arguments or answer from existing "
+                "context.)"
+            )
+            logger.warning(
+                "arg-loop abort: name=%s digest=%s streak=%d threshold=%d",
+                stuck_name,
+                stuck_digest,
+                arg_loop.streak,
+                arg_loop.threshold,
+            )
+            abort_msg = AssistantMessage(
+                content=[TextContent(text=abort_text)],
+                stop_reason="loop_detection",
+            )
             appended.append(abort_msg)
             return TurnResult(
                 final_message=abort_msg,

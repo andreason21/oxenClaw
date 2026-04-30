@@ -30,6 +30,10 @@ from typing import Any
 
 import oxenclaw.pi.providers  # noqa: F401  registers stream wrappers
 from oxenclaw.agents.base import AgentContext
+from oxenclaw.agents.cron_suggest import (
+    detect_cron_request,
+    render_cron_suggestion_prelude,
+)
 from oxenclaw.agents.history import ConversationHistory
 from oxenclaw.agents.incomplete_turn import repair_incomplete_turn
 from oxenclaw.agents.message_merge import merge_consecutive_same_role
@@ -37,10 +41,6 @@ from oxenclaw.agents.pending_action import (
     extract_unfulfilled_promise,
     looks_like_short_affirmation,
     render_pending_action_prelude,
-)
-from oxenclaw.agents.cron_suggest import (
-    detect_cron_request,
-    render_cron_suggestion_prelude,
 )
 from oxenclaw.agents.pseudo_tool import extract_pseudo_tool_call
 from oxenclaw.agents.skill_suggest import (
@@ -91,7 +91,7 @@ from oxenclaw.pi.context_engine import (
 )
 from oxenclaw.pi.hooks import HookContext, HookRunner
 from oxenclaw.pi.run import RuntimeConfig, run_agent_turn
-from oxenclaw.pi.run.history_image_prune import prune_old_images
+from oxenclaw.pi.run.history_image_prune import prune_old_images, vision_keep_turns_for
 from oxenclaw.pi.system_prompt import (
     assemble_system_prompt,
     embedded_context_contribution,
@@ -749,11 +749,13 @@ class PiAgent:
         system: str,
         api: Any,
         turn_runtime: RuntimeConfig,
+        max_rounds: int = 3,
     ) -> Any:
         """When the model wrote a tool call as JSON in its reply text
         instead of issuing a real tool_use block, parse it, execute
-        the tool, and run one more turn so the model can summarise
-        the actual result. Returns the (possibly replaced) TurnResult.
+        the tool, and run more turns so the model can summarise the
+        actual result. Up to `max_rounds` consecutive autofire rounds
+        per user turn — mirrors openclaw `pseudo-tool-recovery`.
 
         No-op when:
           * the final message already contains a real tool_use block
@@ -762,6 +764,33 @@ class PiAgent:
           * the resolved tool raises a non-recoverable error
             (logged; original `result` returned unchanged).
         """
+        rounds = 0
+        while rounds < max_rounds:
+            new_result = await self._auto_fire_pseudo_tool_once(
+                result=result,
+                history=history,
+                system=system,
+                api=api,
+                turn_runtime=turn_runtime,
+            )
+            if new_result is result:
+                return result  # no autofire happened this round
+            result = new_result
+            rounds += 1
+            logger.info("pseudo-tool autofire round %d/%d completed", rounds, max_rounds)
+        return result
+
+    async def _auto_fire_pseudo_tool_once(
+        self,
+        *,
+        result: Any,
+        history: list,
+        system: str,
+        api: Any,
+        turn_runtime: RuntimeConfig,
+    ) -> Any:
+        """Single autofire round. Returns the original `result` unchanged
+        when no autofire fired; returns a new TurnResult otherwise."""
         import uuid
 
         final = getattr(result, "final_message", None)
@@ -1208,10 +1237,13 @@ class PiAgent:
 
         # History image prune — replace old base64 image blobs with
         # placeholders so a 30-turn multimodal session doesn't blow
-        # the context window. Always safe; defaults keep the most
-        # recent 2 user turns intact.
+        # the context window. The keep budget is model-family aware
+        # (claude=6, qwen/gemma=4, default=2) so vision-strong models
+        # keep more recent images while small ones still get aggressive
+        # pruning. Mirrors openclaw's per-family vision context budgets.
         try:
-            prune_old_images(history, keep_recent_user_turns=2)
+            keep_n = vision_keep_turns_for(self._model.id)
+            prune_old_images(history, keep_recent_user_turns=keep_n)
         except Exception:
             logger.exception("history-image-prune failed (non-fatal)")
 

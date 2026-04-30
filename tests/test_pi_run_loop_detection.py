@@ -55,8 +55,10 @@ async def test_loop_detection_aborts_after_repeated_unknown_tools() -> None:
     assert result.stopped_reason == "loop_detection"
     final_text = result.final_message.content[0].text
     assert "loop-detection abort" in final_text
-    # Should NOT have looped to the iteration cap.
-    assert state["calls"] <= cfg.unknown_tool_threshold + 1
+    # New behavior (openclaw parity): one tool-list reinjection nudge
+    # before structural abort. Worst case: threshold + reinject (1) +
+    # threshold again = 2*threshold + 1 calls before the abort fires.
+    assert state["calls"] <= 2 * cfg.unknown_tool_threshold + 1
 
 
 async def test_loop_detection_resets_on_successful_tool() -> None:

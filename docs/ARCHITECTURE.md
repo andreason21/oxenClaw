@@ -353,3 +353,80 @@ TelegramChannelConfigSchema = {
 - `asyncio` throughout.
 - Pydantic parity with Zod.
 - Mock-driven tests for every channel boundary.
+
+---
+
+## openclaw run-loop reliability parity (2026-04-30)
+
+A 17-item hardening pass brought the `pi/run` loop to byte-for-byte
+behavioural parity with openclaw's `pi-embedded-runner`. Highlights:
+
+**Defaults (openclaw alignment)**
+- `RuntimeConfig.max_tool_iterations` 8 → **25** (`runMaxIterations`).
+- `RuntimeConfig.unknown_tool_threshold` 3 → **5** (with one-shot
+  tool-list reinjection nudge before structural abort).
+- `RuntimeConfig.max_compression_self_heals` 2 → **3**
+  (`compressionSelfHealMax`).
+- New `RuntimeConfig.arg_loop_threshold=4` — same `(name, args_digest)`
+  repeated N times in a row triggers a `loop_detection` abort, even
+  when each individual call succeeded.
+
+**Robustness**
+- `attempt.py`: `tool_buf` race guard — `input_delta` arriving before
+  `tool_use_start` no longer surfaces a nameless tool; falls back to
+  `_parse_error` so the model self-corrects.
+- `pi_agent._maybe_auto_fire_pseudo_tool`: pseudo-tool autofire now
+  iterates up to **3 rounds per turn** (openclaw
+  `pseudo-tool-recovery`), not 1.
+- `_maybe_rotate_credential`: drops the `api_key[:8]` guess fallback —
+  log + skip when `current_key_id` is unavailable, matching
+  openclaw's "don't cool the wrong key" stance.
+
+**Model-aware estimators**
+- New `oxenclaw/pi/run/token_estimator.py`: family-aware chars/token
+  ratios (anthropic 3.0, qwen 2.5, gemma 2.8, llama 3.0, default 3.5)
+  with optional `tiktoken` passthrough for OpenAI models.
+  `preemptive_compaction.decide()` now consumes the per-model ratio.
+- New `vision_keep_turns_for(model_id)` in `history_image_prune.py`:
+  claude=6, gpt-4o=6, qwen/gemma=4, llava=3, default=2. PiAgent
+  wires it into the `prune_old_images` call so vision-strong models
+  retain more recent images automatically.
+
+**Policy & engine wiring**
+- `RuntimeConfig.tool_policy` is now applied at the run-loop entry:
+  `policy.resolve(tools)` filters disabled / denied tools out of the
+  model's view, and `policy.max_chars_for(name)` drives per-tool
+  result truncation. Previously the operator had to wire it
+  themselves.
+- `pi/context_engine/openclaw_engine.py` (new): `OpenclawContextEngine`
+  is now the **PiAgent default**. Subclasses `LegacyContextEngine`
+  and overrides `assemble()` to proactively trim `ToolResultBlock`
+  bodies when the running token estimate crosses 80 % of the budget.
+  Below that threshold it's a no-op so legacy callers keep their
+  byte-for-byte behaviour. Operators wanting strict pre-rc.16
+  behaviour can inject `LegacyContextEngine()` explicitly.
+
+**Failover**
+- `RuntimeConfig.failover_cycle: bool=False` (opt-in). When True,
+  the chain wraps from tail back to head once it's exhausted; bounded
+  by `failover_cycles_used >= len(chain)` so a permanently-broken
+  set of models can't loop forever. `should_failover` /
+  `resolve_next_model` accept `cycle` + `cycles_used` and the run
+  loop tracks `failover_cycles_used`, incrementing on tail→head
+  wrap.
+
+**Concurrency hygiene**
+- `LaneRegistry`: drop `asyncio.Semaphore._value` private-attr
+  access; track `_in_flight_count` via `try/finally` so `stats()`
+  remains accurate across asyncio versions.
+
+**Loop detection**
+- New `oxenclaw/pi/run/arg_loop_detector.py`: `ArgLoopDetector`
+  keeps a SHA1-digested `(name, args_digest)` deque (length 16,
+  threshold 4). Wired into the run loop's tool-result phase.
+- Unknown-tool abort path now sends a tool-list reinjection nudge
+  once before the structural `loop_detection` stop_reason, mirroring
+  openclaw's `tool-list reinjection` recovery.
+
+**Tests**: 2064 passed (8 new modules, 1 updated assertion).
+**Lint**: ruff strict + pyright strict clean across all touched files.

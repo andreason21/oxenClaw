@@ -2,7 +2,7 @@
 # version is kept in sync with pyproject.toml via scripts/bump_version.py.
 # The release workflow refuses to ship if the three files disagree.
 name = "oxenclaw-desktop"
-version = "0.1.0-rc.26"
+version = "0.1.0-rc.27"
 description = "oxenClaw native desktop app"
 authors = ["oxenClaw"]
 license = "MIT"

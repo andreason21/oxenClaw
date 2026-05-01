@@ -60,6 +60,37 @@ from oxenclaw.plugin_sdk.runtime_env import get_logger
 logger = get_logger("pi.run")
 
 
+# Overload-class failover backoff. Mirrors openclaw `OVERLOAD_FAILOVER_BACKOFF_POLICY`
+# in `pi-embedded-runner/run.ts:100`. When the active model errors out with
+# rate_limit / server-overloaded, we don't want to walk the failover chain
+# instantly — that turns a single 429 cluster into a forced chain-head rotation.
+# Instead, sleep paced backoff (250 → 500 → 1000ms, capped at 1500ms) so the
+# chain walk feels responsive but doesn't hammer the next provider either.
+_OVERLOAD_FAILOVER_INITIAL_MS = 250.0
+_OVERLOAD_FAILOVER_MAX_MS = 1500.0
+_OVERLOAD_FAILOVER_FACTOR = 2.0
+_OVERLOAD_FAILOVER_JITTER = 0.2
+
+
+def _overload_failover_backoff_seconds(attempt: int) -> float:
+    """Return the paced delay (seconds) before walking the failover chain.
+
+    Uses the per-process retry-counter RNG so concurrent run loops don't
+    hit the chain head in lockstep. Bounded by `_OVERLOAD_FAILOVER_MAX_MS`.
+    """
+    base = min(
+        _OVERLOAD_FAILOVER_MAX_MS,
+        _OVERLOAD_FAILOVER_INITIAL_MS * (_OVERLOAD_FAILOVER_FACTOR ** max(0, attempt - 1)),
+    )
+    if _OVERLOAD_FAILOVER_JITTER > 0:
+        with _RETRY_COUNTER_LOCK:
+            seed = next(_RETRY_COUNTER) ^ time.monotonic_ns()
+        rng = random.Random(seed)
+        spread = base * _OVERLOAD_FAILOVER_JITTER
+        base = max(0.0, base + rng.uniform(-spread, spread))
+    return base / 1000.0
+
+
 def _retry_after_cap_seconds() -> float:
     """Operator-tunable cap on `Retry-After` honoring.
 
@@ -398,6 +429,7 @@ async def run_agent_turn(
     recoveries_used = 0  # stop-reason recovery counter
     length_recoveries_used = 0  # length-cutoff recovery counter
     length_max_tokens_override: int | None = None
+    overload_failover_attempts = 0  # paced backoff before walking the chain on overload
     # Compress-then-retry self-heal counter (per turn). Context-overflow
     # / payload-too-large failures break to the outer iteration so the
     # preemptive compactor can shrink context before the next attempt.
@@ -594,6 +626,30 @@ async def run_agent_turn(
                             classified.reason.value,
                             failover_cycles_used,
                         )
+                        # Paced backoff before chain walk on overload-class
+                        # failures (rate_limit / server). Mirrors openclaw
+                        # `maybeBackoffBeforeOverloadFailover`. Skipped for
+                        # structural reasons (auth, model_not_found, ...) so
+                        # those still rotate immediately.
+                        if classified.reason in (
+                            FailoverReason.RATE_LIMIT,
+                            FailoverReason.SERVER,
+                        ):
+                            overload_failover_attempts += 1
+                            delay = _overload_failover_backoff_seconds(overload_failover_attempts)
+                            logger.warning(
+                                "overload backoff before failover: %s → %s "
+                                "attempt=%d delay=%.3fs reason=%s",
+                                active_model.id,
+                                next_model.id,
+                                overload_failover_attempts,
+                                delay,
+                                classified.reason.value,
+                            )
+                            try:
+                                await asyncio.sleep(delay)
+                            except asyncio.CancelledError:
+                                raise
                         active_model = next_model
                         failover_cursor = new_cursor
                         failover_empty_streak = 0

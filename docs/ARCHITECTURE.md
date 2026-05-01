@@ -493,3 +493,39 @@ equivalent length-recovery knob.
 **Tests**: `tests/test_pi_stop_recovery.py` adds 4 cases (predicate +
 default helper + run-loop recovery + disabled path); 12/12 pass.
 118 PI run-loop suite tests pass.
+
+
+## Overload-class failover backoff (2026-05-01)
+
+Audit against openclaw upstream (commit `3f7f2c8dc9`, 2026-05) found
+that `should_failover` (`failover.py:82-98`) returned
+`failover=True` for any retryable provider error reaching the
+post-classification branch. A single 429 burst could rotate the chain
+head before the active model had a chance to recover, defeating the
+point of having a chain at all (the next provider hits the same
+saturated gateway).
+
+**`oxenclaw/pi/run/run.py`** — port of `OVERLOAD_FAILOVER_BACKOFF_POLICY`
+(`pi-embedded-runner/run.ts:100-105`):
+- `_OVERLOAD_FAILOVER_INITIAL_MS = 250`, `MAX_MS = 1500`, `FACTOR = 2`,
+  `JITTER = 0.2`. Exact match with upstream.
+- New `_overload_failover_backoff_seconds(attempt)` reuses the existing
+  decorrelated-RNG path (`_RETRY_COUNTER` + `_RETRY_COUNTER_LOCK`) so
+  concurrent run loops don't sync up under load.
+- `overload_failover_attempts` counter on the run loop, incremented
+  per chain walk caused by `RATE_LIMIT` / `SERVER` reasons. Walk delay
+  scales 250 → 500 → 1000 → 1500 → 1500ms with ±20% jitter.
+- Non-overload reasons (`AUTH`, `MODEL_NOT_FOUND`, ...) still rotate
+  immediately — pacing only applies where the next provider is likely
+  to be saturated by the same upstream condition.
+
+This is a faithful port. Upstream calls
+`maybeBackoffBeforeOverloadFailover(reason)` at four sites
+(`run.ts:1420, 1440, 1552, 1557`) covering profile rotation and
+fallback model switch; oxenclaw consolidates this at the single
+failover-decide site since the run loop's structure is flatter.
+
+**Tests**: `tests/test_failover.py` adds 2 cases (helper bounds + a
+fake-provider integration test that patches `asyncio.sleep` and asserts
+the paced delay fires before the chain walk); 9/9 pass. Total PI
+run-loop suite: 120 pass.

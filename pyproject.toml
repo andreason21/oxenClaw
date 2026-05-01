@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "oxenclaw"
-version = "0.1.0-rc.30"
+version = "0.1.0-rc.31"
 description = "Python port of openclaw — personal multi-channel AI assistant gateway"
 readme = "README.md"
 license = { text = "MIT" }

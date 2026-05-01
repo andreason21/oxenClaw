@@ -74,12 +74,59 @@ from oxenclaw.plugin_sdk.channel_contract import (
 from oxenclaw.plugin_sdk.runtime_env import get_logger
 from oxenclaw.plugins import discover_plugins
 
-app = typer.Typer(help="Run the gateway server.", no_args_is_help=True)
+_GATEWAY_HELP = (
+    "Run the gateway server.\n\n"
+    "Most runtime behaviour is config-driven, NOT CLI-driven:\n"
+    "  • Config file: $OXENCLAW_HOME/config.yaml (default ~/.oxenclaw/config.yaml).\n"
+    "    Defines agents, channels, skills, registries, memory, MCP servers.\n"
+    "  • Env file:    $OXENCLAW_HOME/env (KEY=VALUE per line, sourced before start).\n"
+    "  • Inspect:     `oxenclaw paths` (resolved dirs), `oxenclaw config validate`\n"
+    "                 (preflight: config.yaml, mcp.json, env refs, credentials).\n"
+    "  • Edit:        `oxenclaw config show|edit|set`.\n\n"
+    "CLI flags below override config.yaml for THIS run only; they don't persist."
+)
+
+_GATEWAY_START_EPILOG = """**Config & env.** Runtime state lives under `$OXENCLAW_HOME` (default `~/.oxenclaw/`):
+`config.yaml` (agents, channels, skills, registries, memory, MCP),
+`env` (`KEY=VALUE` pairs auto-loaded before boot),
+`credentials.json` (provider API keys, chmod 0600),
+`state/` and `logs/` (runtime artefacts).
+Validate config before booting with `oxenclaw config validate`
+(or pass `--skip-preflight` to skip; the gateway runs this on startup anyway).
+
+**Key env vars** (full list: `docs/OPERATIONS.md`):
+
+* `OXENCLAW_HOME` — override the state dir
+
+* `OXENCLAW_GATEWAY_TOKEN` — WS bearer token (else `--auth-token` / banner)
+
+* `OXENCLAW_ALLOWED_ORIGINS` — comma-separated CSRF Origin allowlist
+
+* `OXENCLAW_ALLOW_NON_LOOPBACK=1` — permit binding beyond loopback
+
+* `OXENCLAW_LLAMACPP_GGUF` — enables `auto` → `llamacpp-direct` provider
+
+* `OXENCLAW_LLAMACPP_BIN` — override `llama-server` binary path
+
+* `OXENCLAW_LLAMACPP_CTX` / `OXENCLAW_LLAMACPP_NGL` — `num_ctx` / `n_gpu_layers`
+
+* `OXENCLAW_OLLAMA_KEEP_ALIVE` — Ollama unload TTL (default 30m)
+
+* `OXENCLAW_OLLAMA_NUM_CTX=auto` — per-model `num_ctx` detection (else 32768)
+
+* `OXENCLAW_LLM_TRACE=1` — dump every provider request/response
+"""
+
+app = typer.Typer(
+    help=_GATEWAY_HELP,
+    no_args_is_help=True,
+    rich_markup_mode="markdown",
+)
 
 logger = get_logger("cli.gateway")
 
 
-@app.command("start")
+@app.command("start", epilog=_GATEWAY_START_EPILOG)
 def start(
     host: str = typer.Option(
         "127.0.0.1",

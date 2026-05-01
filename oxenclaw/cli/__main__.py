@@ -21,7 +21,11 @@ from oxenclaw.cli import (
     wiki_cmd,
 )
 
-app = typer.Typer(help="oxenclaw — Python port of openclaw.", no_args_is_help=True)
+app = typer.Typer(
+    help="oxenclaw — Python port of openclaw.",
+    no_args_is_help=True,
+    rich_markup_mode="markdown",
+)
 
 
 @app.callback()
@@ -37,7 +41,15 @@ def _root_callback() -> None:
 
 
 app.add_typer(config_cmd.app, name="config", help="Inspect and edit config.yaml.")
-app.add_typer(gateway_cmd.app, name="gateway", help="Run the gateway server.")
+app.add_typer(
+    gateway_cmd.app,
+    name="gateway",
+    help=(
+        "Run the gateway server. Most behaviour is config-driven via "
+        "$OXENCLAW_HOME/config.yaml — see `oxenclaw gateway start --help` "
+        "for the full list of CLI overrides and env vars."
+    ),
+)
 app.add_typer(message_cmd.app, name="message", help="Send a message via the gateway.")
 app.add_typer(skills_cmd.app, name="skills", help="Browse/install skills from ClawHub.")
 app.add_typer(memory_cmd.app, name="memory", help="Manage long-term memory.")

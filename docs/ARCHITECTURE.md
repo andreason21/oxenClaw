@@ -741,3 +741,53 @@ better as a hotfix when observed), shared-Ollama embed contention (M,
 hardware-bound), CodingAgent / LocalAgent pseudo-tool autofire (M,
 those agents have their own tool flow), system-prompt shrink for tiny
 models (M, design choice — auto vs opt-in).
+
+
+## Plan-then-execute orchestrator (2026-05-01)
+
+Optional helper for local 7-13B agent runs. Bundled PiAgent flow lets
+the model plan and call tools in the same inference loop; small models
+routinely emit tool calls mid-thought before the plan settles, which
+shows up as truncated outputs, repeated failed tool calls, or just
+forgetting the goal after the first tool result.
+
+**`oxenclaw/agents/plan_execute.py`** (~340 LOC) — stateless
+orchestrator around `run_agent_turn`:
+
+- **Phase 1 (planning)**: `tools=[]`, system addition forces a
+  numbered plan as text only (3-7 actionable steps). The constrained
+  tools=[] is structural — no matter what the model wants to do, it
+  cannot call a tool here.
+- **Phase 2 (execution)**: per step, run with full tools enabled. The
+  step text becomes a synthetic user turn so the model sees a
+  "execute step N: <text>" prompt.
+- **Verifier turn**: after each step, a short tools=[] turn asks "Did
+  the previous turn satisfy step N? YES/NO + reason." Model judges
+  its own work in a clean inference call.
+- **Retry on NO**: capped by `verifier_retry_cap` (default 2). Failed
+  verifier appends a synthetic user nudge with the reason and re-runs
+  the step.
+- **Fallback**: when phase-1 produces no parseable numbered plan
+  (just prose, or empty), the helper falls back to a normal single
+  `run_agent_turn` call so the user is never stranded.
+
+Plan parsing tolerates `"1.", "1)", "**1.**", "- 1."` line shapes;
+verdict parsing tolerates `"YES:"`, `"Yes -"`, bare `Yes`/`No`,
+leading prose; ambiguous output defaults to `met=False` so the
+retry path runs (errs toward extra work, not premature success).
+
+This is opt-in: PiAgent's default flow is unchanged. Operators wire
+it as a wrapper or call `run_plan_then_execute(...)` directly.
+
+**Tests**: `tests/test_plan_execute.py` adds 15 cases (plan-parsing
+basic / paren-form / inner-prose / empty; verdict parsing all 7
+shapes including ambiguous defaults; happy 3-step path with 7-turn
+trace; retry-then-succeed; give-up-after-cap; fallback when no plan).
+Total PI run-loop suite: **209 pass**.
+
+**Live benchmark deferred**: a CPU-only Ollama qwen3.5:9b run hit
+~30 minutes wall time on the plan phase due to cold-load timeouts
+(`opts.timeout_seconds=300` default, 9B Q4_K_M cold load >5 min on
+slow CPUs). Real comparison requires a GPU-accelerated environment;
+script lives at `/tmp/oxenclaw_plan_execute_bench.py` for operator
+reproduction.

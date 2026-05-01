@@ -34,6 +34,8 @@ def _root_callback() -> None:
     from oxenclaw.config.env_loader import load_oxenclaw_env_file
 
     load_oxenclaw_env_file()
+
+
 app.add_typer(config_cmd.app, name="config", help="Inspect and edit config.yaml.")
 app.add_typer(gateway_cmd.app, name="gateway", help="Run the gateway server.")
 app.add_typer(message_cmd.app, name="message", help="Send a message via the gateway.")

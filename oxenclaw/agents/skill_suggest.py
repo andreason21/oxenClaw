@@ -43,23 +43,66 @@ _TOKEN_RE = re.compile(r"[A-Za-z0-9]+|[가-힣]+")
 # wild. Keep this list focused; over-aliasing → false-positive
 # suggestions which are worse than no suggestion.
 _DOMAIN_SYNONYMS: dict[str, frozenset[str]] = {
-    "stock": frozenset({
-        "stock", "stocks", "equity", "equities", "share", "shares",
-        "price", "prices", "ticker", "trading", "finance", "financial",
-        "주식", "주가", "시세", "종목", "코스피", "코스닥", "kospi", "kosdaq",
-    }),
-    "crypto": frozenset({
-        "crypto", "cryptocurrency", "bitcoin", "btc", "eth", "ethereum",
-        "암호화폐", "코인",
-    }),
-    "portfolio": frozenset({
-        "portfolio", "watchlist", "holdings",
-        "포트폴리오", "관심종목", "보유",
-    }),
-    "weather": frozenset({
-        "weather", "temperature", "forecast", "rain", "snow",
-        "날씨", "기온", "비", "눈", "예보",
-    }),
+    "stock": frozenset(
+        {
+            "stock",
+            "stocks",
+            "equity",
+            "equities",
+            "share",
+            "shares",
+            "price",
+            "prices",
+            "ticker",
+            "trading",
+            "finance",
+            "financial",
+            "주식",
+            "주가",
+            "시세",
+            "종목",
+            "코스피",
+            "코스닥",
+            "kospi",
+            "kosdaq",
+        }
+    ),
+    "crypto": frozenset(
+        {
+            "crypto",
+            "cryptocurrency",
+            "bitcoin",
+            "btc",
+            "eth",
+            "ethereum",
+            "암호화폐",
+            "코인",
+        }
+    ),
+    "portfolio": frozenset(
+        {
+            "portfolio",
+            "watchlist",
+            "holdings",
+            "포트폴리오",
+            "관심종목",
+            "보유",
+        }
+    ),
+    "weather": frozenset(
+        {
+            "weather",
+            "temperature",
+            "forecast",
+            "rain",
+            "snow",
+            "날씨",
+            "기온",
+            "비",
+            "눈",
+            "예보",
+        }
+    ),
     "time": frozenset({"time", "clock", "now", "today", "시간", "시각", "지금"}),
     "github": frozenset({"github", "issue", "issues", "pr", "repo", "이슈", "저장소"}),
 }
@@ -84,16 +127,74 @@ def _expand_synonyms(tokens: set[str]) -> set[str]:
 # Includes generic verbs/nouns from both EN and KO.
 _STOPWORDS: frozenset[str] = frozenset(
     {
-        "the", "a", "an", "and", "or", "of", "to", "in", "for", "on",
-        "with", "is", "are", "was", "were", "be", "this", "that",
-        "what", "how", "why", "when", "where", "who",
-        "i", "me", "my", "you", "your",
-        "use", "using", "show", "tell", "find", "get", "give",
-        "please", "now", "today", "current",
-        "알려", "알려줘", "보여", "보여줘", "해줘", "해주세요", "줘",
-        "어떻게", "뭐", "뭐야", "어디", "언제", "왜", "누구",
-        "지금", "오늘", "현재", "는", "은", "이", "가", "을", "를",
-        "사용", "사용해", "사용해줘", "스킬", "툴",
+        "the",
+        "a",
+        "an",
+        "and",
+        "or",
+        "of",
+        "to",
+        "in",
+        "for",
+        "on",
+        "with",
+        "is",
+        "are",
+        "was",
+        "were",
+        "be",
+        "this",
+        "that",
+        "what",
+        "how",
+        "why",
+        "when",
+        "where",
+        "who",
+        "i",
+        "me",
+        "my",
+        "you",
+        "your",
+        "use",
+        "using",
+        "show",
+        "tell",
+        "find",
+        "get",
+        "give",
+        "please",
+        "now",
+        "today",
+        "current",
+        "알려",
+        "알려줘",
+        "보여",
+        "보여줘",
+        "해줘",
+        "해주세요",
+        "줘",
+        "어떻게",
+        "뭐",
+        "뭐야",
+        "어디",
+        "언제",
+        "왜",
+        "누구",
+        "지금",
+        "오늘",
+        "현재",
+        "는",
+        "은",
+        "이",
+        "가",
+        "을",
+        "를",
+        "사용",
+        "사용해",
+        "사용해줘",
+        "스킬",
+        "툴",
     }
 )
 
@@ -171,9 +272,7 @@ def suggest_skill_for(
         denom = max(len(skill_tokens), 1)
         score = len(matched) / (denom**0.5)
         if best is None or score > best.score:
-            best = SkillSuggestion(
-                skill=s, matched_terms=report_terms, score=score
-            )
+            best = SkillSuggestion(skill=s, matched_terms=report_terms, score=score)
     return best
 
 
@@ -231,8 +330,7 @@ def render_skill_suggestion_prelude(
         script, sample = extracted
         script_hint = f'"{script}"'
         args_hint = (
-            f'a list whose first element resembles "{sample}", '
-            "adjusted for the user's question"
+            f'a list whose first element resembles "{sample}", adjusted for the user\'s question'
             if sample
             else "the values implied by the user's question"
         )

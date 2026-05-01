@@ -53,9 +53,7 @@ async def test_runs_python_script_with_args(tmp_path: Path) -> None:
     )
     paths = OxenclawPaths(home=tmp_path)
     tool = skill_run_tool(paths=paths)
-    out = await tool.execute(
-        {"skill": "echoer", "script": "echo.py", "args": ["world", "42"]}
-    )
+    out = await tool.execute({"skill": "echoer", "script": "echo.py", "args": ["world", "42"]})
     assert "exit=0" in out
     assert "HELLO world 42" in out
 
@@ -84,9 +82,7 @@ async def test_path_traversal_rejected(tmp_path: Path) -> None:
     _install_skill(tmp_path, "demo", {"x.py": "print('x')\n"})
     # Attempt to escape via ../
     tool = skill_run_tool(paths=OxenclawPaths(home=tmp_path))
-    out = await tool.execute(
-        {"skill": "demo", "script": "../../etc/passwd", "args": []}
-    )
+    out = await tool.execute({"skill": "demo", "script": "../../etc/passwd", "args": []})
     assert "outside" in out
 
 

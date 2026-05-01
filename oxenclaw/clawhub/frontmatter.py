@@ -188,9 +188,7 @@ def _coerce_skill_commands(raw: Any) -> Any:
         if isinstance(entry, str):
             m = _SHORTHAND_CMD_RE.match(entry.strip())
             if m is None:
-                _logger.warning(
-                    "skill manifest: dropping unparseable command entry %r", entry
-                )
+                _logger.warning("skill manifest: dropping unparseable command entry %r", entry)
                 continue
             name = m.group("name").replace("-", "_")
             desc = (m.group("desc") or name).strip()

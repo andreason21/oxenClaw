@@ -133,9 +133,7 @@ async def test_tools_lists_gated_tools_per_agent() -> None:
 
     register_approval_methods(router, manager, agents=agents)
 
-    resp = await router.dispatch(
-        {"jsonrpc": "2.0", "id": 1, "method": "exec-approvals.tools"}
-    )
+    resp = await router.dispatch({"jsonrpc": "2.0", "id": 1, "method": "exec-approvals.tools"})
     by_name = {t["name"]: t for t in resp.result}
     assert set(by_name) == {"write_file", "shell_run"}
     assert by_name["write_file"]["agents"] == ["alpha", "beta"]
@@ -145,7 +143,5 @@ async def test_tools_lists_gated_tools_per_agent() -> None:
 
 async def test_tools_returns_empty_when_no_agents_passed() -> None:
     router, _ = _setup()
-    resp = await router.dispatch(
-        {"jsonrpc": "2.0", "id": 1, "method": "exec-approvals.tools"}
-    )
+    resp = await router.dispatch({"jsonrpc": "2.0", "id": 1, "method": "exec-approvals.tools"})
     assert resp.result == []

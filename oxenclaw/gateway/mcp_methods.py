@@ -132,8 +132,10 @@ def _summarize_entry(name: str, raw: Any) -> dict[str, Any]:
     can pre-fill from it (including unexpanded `${VAR}` references), and
     a parsed-side `valid` / `kind` so the UI can show a status badge.
     """
-    parsed = parse_server_config(name, raw) if isinstance(raw, dict) else _ParseFailure(
-        "server config must be an object"
+    parsed = (
+        parse_server_config(name, raw)
+        if isinstance(raw, dict)
+        else _ParseFailure("server config must be an object")
     )
     out: dict[str, Any] = {"name": name, "raw": raw if isinstance(raw, dict) else {}}
     if isinstance(parsed, _ParseFailure):

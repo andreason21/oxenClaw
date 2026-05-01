@@ -18,9 +18,7 @@ from oxenclaw.clawhub.loader import InstalledSkill, format_skills_for_prompt
 
 
 def _skill(slug: str, body: str) -> InstalledSkill:
-    manifest = SkillManifest.model_validate(
-        {"name": slug, "description": f"{slug} desc"}
-    )
+    manifest = SkillManifest.model_validate({"name": slug, "description": f"{slug} desc"})
     return InstalledSkill(
         slug=slug,
         manifest=manifest,
@@ -63,9 +61,7 @@ def test_truncation_does_not_cut_inside_fenced_code_block() -> None:
     so no half-fence escapes into the prompt."""
     body = (
         "Intro paragraph (long enough to push the cap past the open fence).\n"
-        "More intro text padding lines.\n"
-        + ("padding line\n" * 30)
-        + "```python\n"
+        "More intro text padding lines.\n" + ("padding line\n" * 30) + "```python\n"
         "uv run scripts/foo.py\n"
         "still inside fence\n"
         "```\n"
@@ -78,8 +74,7 @@ def test_truncation_does_not_cut_inside_fenced_code_block() -> None:
     body_block = body_block.split("</usage>")[0]
     fence_count = body_block.count("```")
     assert fence_count % 2 == 0, (
-        "excerpt left an unterminated ``` fence; got "
-        f"{fence_count} fences in: {body_block!r}"
+        f"excerpt left an unterminated ``` fence; got {fence_count} fences in: {body_block!r}"
     )
 
 

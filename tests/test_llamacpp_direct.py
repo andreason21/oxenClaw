@@ -82,9 +82,12 @@ def test_find_binary_raises_when_nothing_found(monkeypatch) -> None:
     for env in ("OXENCLAW_LLAMACPP_BIN", "LLAMA_SERVER_PATH", "UNSLOTH_LLAMA_CPP_PATH"):
         monkeypatch.delenv(env, raising=False)
 
-    with patch("shutil.which", return_value=None), patch(
-        "oxenclaw.pi.llamacpp_server.manager._candidate_install_dirs",
-        return_value=[],
+    with (
+        patch("shutil.which", return_value=None),
+        patch(
+            "oxenclaw.pi.llamacpp_server.manager._candidate_install_dirs",
+            return_value=[],
+        ),
     ):
         with pytest.raises(LlamaCppServerError, match="not found"):
             find_llama_server_binary()

@@ -159,9 +159,9 @@ DEFAULT_SYSTEM_PROMPT = (
     "`<available_skills>` block lists installed skills with their\n"
     "SKILL.md `<usage>` excerpt (first ~1500 chars: scripts + sample\n"
     "args). To run an installed skill's documented script, call the\n"
-    '`skill_run` tool — e.g. for stock-analysis on Samsung Electronics:\n'
-    '  `skill_run(skill=\"stock-analysis\", script=\"analyze_stock.py\",\n'
-    '            args=[\"005930.KS\"])`\n'
+    "`skill_run` tool — e.g. for stock-analysis on Samsung Electronics:\n"
+    '  `skill_run(skill="stock-analysis", script="analyze_stock.py",\n'
+    '            args=["005930.KS"])`\n'
     "(Korean tickers use the `<6-digit>.KS` (KOSPI) / `.KQ` (KOSDAQ)\n"
     "Yahoo suffix.) Pick the right script + args from the `<usage>`\n"
     "excerpt; do NOT emit a tool_use block named after the skill —\n"
@@ -811,9 +811,7 @@ class PiAgent:
         # that emits arguments without naming the tool — e.g. the
         # bare `{"action":"add","schedule":"...","prompt":"..."}`
         # JSON the cron prelude provokes.
-        tool_schemas = {
-            t.name: t.input_schema for t in self._tools._tools.values()
-        }
+        tool_schemas = {t.name: t.input_schema for t in self._tools._tools.values()}
         pseudo = extract_pseudo_tool_call(
             text,
             is_known_tool=lambda n: self._tools.get(n) is not None,
@@ -855,11 +853,7 @@ class PiAgent:
             stop_reason="tool_use",
         )
         synthetic_result = ToolResultMessage(
-            results=[
-                ToolResultBlock(
-                    tool_use_id=fake_id, content=output, is_error=is_error
-                )
-            ],
+            results=[ToolResultBlock(tool_use_id=fake_id, content=output, is_error=is_error)],
         )
 
         # The original turn appended its text-only assistant message
@@ -868,10 +862,14 @@ class PiAgent:
         original_appended = list(getattr(result, "appended_messages", []) or [])
         if original_appended and original_appended[-1] is final:
             original_appended = original_appended[:-1]
-        retry_history = list(history) + original_appended + [
-            synthetic_assistant,
-            synthetic_result,
-        ]
+        retry_history = (
+            list(history)
+            + original_appended
+            + [
+                synthetic_assistant,
+                synthetic_result,
+            ]
+        )
 
         try:
             rerun = await run_agent_turn(
@@ -1107,9 +1105,7 @@ class PiAgent:
         if text:
             try:
                 installed_skills = (
-                    load_installed_skills(self._paths)
-                    if self._include_skills
-                    else []
+                    load_installed_skills(self._paths) if self._include_skills else []
                 )
                 suggestion = suggest_skill_for(text, installed_skills)
             except Exception:
@@ -1135,9 +1131,7 @@ class PiAgent:
         # `cron:<job_id>`). Otherwise the registered prompt's own time
         # phrase ("매일 아침 8시 50분에 …") triggers a fresh registration
         # on every fire — observed as the duplicate-job feedback loop.
-        is_cron_fire = bool(
-            inbound.sender_id and inbound.sender_id.startswith("cron:")
-        )
+        is_cron_fire = bool(inbound.sender_id and inbound.sender_id.startswith("cron:"))
         if text and not is_cron_fire:
             try:
                 cron_hint = detect_cron_request(text)
@@ -1171,9 +1165,7 @@ class PiAgent:
             if promise:
                 pending_prelude = render_pending_action_prelude(promise)
                 user_text_for_model = f"{pending_prelude}\n\n{user_text_for_model}"
-                logger.info(
-                    "pending-action prelude injected: promise_snippet=%r", promise[:80]
-                )
+                logger.info("pending-action prelude injected: promise_snippet=%r", promise[:80])
 
         # Build the user message content. Pure-text turns keep the
         # `content: str` shape (smaller payload, identical semantics);

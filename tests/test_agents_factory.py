@@ -118,9 +118,7 @@ def test_auto_picks_llamacpp_direct_when_configured(
     assert agent2._model.provider == "llamacpp-direct"
 
 
-def test_resolve_default_local_provider_branches(
-    monkeypatch: pytest.MonkeyPatch, tmp_path
-) -> None:
+def test_resolve_default_local_provider_branches(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
     from oxenclaw.agents.factory import resolve_default_local_provider
 
     # Branch 1: no GGUF env → ollama.

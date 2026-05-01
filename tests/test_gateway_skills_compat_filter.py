@@ -75,9 +75,7 @@ def setup(tmp_path):  # type: ignore[no-untyped-def]
     client.fetch_skill_detail = AsyncMock(  # type: ignore[method-assign]
         return_value={
             "slug": "mac-only",
-            "latestVersion": {
-                "manifest": {"openclaw": {"os": ["darwin"]}}
-            },
+            "latestVersion": {"manifest": {"openclaw": {"os": ["darwin"]}}},
         }
     )
     client.aclose = AsyncMock()  # type: ignore[method-assign]

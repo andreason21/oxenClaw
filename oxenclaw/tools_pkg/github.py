@@ -116,10 +116,7 @@ def github_tool(config: GithubToolConfig | None = None) -> Tool:
                 "web_search": "general web queries",
                 "web_fetch": "fetching a specific URL",
             },
-            notes=(
-                "Verb must be in the allow-list; shell metacharacters in args "
-                "are refused."
-            ),
+            notes=("Verb must be in the allow-list; shell metacharacters in args are refused."),
         ),
         input_model=_GhArgs,
         handler=_h,

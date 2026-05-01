@@ -118,35 +118,27 @@ def check_compatibility(
         report.unsupported_os = True
         report.installable = False
         declared = ", ".join(sorted({o for o in os_list if o.strip()}))
-        report.reasons.append(
-            f"requires {declared or '(unspecified)'}; current platform is {cur}"
-        )
+        report.reasons.append(f"requires {declared or '(unspecified)'}; current platform is {cur}")
 
     missing_bins = [b for b in requires_bins if b and not which(b)]
     if missing_bins:
         report.missing_bins.extend(missing_bins)
         report.installable = False
-        report.reasons.append(
-            "missing required binaries on PATH: " + ", ".join(missing_bins)
-        )
+        report.reasons.append("missing required binaries on PATH: " + ", ".join(missing_bins))
 
     any_bins = [b for b in requires_any_bins if b]
     if any_bins and not any(which(b) for b in any_bins):
         report.missing_any_bins.extend(any_bins)
         report.installable = False
         report.reasons.append(
-            "no candidate binary on PATH (need at least one of: "
-            + ", ".join(any_bins)
-            + ")"
+            "no candidate binary on PATH (need at least one of: " + ", ".join(any_bins) + ")"
         )
 
     missing_env = [v for v in requires_env if v and not env.get(v)]
     if missing_env:
         report.missing_env.extend(missing_env)
         report.installable = False
-        report.reasons.append(
-            "missing required env vars: " + ", ".join(missing_env)
-        )
+        report.reasons.append("missing required env vars: " + ", ".join(missing_env))
 
     return report
 

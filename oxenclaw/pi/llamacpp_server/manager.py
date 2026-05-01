@@ -85,9 +85,7 @@ def find_llama_server_binary() -> Path:
             p = Path(os.path.expanduser(raw))
             if p.is_file() and os.access(p, os.X_OK):
                 return p
-            raise LlamaCppServerError(
-                f"${env}={raw!r} is not an executable file"
-            )
+            raise LlamaCppServerError(f"${env}={raw!r} is not an executable file")
 
     on_path = shutil.which("llama-server")
     if on_path:
@@ -181,9 +179,7 @@ class LlamaCppServerSpec:
         )
 
 
-def _build_command(
-    binary: Path, spec: LlamaCppServerSpec, port: int
-) -> list[str]:
+def _build_command(binary: Path, spec: LlamaCppServerSpec, port: int) -> list[str]:
     """Assemble the full `llama-server` argv for `spec`.
 
     The flags here are the "fast preset". Comments inline cite the
@@ -419,10 +415,14 @@ class LlamaCppServer:
             if self._stdout_thread is not None:
                 self._stdout_thread.join(timeout=1.5)
             tail_lines = self._stdout_tail[-30:]
-            tail = "\n".join(tail_lines) if tail_lines else (
-                "(empty — child crashed before printing; try the spawn "
-                "manually to see the real stderr: \n  "
-                f"{' '.join(cmd)})"
+            tail = (
+                "\n".join(tail_lines)
+                if tail_lines
+                else (
+                    "(empty — child crashed before printing; try the spawn "
+                    "manually to see the real stderr: \n  "
+                    f"{' '.join(cmd)})"
+                )
             )
             raise LlamaCppServerError(f"{reason}. Last stdout:\n{tail}") from None
 
@@ -440,9 +440,7 @@ class LlamaCppServer:
                 # the child rejected its argv (unsupported flag) and
                 # printed only to stderr we'd already merged into
                 # stdout. Either way, the spawn is doomed; bail.
-                raise LlamaCppServerError(
-                    f"llama-server exited early with code {rc}"
-                )
+                raise LlamaCppServerError(f"llama-server exited early with code {rc}")
             try:
                 with urllib.request.urlopen(url, timeout=1.5) as resp:
                     if 200 <= resp.status < 500:
@@ -495,9 +493,7 @@ class LlamaCppServer:
                 try:
                     proc.wait(timeout=_SHUTDOWN_GRACE_S)
                 except subprocess.TimeoutExpired:
-                    logger.warning(
-                        "llama-server (pid=%s) ignored SIGKILL", proc.pid
-                    )
+                    logger.warning("llama-server (pid=%s) ignored SIGKILL", proc.pid)
         self._proc = None
         self._port = None
         self._spec = None

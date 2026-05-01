@@ -80,13 +80,9 @@ def _resolve_script(skill_dir: Path, script: str) -> Path:
     scripts_dir = (skill_dir / "scripts").resolve()
     candidate = (scripts_dir / script).resolve()
     if scripts_dir not in candidate.parents and candidate != scripts_dir:
-        raise ValueError(
-            f"script {script!r} resolves outside the skill's scripts/ directory"
-        )
+        raise ValueError(f"script {script!r} resolves outside the skill's scripts/ directory")
     if not candidate.is_file():
-        raise FileNotFoundError(
-            f"script not found: {candidate.relative_to(skill_dir)}"
-        )
+        raise FileNotFoundError(f"script not found: {candidate.relative_to(skill_dir)}")
     return candidate
 
 
@@ -102,9 +98,7 @@ def _has_pep723_header(script_path: Path) -> bool:
     return "# /// script" in head
 
 
-def _build_argv(
-    script_path: Path, args: list[str], which: Any
-) -> tuple[list[str], str | None]:
+def _build_argv(script_path: Path, args: list[str], which: Any) -> tuple[list[str], str | None]:
     """Pick an interpreter for `script_path`. Returns (argv, error_msg)
     where argv is None when no interpreter is available."""
     suffix = script_path.suffix.lower()

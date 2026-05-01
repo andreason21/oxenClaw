@@ -196,8 +196,7 @@ def weather_tool() -> Tool:
     return FunctionTool(
         name="weather",
         description=hermes_desc(
-            "Get the current weather via wttr.in (city) or open-meteo "
-            "(lat/lon). Free, no-auth.",
+            "Get the current weather via wttr.in (city) or open-meteo (lat/lon). Free, no-auth.",
             when_use=[
                 "the user asks about temperature / forecast / 날씨",
                 "you have a place name or coordinates",

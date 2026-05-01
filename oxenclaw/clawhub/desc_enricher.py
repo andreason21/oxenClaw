@@ -166,8 +166,10 @@ _BODY_CHARS_FOR_PROMPT = 4000
 
 
 def _build_prompt(name: str, description: str, body: str) -> str:
-    truncated = body if len(body) <= _BODY_CHARS_FOR_PROMPT else (
-        body[:_BODY_CHARS_FOR_PROMPT] + "\n…(truncated)"
+    truncated = (
+        body
+        if len(body) <= _BODY_CHARS_FOR_PROMPT
+        else (body[:_BODY_CHARS_FOR_PROMPT] + "\n…(truncated)")
     )
     return _PROMPT_TEMPLATE.format(
         name=name,
@@ -329,9 +331,7 @@ def render_for_prompt(
     if enriched.when_skip:
         parts.append("WHEN NOT TO USE: " + "; ".join(enriched.when_skip) + ".")
     if enriched.alternatives:
-        alt_lines = "; ".join(
-            f"{name} ({why})" for name, why in enriched.alternatives.items()
-        )
+        alt_lines = "; ".join(f"{name} ({why})" for name, why in enriched.alternatives.items())
         parts.append("ALTERNATIVES: " + alt_lines + ".")
     return " ".join(parts)
 

@@ -32,9 +32,7 @@ def test_disabled_by_default(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
     assert not (tmp_path / "trace.jsonl").exists()
 
 
-def test_request_response_round_trip(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_request_response_round_trip(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     sink = tmp_path / "trace.jsonl"
     monkeypatch.setenv("OXENCLAW_LLM_TRACE", "1")
     monkeypatch.setenv("OXENCLAW_LLM_TRACE_FILE", str(sink))
@@ -71,9 +69,7 @@ def test_request_response_round_trip(
     assert lines[1]["finish_reason"] == "tool_calls"
 
 
-def test_truncation_clamps_huge_strings(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_truncation_clamps_huge_strings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     sink = tmp_path / "trace.jsonl"
     monkeypatch.setenv("OXENCLAW_LLM_TRACE", "1")
     monkeypatch.setenv("OXENCLAW_LLM_TRACE_FILE", str(sink))

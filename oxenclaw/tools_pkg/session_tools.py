@@ -140,8 +140,7 @@ def sessions_status_tool(sm: SessionManager) -> Tool:
     return FunctionTool(
         name="sessions_status",
         description=hermes_desc(
-            "Return metadata for one session (title, counts, "
-            "last_assistant_preview, has_plan).",
+            "Return metadata for one session (title, counts, last_assistant_preview, has_plan).",
             when_use=[
                 "you have a session_key and need its current status",
             ],
@@ -181,8 +180,7 @@ def sessions_list_tool(sm: SessionManager) -> Tool:
     return FunctionTool(
         name="sessions_list",
         description=hermes_desc(
-            "List sessions (optionally filtered by agent_id) as a JSON "
-            "array of summaries.",
+            "List sessions (optionally filtered by agent_id) as a JSON array of summaries.",
             when_use=[
                 "the user wants to browse / pick a session by id",
                 "you need to discover the session_key for a follow-up tool",
@@ -227,8 +225,7 @@ def sessions_history_tool(sm: SessionManager) -> Tool:
     return FunctionTool(
         name="sessions_history",
         description=hermes_desc(
-            "Return the last `limit` messages (default 20) from a session "
-            "as {role, preview} rows.",
+            "Return the last `limit` messages (default 20) from a session as {role, preview} rows.",
             when_use=[
                 "you need to read what was actually said in a prior session",
             ],
@@ -285,10 +282,7 @@ def sessions_send_tool(sm: SessionManager) -> Tool:
                 "the user is in a live chat (just reply normally)",
             ],
             alternatives={"message": "real channel send to a user"},
-            notes=(
-                "Does NOT trigger an agent run. Mutating — approval-gated "
-                "when available."
-            ),
+            notes=("Does NOT trigger an agent run. Mutating — approval-gated when available."),
         ),
         input_model=_SendArgs,
         handler=_h,

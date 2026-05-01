@@ -234,8 +234,7 @@ def read_pdf_tool() -> Tool:
     return FunctionTool(
         name="read_pdf",
         description=hermes_desc(
-            "Extract text from a PDF using pypdf. Pages are separated by "
-            "'--- page N ---' markers.",
+            "Extract text from a PDF using pypdf. Pages are separated by '--- page N ---' markers.",
             when_use=[
                 "the path ends in .pdf and you want its text",
                 "you need a per-page split rather than raw bytes",
@@ -917,10 +916,7 @@ def shell_run_tool() -> Tool:
                 "glob": "find -name",
                 "process_tool": "background processes",
             },
-            notes=(
-                "REQUIRES human approval. Hardline / dangerous patterns "
-                "are blocked outright."
-            ),
+            notes=("REQUIRES human approval. Hardline / dangerous patterns are blocked outright."),
         ),
         input_model=_ShellRunArgs,
         handler=_h,

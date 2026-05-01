@@ -85,11 +85,7 @@ def test_unfenced_json_object_in_text() -> None:
 
 def test_openai_style_function_wrapping() -> None:
     """Some models emit `{"function": {"name": ..., "arguments": {...}}}`."""
-    text = (
-        "```json\n"
-        '{"function": {"name": "weather", "arguments": {"city": "Seoul"}}}\n'
-        "```"
-    )
+    text = '```json\n{"function": {"name": "weather", "arguments": {"city": "Seoul"}}}\n```'
     pseudo = extract_pseudo_tool_call(text, is_known_tool=_is_known)
     assert pseudo is not None
     assert pseudo.name == "weather"
@@ -106,9 +102,7 @@ def test_name_with_input_key() -> None:
 
 def test_arguments_as_stringified_json() -> None:
     """OpenAI streaming dumps `arguments` as a JSON string."""
-    text = (
-        '```json\n{"name": "web_search", "arguments": "{\\"query\\": "kimchi"}"}\n```'
-    )
+    text = '```json\n{"name": "web_search", "arguments": "{\\"query\\": "kimchi"}"}\n```'
     # The escaped string isn't valid JSON in our test (odd quotes); use a
     # cleaner version:
     text = '```json\n{"name": "web_search", "arguments": "{\\"query\\": \\"kimchi\\"}"}\n```'
@@ -163,9 +157,7 @@ def test_schema_shape_matches_cron_args_without_name_field() -> None:
         "}\n"
         "```"
     )
-    pseudo = extract_pseudo_tool_call(
-        text, is_known_tool=_is_known, tool_schemas=TOOL_SCHEMAS
-    )
+    pseudo = extract_pseudo_tool_call(text, is_known_tool=_is_known, tool_schemas=TOOL_SCHEMAS)
     assert pseudo is not None
     assert pseudo.name == "cron"
     assert pseudo.args["action"] == "add"
@@ -175,14 +167,8 @@ def test_schema_shape_matches_cron_args_without_name_field() -> None:
 def test_schema_shape_matches_skill_run_args_without_name_field() -> None:
     """Same bug class for skill_run — the model emitted only the
     arguments earlier in the qwen3.5:9b stock-analysis trace."""
-    text = (
-        "```json\n"
-        '{"skill":"stock-analysis","script":"analyze_stock.py","args":["KOSPI"]}\n'
-        "```"
-    )
-    pseudo = extract_pseudo_tool_call(
-        text, is_known_tool=_is_known, tool_schemas=TOOL_SCHEMAS
-    )
+    text = '```json\n{"skill":"stock-analysis","script":"analyze_stock.py","args":["KOSPI"]}\n```'
+    pseudo = extract_pseudo_tool_call(text, is_known_tool=_is_known, tool_schemas=TOOL_SCHEMAS)
     assert pseudo is not None
     assert pseudo.name == "skill_run"
 
@@ -198,14 +184,8 @@ def test_schema_shape_rejects_extra_unknown_keys() -> None:
     """When `additionalProperties` isn't set, an extra key the schema
     doesn't declare disqualifies the match. Otherwise we'd routinely
     misroute partial blobs."""
-    text = (
-        "```json\n"
-        '{"action":"add","schedule":"50 8 * * *","prompt":"x","wibble":"q"}\n'
-        "```"
-    )
-    pseudo = extract_pseudo_tool_call(
-        text, is_known_tool=_is_known, tool_schemas=TOOL_SCHEMAS
-    )
+    text = '```json\n{"action":"add","schedule":"50 8 * * *","prompt":"x","wibble":"q"}\n```'
+    pseudo = extract_pseudo_tool_call(text, is_known_tool=_is_known, tool_schemas=TOOL_SCHEMAS)
     assert pseudo is None
 
 
@@ -236,9 +216,7 @@ def test_schema_shape_refuses_to_guess_on_ambiguous_match() -> None:
 def test_schema_shape_skipped_when_required_unsatisfied() -> None:
     """If the candidate JSON is missing a required field, no match."""
     text = '```json\n{"schedule":"0 9 * * *","prompt":"x"}\n```'  # no `action`
-    pseudo = extract_pseudo_tool_call(
-        text, is_known_tool=_is_known, tool_schemas=TOOL_SCHEMAS
-    )
+    pseudo = extract_pseudo_tool_call(text, is_known_tool=_is_known, tool_schemas=TOOL_SCHEMAS)
     assert pseudo is None
 
 
@@ -247,12 +225,8 @@ def test_named_match_still_wins_over_schema_shape() -> None:
     shape, the explicit name path takes precedence so the matcher
     doesn't reroute to a different tool just because shape happens
     to fit."""
-    text = (
-        '```json\n{"tool":"weather","action":"add","schedule":"50 8 * * *","prompt":"x"}\n```'
-    )
-    pseudo = extract_pseudo_tool_call(
-        text, is_known_tool=_is_known, tool_schemas=TOOL_SCHEMAS
-    )
+    text = '```json\n{"tool":"weather","action":"add","schedule":"50 8 * * *","prompt":"x"}\n```'
+    pseudo = extract_pseudo_tool_call(text, is_known_tool=_is_known, tool_schemas=TOOL_SCHEMAS)
     # `tool: weather` is the named call. (`weather` schema requires
     # `location`, which is missing — but we only re-shape match when
     # there's no name. The name path treats this as `weather` with

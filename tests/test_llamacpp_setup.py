@@ -27,9 +27,12 @@ def test_doctor_probe_warns_when_nothing_configured(monkeypatch: pytest.MonkeyPa
     monkeypatch.delenv("LLAMA_SERVER_PATH", raising=False)
     monkeypatch.delenv("UNSLOTH_LLAMA_CPP_PATH", raising=False)
 
-    with patch("shutil.which", return_value=None), patch(
-        "oxenclaw.pi.llamacpp_server.manager._candidate_install_dirs",
-        return_value=[],
+    with (
+        patch("shutil.which", return_value=None),
+        patch(
+            "oxenclaw.pi.llamacpp_server.manager._candidate_install_dirs",
+            return_value=[],
+        ),
     ):
         report = DoctorReport()
         _probe_llamacpp_direct(report)
@@ -204,9 +207,12 @@ def test_wizard_downloads_binary_when_missing(
     monkeypatch.setattr(Path, "home", classmethod(lambda cls: fake_home))
 
     # Force discovery to fail so the wizard takes the install branch.
-    with patch("shutil.which", return_value=None), patch(
-        "oxenclaw.pi.llamacpp_server.manager._candidate_install_dirs",
-        return_value=[fake_home / ".oxenclaw" / "llama.cpp"],
+    with (
+        patch("shutil.which", return_value=None),
+        patch(
+            "oxenclaw.pi.llamacpp_server.manager._candidate_install_dirs",
+            return_value=[fake_home / ".oxenclaw" / "llama.cpp"],
+        ),
     ):
         prompter = _StubPrompter(
             selects=["download a prebuilt release zip (paste URL)"],
@@ -233,9 +239,7 @@ def test_wizard_downloads_binary_when_missing(
     assert result.is_ready()
 
 
-def test_wizard_accepts_tar_gz_release_url(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_wizard_accepts_tar_gz_release_url(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """The user's bug: pasting a `.tar.gz` release URL should not fail
     URL validation. Wizard now accepts every common archive suffix."""
     fake_home = tmp_path / "home"
@@ -251,9 +255,12 @@ def test_wizard_accepts_tar_gz_release_url(
         "llama-b8967-bin-ubuntu-sycl-fp16-x64.tar.gz"
     )
 
-    with patch("shutil.which", return_value=None), patch(
-        "oxenclaw.pi.llamacpp_server.manager._candidate_install_dirs",
-        return_value=[fake_home / ".oxenclaw" / "llama.cpp"],
+    with (
+        patch("shutil.which", return_value=None),
+        patch(
+            "oxenclaw.pi.llamacpp_server.manager._candidate_install_dirs",
+            return_value=[fake_home / ".oxenclaw" / "llama.cpp"],
+        ),
     ):
         prompter = _StubPrompter(
             selects=["download a prebuilt release zip (paste URL)"],
@@ -288,9 +295,12 @@ def test_wizard_reprompts_on_bad_url_then_gives_up(
     monkeypatch.delenv("LLAMA_SERVER_PATH", raising=False)
     monkeypatch.setattr(Path, "home", classmethod(lambda cls: fake_home))
 
-    with patch("shutil.which", return_value=None), patch(
-        "oxenclaw.pi.llamacpp_server.manager._candidate_install_dirs",
-        return_value=[fake_home / ".oxenclaw" / "llama.cpp"],
+    with (
+        patch("shutil.which", return_value=None),
+        patch(
+            "oxenclaw.pi.llamacpp_server.manager._candidate_install_dirs",
+            return_value=[fake_home / ".oxenclaw" / "llama.cpp"],
+        ),
     ):
         prompter = _StubPrompter(
             selects=["download a prebuilt release zip (paste URL)"],
@@ -353,9 +363,12 @@ def test_wizard_builds_from_source_when_missing(
             return f"/usr/bin/{name}"
         return None
 
-    with patch("shutil.which", side_effect=_fake_which), patch(
-        "oxenclaw.pi.llamacpp_server.manager._candidate_install_dirs",
-        return_value=[install_dir],
+    with (
+        patch("shutil.which", side_effect=_fake_which),
+        patch(
+            "oxenclaw.pi.llamacpp_server.manager._candidate_install_dirs",
+            return_value=[install_dir],
+        ),
     ):
         prompter = _StubPrompter(
             # Builder choice label is dynamic ("(detected backend: cpu)" etc.)
@@ -386,9 +399,7 @@ def test_wizard_builds_from_source_when_missing(
     assert result.is_ready()
 
 
-def test_wizard_downloads_gguf_via_hf_cli(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_wizard_downloads_gguf_via_hf_cli(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     binary = tmp_path / "llama-server"
     binary.write_text("#!/bin/sh\nexit 0\n")
     binary.chmod(0o755)
@@ -440,9 +451,12 @@ def test_wizard_aborts_when_user_declines_binary(
     monkeypatch.delenv("UNSLOTH_LLAMA_CPP_PATH", raising=False)
     monkeypatch.setattr(Path, "home", classmethod(lambda cls: fake_home))
 
-    with patch("shutil.which", return_value=None), patch(
-        "oxenclaw.pi.llamacpp_server.manager._candidate_install_dirs",
-        return_value=[],
+    with (
+        patch("shutil.which", return_value=None),
+        patch(
+            "oxenclaw.pi.llamacpp_server.manager._candidate_install_dirs",
+            return_value=[],
+        ),
     ):
         prompter = _StubPrompter(
             selects=["leave it for now (I'll set it up myself)"],
@@ -484,9 +498,12 @@ def test_wizard_rejects_binary_that_fails_smoke(
             binary.chmod(0o755)
             return [binary]
 
-    with patch("shutil.which", return_value=None), patch(
-        "oxenclaw.pi.llamacpp_server.manager._candidate_install_dirs",
-        return_value=[install_dir],
+    with (
+        patch("shutil.which", return_value=None),
+        patch(
+            "oxenclaw.pi.llamacpp_server.manager._candidate_install_dirs",
+            return_value=[install_dir],
+        ),
     ):
         prompter = _StubPrompter(
             selects=["download a prebuilt release zip (paste URL)"],
@@ -507,9 +524,7 @@ def test_wizard_rejects_binary_that_fails_smoke(
     assert any("won't run" in m or "wrong-architecture" in m for m in io.messages)
 
 
-def test_wizard_smoke_failure_propagates(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_wizard_smoke_failure_propagates(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     binary = tmp_path / "llama-server"
     binary.write_text("#!/bin/sh\nexit 0\n")
     binary.chmod(0o755)
@@ -587,9 +602,7 @@ def test_env_autoload_applies_persisted_keys(_env_isolation, tmp_path: Path) -> 
     assert _os.environ["OXENCLAW_LLAMACPP_GGUF"] == "/test/m.gguf"
 
 
-def test_env_autoload_does_not_override_shell_by_default(
-    _env_isolation, tmp_path: Path
-) -> None:
+def test_env_autoload_does_not_override_shell_by_default(_env_isolation, tmp_path: Path) -> None:
     """Shell-set vars must win — operator's `export FOO=bar` is the
     escape hatch."""
     import os as _os
@@ -641,9 +654,7 @@ def test_persist_env_preserves_existing_unrelated_lines(
     env_file = fake_home / ".oxenclaw" / "env"
     env_file.parent.mkdir(parents=True, exist_ok=True)
     env_file.write_text(
-        "# my custom config\n"
-        'export PROMPT="hi"\n'
-        'export OXENCLAW_LLAMACPP_BIN="/old/path"\n',
+        '# my custom config\nexport PROMPT="hi"\nexport OXENCLAW_LLAMACPP_BIN="/old/path"\n',
         encoding="utf-8",
     )
 

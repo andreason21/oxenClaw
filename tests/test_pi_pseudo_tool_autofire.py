@@ -139,11 +139,7 @@ async def test_pseudo_tool_in_text_is_auto_fired_and_summarised(
         if state["calls"] == 1:
             yield TextDeltaEvent(delta="수원 날씨를 확인하겠습니다.\n\n")
             yield TextDeltaEvent(
-                delta=(
-                    "```json\n"
-                    '{"tool": "weather", "location": "Suwon, South Korea"}\n'
-                    "```"
-                )
+                delta=('```json\n{"tool": "weather", "location": "Suwon, South Korea"}\n```')
             )
             yield StopEvent(reason="end_turn")
             return
@@ -331,9 +327,7 @@ async def test_multi_turn_pseudo_then_proceed_does_not_double_fire(
         if state["calls"] == 1:
             # Round 1: pseudo tool call in text.
             yield TextDeltaEvent(delta="수원 날씨를 확인하겠습니다.\n\n")
-            yield TextDeltaEvent(
-                delta='```json\n{"tool":"weather","location":"Suwon"}\n```'
-            )
+            yield TextDeltaEvent(delta='```json\n{"tool":"weather","location":"Suwon"}\n```')
             yield StopEvent(reason="end_turn")
             return
         if state["calls"] == 2:
@@ -416,9 +410,7 @@ async def test_multi_turn_pseudo_then_proceed_does_not_double_fire(
         f"weather re-fired on turn2; weather_log={weather_log!r}"
     )
     # Exactly one more model round on turn 2 (no auto-fire retry).
-    assert state["calls"] == 3, (
-        f"turn2 expected 1 round (=3 total), got {state['calls']}"
-    )
+    assert state["calls"] == 3, f"turn2 expected 1 round (=3 total), got {state['calls']}"
 
     # C's pending-action prelude must NOT have been injected: the
     # synthetic auto-fired ToolUseBlock counts as a real tool call,
@@ -483,9 +475,7 @@ async def test_multi_turn_promise_only_then_proceed_triggers_c_prelude(
 
         if state["calls"] == 2:
             yield ToolUseStartEvent(id="w_real_1", name="weather")
-            yield ToolUseInputDeltaEvent(
-                id="w_real_1", input_delta='{"city":"Suwon"}'
-            )
+            yield ToolUseInputDeltaEvent(id="w_real_1", input_delta='{"city":"Suwon"}')
             yield ToolUseEndEvent(id="w_real_1")
             yield StopEvent(reason="tool_use")
             return

@@ -130,9 +130,7 @@ def test_user_morning_report_request_yields_actionable_prelude() -> None:
     """The actual user input that exposed the bug. The prelude must
     contain everything the model needs to convert it into a cron tool
     call without further reasoning."""
-    user_text = (
-        "매일 아침 8시50분에 나스닥, S&P, 환율, 오일 수치 리포트 만들어서 알려줘"
-    )
+    user_text = "매일 아침 8시50분에 나스닥, S&P, 환율, 오일 수치 리포트 만들어서 알려줘"
     s = detect_cron_request(user_text)
     assert s is not None
     assert s.schedule == "50 8 * * *"

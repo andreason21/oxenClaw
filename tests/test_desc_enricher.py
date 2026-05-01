@@ -78,7 +78,7 @@ def test_parse_plain_json() -> None:
 
 
 def test_parse_strips_code_fences() -> None:
-    raw = "```json\n{\"when_use\":[\"a\"]}\n```"
+    raw = '```json\n{"when_use":["a"]}\n```'
     parsed = parse_llm_response(raw)
     assert parsed is not None
     assert parsed.when_use == ["a"]
@@ -191,9 +191,7 @@ def test_enrich_writes_cache_and_returns_record(
     cached = load_cached(skill_dir)
     assert cached is not None
     assert cached.enriched.when_use == ["the user asks for X"]
-    assert cached.content_hash == content_hash(
-        "thing", "Do a thing.", "# Thing\nUsage: thing arg"
-    )
+    assert cached.content_hash == content_hash("thing", "Do a thing.", "# Thing\nUsage: thing arg")
 
 
 def test_enrich_cache_hit_skips_llm(

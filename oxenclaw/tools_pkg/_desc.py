@@ -42,9 +42,7 @@ def hermes_desc(
     if when_use:
         parts.append("WHEN TO USE: " + "; ".join(s.strip() for s in when_use) + ".")
     if when_skip:
-        parts.append(
-            "WHEN NOT TO USE: " + "; ".join(s.strip() for s in when_skip) + "."
-        )
+        parts.append("WHEN NOT TO USE: " + "; ".join(s.strip() for s in when_skip) + ".")
     if alternatives:
         alt_lines = "; ".join(f"{name} ({why})" for name, why in alternatives.items())
         parts.append("ALTERNATIVES: " + alt_lines + ".")

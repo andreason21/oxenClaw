@@ -125,10 +125,7 @@ def canvas_present_tool(
                 "the content needs external scripts/CSS (sandboxed iframe)",
             ],
             alternatives={"canvas_hide": "collapse the panel when done"},
-            notes=(
-                "HTML must be a self-contained document; no external CSS/JS "
-                "URLs."
-            ),
+            notes=("HTML must be a self-contained document; no external CSS/JS URLs."),
         ),
         input_model=_PresentArgs,
         handler=_handler,

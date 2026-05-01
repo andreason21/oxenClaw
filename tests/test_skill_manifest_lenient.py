@@ -29,9 +29,7 @@ _DICT_CMD = {
 
 
 def test_dict_command_still_parses() -> None:
-    m = SkillManifest.model_validate(
-        {"name": "demo", "description": "d", "commands": [_DICT_CMD]}
-    )
+    m = SkillManifest.model_validate({"name": "demo", "description": "d", "commands": [_DICT_CMD]})
     assert len(m.commands) == 1
     assert m.commands[0].name == "weather_lookup"
     assert m.commands[0].is_runnable is True
@@ -99,10 +97,7 @@ def test_unparseable_string_is_dropped_not_crash(caplog) -> None:
     )
     # Only the dict entry survives; garbled lines were skipped.
     assert [c.name for c in m.commands] == ["weather_lookup"]
-    assert any(
-        "dropping unparseable command entry" in r.getMessage()
-        for r in caplog.records
-    )
+    assert any("dropping unparseable command entry" in r.getMessage() for r in caplog.records)
 
 
 def test_build_tools_skips_docs_only_entries() -> None:

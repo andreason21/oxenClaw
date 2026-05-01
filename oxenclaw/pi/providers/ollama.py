@@ -189,9 +189,9 @@ async def _resolve_num_ctx(base_url: str, model_id: str) -> int:
         _resolved_ctx_cache[model_id] = resolved
         kv_gb = _estimate_kv_cache_gb(info, resolved)
         kv_note = f" (~{kv_gb:.1f} GiB KV cache)" if kv_gb else ""
-        logger = __import__(
-            "oxenclaw.plugin_sdk.runtime_env", fromlist=["get_logger"]
-        ).get_logger("pi.ollama")
+        logger = __import__("oxenclaw.plugin_sdk.runtime_env", fromlist=["get_logger"]).get_logger(
+            "pi.ollama"
+        )
         logger.info(
             "ollama %s: num_ctx=auto resolved to %d%s",
             model_id,
@@ -230,9 +230,7 @@ def _serialize_message(msg: Any) -> list[dict[str, Any]]:
             if isinstance(block, TextContent):
                 text_parts.append(block.text)
             elif isinstance(block, ToolUseBlock):
-                tool_calls.append(
-                    {"function": {"name": block.name, "arguments": block.input}}
-                )
+                tool_calls.append({"function": {"name": block.name, "arguments": block.input}})
         out = {"role": "assistant", "content": "".join(text_parts)}
         if tool_calls:
             out["tool_calls"] = tool_calls
@@ -287,9 +285,7 @@ def _serialize_tools(tools: list[Any]) -> list[dict[str, Any]]:
     return out
 
 
-def build_ollama_payload(
-    ctx: Context, *, stream: bool, num_ctx: int
-) -> dict[str, Any]:
+def build_ollama_payload(ctx: Context, *, stream: bool, num_ctx: int) -> dict[str, Any]:
     messages = _serialize_messages(ctx.messages)
     if ctx.system:
         if not messages or messages[0].get("role") != "system":

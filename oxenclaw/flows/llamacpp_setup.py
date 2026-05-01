@@ -235,8 +235,7 @@ def _rc_already_sources(rc_file: Path, env_file: Path) -> bool:
 
 def _append_rc_source(rc_file: Path, env_file: Path) -> None:
     block = (
-        "\n# oxenclaw — load llamacpp-direct setup env\n"
-        f"[ -f {env_file} ] && source {env_file}\n"
+        f"\n# oxenclaw — load llamacpp-direct setup env\n[ -f {env_file} ] && source {env_file}\n"
     )
     with rc_file.open("a", encoding="utf-8") as fh:
         fh.write(block)
@@ -335,9 +334,7 @@ class LlamaCppSetupWizard:
 
         self.io.emit("  [WARN]  llama-server binary not found.")
         backend_label, _ = _detect_build_backend()
-        build_choice = (
-            f"build from source (git clone + cmake, detected backend: {backend_label}) — recommended"
-        )
+        build_choice = f"build from source (git clone + cmake, detected backend: {backend_label}) — recommended"
         prebuilt_choice = "download a prebuilt release zip (paste URL)"
         choice = self.prompter.select(
             "How would you like to install it?",
@@ -420,8 +417,7 @@ class LlamaCppSetupWizard:
             clone_dir.parent.mkdir(parents=True, exist_ok=True)
             if clone_dir.exists():
                 self.io.emit(
-                    f"  [ERR]   {clone_dir} exists but is not a git repo; "
-                    "move it aside and re-run"
+                    f"  [ERR]   {clone_dir} exists but is not a git repo; move it aside and re-run"
                 )
                 return None
             self.io.emit(f"  Cloning {repo} → {clone_dir}")
@@ -493,9 +489,7 @@ class LlamaCppSetupWizard:
                     pass
                 self.io.emit(f"  [OK]    binary at {c}")
                 return c
-        self.io.emit(
-            f"  [ERR]   build reported success but no llama-server under {build_dir}"
-        )
+        self.io.emit(f"  [ERR]   build reported success but no llama-server under {build_dir}")
         return None
 
     _SUPPORTED_ARCHIVE_SUFFIXES = (
@@ -591,8 +585,7 @@ class LlamaCppSetupWizard:
                     candidates.append(p)
         if not candidates:
             self.io.emit(
-                f"  [ERR]   archive extracted but no llama-server binary "
-                f"under {install_dir}"
+                f"  [ERR]   archive extracted but no llama-server binary under {install_dir}"
             )
             return None
         binary = candidates[0]
@@ -702,9 +695,7 @@ class LlamaCppSetupWizard:
             rc, output = self.io.run_subprocess(argv2)
         if rc != 0:
             self.io.emit(f"  [ERR]   download failed (rc={rc})\n{output[:1000]}")
-            self.io.emit(
-                "  Install huggingface_hub first: `pip install -U \"huggingface_hub[cli]\"`"
-            )
+            self.io.emit('  Install huggingface_hub first: `pip install -U "huggingface_hub[cli]"`')
             return None
 
         candidate = local_dir / filename
@@ -835,8 +826,7 @@ class LlamaCppSetupWizard:
         rc_touched: Path | None = None
         if rc is not None and not _rc_already_sources(rc, env_file):
             if self.prompter.confirm(
-                f"Append `source {env_file}` to {rc} so future shells pick "
-                "this up automatically?",
+                f"Append `source {env_file}` to {rc} so future shells pick this up automatically?",
                 default=True,
             ):
                 _append_rc_source(rc, env_file)
@@ -844,8 +834,7 @@ class LlamaCppSetupWizard:
                 self.io.emit(f"  [OK]    appended source line → {rc}")
             else:
                 self.io.emit(
-                    f"  Skipped rc edit. Run `source {env_file}` in any "
-                    "shell that needs the vars."
+                    f"  Skipped rc edit. Run `source {env_file}` in any shell that needs the vars."
                 )
         elif rc is not None:
             self.io.emit(f"  [OK]    {rc} already sources {env_file}")

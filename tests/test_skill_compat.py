@@ -51,9 +51,7 @@ def test_os_mismatch_blocks() -> None:
 def test_os_synonym_macos_matches_darwin() -> None:
     """Manifest authors write `macos`, sys.platform is `darwin` —
     treat them as the same."""
-    r = check_compatibility(
-        os_list=["macos"], current_os="darwin", which=_which_factory(set())
-    )
+    r = check_compatibility(os_list=["macos"], current_os="darwin", which=_which_factory(set()))
     assert r.installable is True
 
 
@@ -152,9 +150,7 @@ def test_walker_handles_detail_versioned_shape() -> None:
             }
         },
     }
-    r = check_skill_dict_compatibility(
-        payload, current_os="linux", which=_which_factory(set())
-    )
+    r = check_skill_dict_compatibility(payload, current_os="linux", which=_which_factory(set()))
     assert r.installable is False
     assert r.unsupported_os is True
     assert "yfinance-cli" in r.missing_bins
@@ -184,9 +180,7 @@ def test_walker_handles_metadata_openclaw_shape() -> None:
 
 def test_walker_handles_top_level_openclaw() -> None:
     payload = {"openclaw": {"os": ["windows"]}}
-    r = check_skill_dict_compatibility(
-        payload, current_os="linux", which=_which_factory(set())
-    )
+    r = check_skill_dict_compatibility(payload, current_os="linux", which=_which_factory(set()))
     assert r.installable is False
 
 
@@ -195,9 +189,7 @@ def test_walker_supports_anyBins_camel_and_snake() -> None:
     `any_bins` (snake variant). Both must work."""
     for key in ("anyBins", "any_bins"):
         payload = {"openclaw": {"requires": {key: ["aaa", "bbb"]}}}
-        r = check_skill_dict_compatibility(
-            payload, current_os="linux", which=_which_factory(set())
-        )
+        r = check_skill_dict_compatibility(payload, current_os="linux", which=_which_factory(set()))
         assert r.installable is False, key
         assert set(r.missing_any_bins) == {"aaa", "bbb"}
 

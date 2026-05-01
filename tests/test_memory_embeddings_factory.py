@@ -73,9 +73,7 @@ def test_factory_llamacpp_direct_requires_gguf(monkeypatch: pytest.MonkeyPatch) 
         build_embedder("llamacpp-direct")
 
 
-def test_factory_llamacpp_direct_uses_env_gguf(
-    monkeypatch: pytest.MonkeyPatch, tmp_path
-) -> None:
+def test_factory_llamacpp_direct_uses_env_gguf(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
     from oxenclaw.memory.embeddings import LlamaCppDirectEmbeddings
 
     fake_gguf = tmp_path / "embed.gguf"

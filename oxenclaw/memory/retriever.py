@@ -216,9 +216,7 @@ class MemoryRetriever:
         merged_tags = list(tags or [])
         if dedup and text.strip():
             try:
-                existing = await self._find_duplicate_entry(
-                    text, threshold=dedup_threshold
-                )
+                existing = await self._find_duplicate_entry(text, threshold=dedup_threshold)
             except Exception:
                 logger.exception("memory.save: dedup probe failed; saving as-new")
                 existing = None
@@ -228,17 +226,14 @@ class MemoryRetriever:
                     if remove_inbox_entry(self._inbox_path, existing):
                         replaced = True
                         logger.info(
-                            "memory.save: replaced duplicate entry "
-                            "(when=%s lines=%d-%d) text=%r",
+                            "memory.save: replaced duplicate entry (when=%s lines=%d-%d) text=%r",
                             existing.when,
                             existing.start_line,
                             existing.end_line,
                             text[:80],
                         )
                 except Exception:
-                    logger.exception(
-                        "memory.save: dedup remove failed; appending alongside"
-                    )
+                    logger.exception("memory.save: dedup remove failed; appending alongside")
         append_to_inbox(
             self._inbox_path,
             text,
@@ -250,9 +245,7 @@ class MemoryRetriever:
             report = replace(report, dedup_replaced=True)
         return report
 
-    async def _find_duplicate_entry(
-        self, text: str, *, threshold: float
-    ) -> InboxEntry | None:
+    async def _find_duplicate_entry(self, text: str, *, threshold: float) -> InboxEntry | None:
         """Return an inbox entry that should be replaced by ``text``.
 
         Two layers, in order:

@@ -100,16 +100,13 @@ def _spec_from_context(ctx: Context) -> LlamaCppServerSpec:
     # cards) and the system prompt has been trimmed accordingly.
     n_ctx = int(extra.get("n_ctx") or _coerce_int(os.environ.get("OXENCLAW_LLAMACPP_CTX"), 65536))
     n_gpu_layers = int(
-        extra.get("n_gpu_layers")
-        or _coerce_int(os.environ.get("OXENCLAW_LLAMACPP_NGL"), 999)
+        extra.get("n_gpu_layers") or _coerce_int(os.environ.get("OXENCLAW_LLAMACPP_NGL"), 999)
     )
     n_threads = int(
-        extra.get("n_threads")
-        or _coerce_int(os.environ.get("OXENCLAW_LLAMACPP_THREADS"), -1)
+        extra.get("n_threads") or _coerce_int(os.environ.get("OXENCLAW_LLAMACPP_THREADS"), -1)
     )
     n_parallel = int(
-        extra.get("n_parallel")
-        or _coerce_int(os.environ.get("OXENCLAW_LLAMACPP_PARALLEL"), 1)
+        extra.get("n_parallel") or _coerce_int(os.environ.get("OXENCLAW_LLAMACPP_PARALLEL"), 1)
     )
 
     extra_args_raw = extra.get("extra_args")
@@ -156,9 +153,7 @@ async def _stream_llamacpp_direct(
         return
 
     server = get_default_server()
-    health_timeout = _coerce_float(
-        os.environ.get("OXENCLAW_LLAMACPP_HEALTH_TIMEOUT_S"), 600.0
-    )
+    health_timeout = _coerce_float(os.environ.get("OXENCLAW_LLAMACPP_HEALTH_TIMEOUT_S"), 600.0)
     try:
         base_url = server.ensure_loaded(spec, health_timeout_s=health_timeout)
     except LlamaCppServerError as exc:

@@ -157,9 +157,7 @@ def register_skills_methods(
             results = await _client_for(p.registry).search_skills(p.query, limit=p.limit)
         except (ClawHubError, KeyError) as exc:
             return _wrap(exc)
-        annotated = _annotate_and_filter(
-            results, include_incompatible=p.include_incompatible
-        )
+        annotated = _annotate_and_filter(results, include_incompatible=p.include_incompatible)
         return {
             "ok": True,
             "registry": p.registry,
@@ -175,12 +173,8 @@ def register_skills_methods(
             return _wrap(exc)
         results = data.get("results") if isinstance(data, dict) else None
         results = list(results or [])
-        annotated = _annotate_and_filter(
-            results, include_incompatible=p.include_incompatible
-        )
-        out = {**data, "results": annotated} if isinstance(data, dict) else {
-            "results": annotated
-        }
+        annotated = _annotate_and_filter(results, include_incompatible=p.include_incompatible)
+        out = {**data, "results": annotated} if isinstance(data, dict) else {"results": annotated}
         out["filtered_count"] = len(results) - len(annotated)
         return {"ok": True, "registry": p.registry, **out}
 

@@ -120,9 +120,7 @@ def extract_pseudo_tool_call(
     return None
 
 
-def _match_to_schema(
-    obj: dict[str, Any], schemas: Mapping[str, dict[str, Any]]
-) -> str | None:
+def _match_to_schema(obj: dict[str, Any], schemas: Mapping[str, dict[str, Any]]) -> str | None:
     """Return the unique tool name whose schema matches `obj`, or None.
 
     Match criteria:
@@ -261,9 +259,7 @@ def _coerce_to_call(obj: Any) -> tuple[str, dict[str, Any]] | None:
             inner = _safe_load_json(v)
             if isinstance(inner, dict):
                 return name, inner
-    flat_args = {
-        k: v for k, v in obj.items() if k not in _NAME_KEYS and k not in _ARGS_KEYS
-    }
+    flat_args = {k: v for k, v in obj.items() if k not in _NAME_KEYS and k not in _ARGS_KEYS}
     return name, flat_args
 
 

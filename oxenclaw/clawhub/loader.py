@@ -275,8 +275,8 @@ def format_skills_for_prompt(
         "  <usage>Each skill below ships runnable scripts under "
         "&lt;location&gt;/scripts/. To USE a skill, call the real "
         "`skill_run` tool (NOT a tool with the skill's name) — e.g. "
-        '`skill_run(skill=&quot;stock-analysis&quot;, '
-        'script=&quot;analyze_stock.py&quot;, args=[&quot;AAPL&quot;])`. '
+        "`skill_run(skill=&quot;stock-analysis&quot;, "
+        "script=&quot;analyze_stock.py&quot;, args=[&quot;AAPL&quot;])`. "
         "The `<usage>` excerpt inside each &lt;skill&gt; block is the "
         "first part of SKILL.md and shows the available scripts + "
         "sample arg shapes — pick from there. If the request matches "
@@ -320,7 +320,7 @@ def _excerpt_skill_body(body: str, *, max_chars: int) -> str:
     # last opening fence so the model doesn't get confused by an
     # unterminated ```.
     last_open = cut.rfind("```")
-    last_close = cut[: last_open].rfind("```") if last_open >= 0 else -1
+    last_close = cut[:last_open].rfind("```") if last_open >= 0 else -1
     if last_open >= 0 and (last_close < 0 or last_close < last_open):
         # Odd number of fences = unterminated → cut before the last fence.
         cut = cut[:last_open].rstrip()

@@ -635,9 +635,10 @@ def build_embedder(
 
     if provider == "llamacpp-direct":
         # GGUF path resolution: explicit kwarg → env var → error.
-        gguf = merged.pop("gguf_path", None) or os.environ.get(
-            "OXENCLAW_LLAMACPP_EMBED_GGUF", ""
-        ).strip()
+        gguf = (
+            merged.pop("gguf_path", None)
+            or os.environ.get("OXENCLAW_LLAMACPP_EMBED_GGUF", "").strip()
+        )
         if not gguf:
             raise UnknownEmbedderProvider(
                 "llamacpp-direct embedder: no GGUF configured. Set "

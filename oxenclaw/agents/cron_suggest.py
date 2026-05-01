@@ -32,21 +32,44 @@ from dataclasses import dataclass
 _INTERVAL_KEYWORDS: frozenset[str] = frozenset(
     {
         # daily
-        "매일", "매아침", "daily", "everyday",
+        "매일",
+        "매아침",
+        "daily",
+        "everyday",
         # weekly
-        "매주", "weekly",
+        "매주",
+        "weekly",
         # monthly
-        "매월", "매달", "monthly",
+        "매월",
+        "매달",
+        "monthly",
         # hourly / minutely
-        "매시간", "매시", "hourly", "매분", "minutely",
+        "매시간",
+        "매시",
+        "hourly",
+        "매분",
+        "minutely",
         # explicit cron / schedule words
-        "cron", "crontab", "schedule", "scheduled", "예약", "정기",
-        "스케줄", "스케쥴", "매번", "주기적",
+        "cron",
+        "crontab",
+        "schedule",
+        "scheduled",
+        "예약",
+        "정기",
+        "스케줄",
+        "스케쥴",
+        "매번",
+        "주기적",
     }
 )
 _INTERVAL_PHRASES = (
-    "every day", "every morning", "every afternoon", "every evening",
-    "every week", "every hour", "every minute",
+    "every day",
+    "every morning",
+    "every afternoon",
+    "every evening",
+    "every week",
+    "every hour",
+    "every minute",
 )
 
 # ─── time-of-day patterns ─────────────────────────────────────────────
@@ -66,15 +89,36 @@ _EN_TIME_RE = re.compile(
 )
 
 _KO_WEEKDAYS: dict[str, int] = {
-    "월요일": 1, "화요일": 2, "수요일": 3, "목요일": 4,
-    "금요일": 5, "토요일": 6, "일요일": 0,
-    "월요": 1, "화요": 2, "수요": 3, "목요": 4,
-    "금요": 5, "토요": 6, "일요": 0,
+    "월요일": 1,
+    "화요일": 2,
+    "수요일": 3,
+    "목요일": 4,
+    "금요일": 5,
+    "토요일": 6,
+    "일요일": 0,
+    "월요": 1,
+    "화요": 2,
+    "수요": 3,
+    "목요": 4,
+    "금요": 5,
+    "토요": 6,
+    "일요": 0,
 }
 _EN_WEEKDAYS: dict[str, int] = {
-    "monday": 1, "tuesday": 2, "wednesday": 3, "thursday": 4,
-    "friday": 5, "saturday": 6, "sunday": 0,
-    "mon": 1, "tue": 2, "wed": 3, "thu": 4, "fri": 5, "sat": 6, "sun": 0,
+    "monday": 1,
+    "tuesday": 2,
+    "wednesday": 3,
+    "thursday": 4,
+    "friday": 5,
+    "saturday": 6,
+    "sunday": 0,
+    "mon": 1,
+    "tue": 2,
+    "wed": 3,
+    "thu": 4,
+    "fri": 5,
+    "sat": 6,
+    "sun": 0,
 }
 
 
@@ -146,9 +190,7 @@ def _pick_weekday(text_lower: str) -> int | None:
     return None
 
 
-def _build_cron(
-    hour: int, minute: int, *, weekly: bool, weekday: int | None
-) -> str:
+def _build_cron(hour: int, minute: int, *, weekly: bool, weekday: int | None) -> str:
     """Return a 5-field crontab expression for the parsed time."""
     if weekly and weekday is not None:
         return f"{minute} {hour} * * {weekday}"
@@ -185,13 +227,8 @@ def detect_cron_request(user_text: str) -> CronSuggestion | None:
                 matched_keywords=intervals,
                 raw_time_text=None,
             )
-        return CronSuggestion(
-            schedule=None, matched_keywords=intervals, raw_time_text=None
-        )
-    weekly = any(
-        kw in text_lower
-        for kw in ("매주", "weekly", "every week")
-    )
+        return CronSuggestion(schedule=None, matched_keywords=intervals, raw_time_text=None)
+    weekly = any(kw in text_lower for kw in ("매주", "weekly", "every week"))
     weekday = _pick_weekday(text_lower) if weekly else None
     schedule = _build_cron(hour, minute, weekly=weekly, weekday=weekday)
     return CronSuggestion(
@@ -218,11 +255,7 @@ def render_cron_suggestion_prelude(
         else "  - schedule: a 5-field crontab string for the cadence the user named"
     )
     matched = ", ".join(suggestion.matched_keywords[:5])
-    time_hint = (
-        f" (parsed time: {suggestion.raw_time_text!r})"
-        if suggestion.raw_time_text
-        else ""
-    )
+    time_hint = f" (parsed time: {suggestion.raw_time_text!r})" if suggestion.raw_time_text else ""
     return (
         "[SCHEDULE REQUEST DETECTED] The user is asking to register a "
         f"recurring task (matched: {matched}){time_hint}. Do NOT explain "
@@ -235,10 +268,10 @@ def render_cron_suggestion_prelude(
         "stripped — '매일' / '아침' / '8시 50분' / 'every day' / 'at 9am' "
         "and the like belong ONLY in `schedule`. Putting them in `prompt` "
         "loops the scheduler: every fire would re-register a duplicate "
-        "job. For \"매일 아침 8시50분에 시장 리포트 알려줘\" the prompt is "
-        "\"시장 리포트 알려줘\".\n"
+        'job. For "매일 아침 8시50분에 시장 리포트 알려줘" the prompt is '
+        '"시장 리포트 알려줘".\n'
         "  - description: a short label summarising what the job does "
-        "(e.g. \"daily market report\")\n"
+        '(e.g. "daily market report")\n'
         "Leave agent_id / channel / account_id / chat_id unset — the "
         "tool fills those from the calling context.\n"
         "If you fall back to writing the call as JSON in your reply "

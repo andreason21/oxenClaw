@@ -70,8 +70,7 @@ def message_tool(router: ChannelRouter) -> Tool:
     return FunctionTool(
         name="message",
         description=hermes_desc(
-            "Send a one-off message to a configured channel target "
-            "(slack, dashboard, etc.).",
+            "Send a one-off message to a configured channel target (slack, dashboard, etc.).",
             when_use=[
                 "the user explicitly asks you to notify someone",
                 "you've completed work the operator wants pushed to a channel",

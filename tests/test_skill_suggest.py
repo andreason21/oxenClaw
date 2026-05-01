@@ -36,10 +36,7 @@ def _stock_skill() -> FakeSkill:
             "earnings reactions, crypto monitoring."
         ),
         body=(
-            "## Quick Commands\n\n"
-            "```bash\n"
-            "uv run {baseDir}/scripts/analyze_stock.py AAPL\n"
-            "```\n"
+            "## Quick Commands\n\n```bash\nuv run {baseDir}/scripts/analyze_stock.py AAPL\n```\n"
         ),
     )
 
@@ -137,7 +134,9 @@ def test_prelude_falls_back_when_body_has_no_sample() -> None:
     """A skill with no parseable invocation in its body still gets
     a useful prelude — just with a placeholder script."""
     bare = FakeSkill(
-        slug="bare", name="bare", description="주가 analysis tool.",
+        slug="bare",
+        name="bare",
+        description="주가 analysis tool.",
         body="No quick commands documented here.\n",
     )
     s = suggest_skill_for("주가", [bare])

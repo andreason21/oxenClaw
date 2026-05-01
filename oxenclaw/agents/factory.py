@@ -120,6 +120,7 @@ def resolve_default_local_provider() -> str:
     """
     return "llamacpp-direct" if _llamacpp_direct_feasible() else "ollama"
 
+
 # Default model when `--model` is omitted. Picked to be cheap + first-run
 # friendly; users can always override with `--model <id>`.
 PROVIDER_DEFAULT_MODELS: dict[str, str] = {

@@ -156,9 +156,7 @@ def _build_tools_safe() -> list[Any]:
     from oxenclaw.pi import EnvAuthStorage, Model
 
     sub_cfg = SubagentConfig(
-        model=Model(
-            id="stub", provider="anthropic", context_window=1000, max_output_tokens=200
-        ),
+        model=Model(id="stub", provider="anthropic", context_window=1000, max_output_tokens=200),
         auth=EnvAuthStorage(),
     )
     tools.append(subagents_tool(sub_cfg))

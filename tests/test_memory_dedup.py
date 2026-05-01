@@ -52,12 +52,8 @@ def test_normalize_collapses_case_whitespace_punct() -> None:
 
 
 def test_normalize_distinguishes_different_content() -> None:
-    assert normalize_for_dedup("user lives in Suwon") != normalize_for_dedup(
-        "user lives in Seoul"
-    )
-    assert normalize_for_dedup("user is named Bob") != normalize_for_dedup(
-        "user lives in Bob"
-    )
+    assert normalize_for_dedup("user lives in Suwon") != normalize_for_dedup("user lives in Seoul")
+    assert normalize_for_dedup("user is named Bob") != normalize_for_dedup("user lives in Bob")
 
 
 # ─── parse_inbox / remove_inbox_entry ───────────────────────────────
@@ -125,8 +121,7 @@ async def test_save_dedupes_exact_repeat(tmp_path: Path) -> None:
         assert report.dedup_replaced is True
         entries = parse_inbox(r.inbox_path)
         assert len(entries) == 1, (
-            f"expected 1 entry after dedup; got {len(entries)}: "
-            f"{[e.body for e in entries]}"
+            f"expected 1 entry after dedup; got {len(entries)}: {[e.body for e in entries]}"
         )
         # Tags merged across the two saves.
         assert set(entries[0].tags) == {"auto", "personal-fact"}
@@ -142,8 +137,7 @@ async def test_save_dedupes_case_and_punct_variants(tmp_path: Path) -> None:
         await r.save("  USER LIVES IN SUWON!  ", tags=["v3"])
         entries = parse_inbox(r.inbox_path)
         assert len(entries) == 1, (
-            f"all variants should fold into one entry; got "
-            f"{[e.body for e in entries]}"
+            f"all variants should fold into one entry; got {[e.body for e in entries]}"
         )
         assert set(entries[0].tags) == {"v1", "v2", "v3"}
     finally:

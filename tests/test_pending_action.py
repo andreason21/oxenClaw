@@ -18,12 +18,38 @@ from oxenclaw.pi import (
 
 
 def test_short_affirmation_ko() -> None:
-    for s in ["진행해", "진행해.", "진행해주세요", "계속", "계속해", "응", "네", "넵", "예", "오케이", "좋아"]:
+    for s in [
+        "진행해",
+        "진행해.",
+        "진행해주세요",
+        "계속",
+        "계속해",
+        "응",
+        "네",
+        "넵",
+        "예",
+        "오케이",
+        "좋아",
+    ]:
         assert looks_like_short_affirmation(s), s
 
 
 def test_short_affirmation_en() -> None:
-    for s in ["yes", "Yes", "yeah", "yep", "ok", "OK", "okay", "sure", "go", "go ahead", "do it", "proceed", "continue"]:
+    for s in [
+        "yes",
+        "Yes",
+        "yeah",
+        "yep",
+        "ok",
+        "OK",
+        "okay",
+        "sure",
+        "go",
+        "go ahead",
+        "do it",
+        "proceed",
+        "continue",
+    ]:
         assert looks_like_short_affirmation(s), s
 
 
@@ -49,9 +75,7 @@ def test_promise_extracted_when_no_tool_use() -> None:
         UserMessage(content="weather tool 사용해"),
         AssistantMessage(
             content=[
-                TextContent(
-                    text="수원 날씨를 확인하겠습니다. ```json\n{\"tool\":\"weather\"}\n```"
-                )
+                TextContent(text='수원 날씨를 확인하겠습니다. ```json\n{"tool":"weather"}\n```')
             ],
         ),
     ]
@@ -102,9 +126,7 @@ def test_promise_extraction_only_inspects_latest_assistant() -> None:
 def test_en_promise_extracted() -> None:
     msgs = [
         UserMessage(content="weather"),
-        AssistantMessage(
-            content=[TextContent(text="Let me check the weather for you.")]
-        ),
+        AssistantMessage(content=[TextContent(text="Let me check the weather for you.")]),
     ]
     snippet = extract_unfulfilled_promise(msgs)
     assert snippet is not None

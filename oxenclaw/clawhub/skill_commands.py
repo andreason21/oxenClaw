@@ -154,9 +154,7 @@ def build_skill_command_tools(skill_name: str, commands: list[SkillCommand]) -> 
     the strict pydantic schema (pre-fix) or register zero-template
     tools that fail at execute time.
     """
-    return [
-        build_skill_command_tool(skill_name, c) for c in commands if c.is_runnable
-    ]
+    return [build_skill_command_tool(skill_name, c) for c in commands if c.is_runnable]
 
 
 def maybe_route_slash_command(

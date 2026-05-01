@@ -35,9 +35,7 @@ logger = logging.getLogger(__name__)
 def env_file_path() -> Path:
     """Resolve `~/.oxenclaw/env`, honouring `$OXENCLAW_HOME` if set."""
     home_override = os.environ.get("OXENCLAW_HOME", "").strip()
-    base = (
-        Path(os.path.expanduser(home_override)) if home_override else Path.home() / ".oxenclaw"
-    )
+    base = Path(os.path.expanduser(home_override)) if home_override else Path.home() / ".oxenclaw"
     return base / "env"
 
 

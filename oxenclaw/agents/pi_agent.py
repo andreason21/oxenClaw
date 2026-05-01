@@ -286,6 +286,26 @@ class PiAgent:
         self._compact_keep_tail = compact_keep_tail_turns
 
         self._model: Model = self._registry.require(model_id)
+        # Pre-flight context-window guard. Mirrors openclaw
+        # `agents/context-window-guard.ts:57-74`. We log a warning when
+        # the model is below the recommended floor (32k); we don't raise
+        # here so operators with intentionally-tiny models (e.g.
+        # `gemma3:4b` at 8k) keep working — the catalog defines them on
+        # purpose. Callers wanting hard-fail behavior can invoke
+        # `assert_context_window_usable` from
+        # `oxenclaw.pi.run.context_window_guard` directly.
+        from oxenclaw.pi.run.context_window_guard import (
+            evaluate_context_window_guard,
+        )
+
+        _guard = evaluate_context_window_guard(self._model.context_window)
+        if _guard.should_warn:
+            logger.warning(
+                "model %s context_window=%d below recommended 32k floor — "
+                "long sessions will trigger compaction early",
+                self._model.id,
+                _guard.tokens,
+            )
         runtime = runtime or RuntimeConfig()
         if thinking is not None and runtime.thinking is None:
             runtime.thinking = thinking

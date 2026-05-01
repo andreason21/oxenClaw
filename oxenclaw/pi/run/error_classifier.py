@@ -53,6 +53,12 @@ class FailoverReason(enum.StrEnum):
     EMPTY_RESPONSE = "empty_response"
     MODEL_NOT_FOUND = "model_not_found"
     CREDIT_EXHAUSTED = "credit_exhausted"
+    # Provider session/conversation handle no longer recognised — common
+    # for stateful APIs (Cloud Code Assist, hosted IDE backends) after
+    # long idle periods. Maps to HTTP 410 Gone (openclaw
+    # `failover-error.ts:64-65`). Treat as a failover trigger so a fresh
+    # session id can be acquired on the next provider in the chain.
+    SESSION_EXPIRED = "session_expired"
     UNKNOWN = "unknown"
 
 
@@ -266,6 +272,17 @@ def classify_api_error(
         if status_code == 404 or _match_any(msg_lc, _MODEL_NOT_FOUND_PATTERNS):
             return ClassifiedError(
                 reason=FailoverReason.MODEL_NOT_FOUND,
+                retryable=False,
+                should_fallback=True,
+                retry_after_seconds=retry_after,
+                message=msg,
+            )
+        if status_code == 410:
+            # Gone — provider session/conversation expired. Mirrors
+            # openclaw `failover-error.ts:64-65`. Failover triggers so
+            # the next chain entry can mint a fresh session.
+            return ClassifiedError(
+                reason=FailoverReason.SESSION_EXPIRED,
                 retryable=False,
                 should_fallback=True,
                 retry_after_seconds=retry_after,

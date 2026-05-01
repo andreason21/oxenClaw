@@ -143,6 +143,15 @@ def test_classify_credit_exhausted_402() -> None:
     assert c.retryable is False
 
 
+def test_classify_session_expired_410() -> None:
+    """Provider session/conversation handle no longer recognised — failover."""
+    err = ErrorEvent(message="HTTP 410: session expired", status_code=410)
+    c = classify_api_error(error=err)
+    assert c.reason is FailoverReason.SESSION_EXPIRED
+    assert c.should_fallback is True
+    assert c.retryable is False
+
+
 def test_classify_credit_exhausted_via_billing_message() -> None:
     c = classify_api_error(message="Your credit balance is exhausted")
     assert c.reason is FailoverReason.CREDIT_EXHAUSTED

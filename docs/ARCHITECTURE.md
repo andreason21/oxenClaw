@@ -529,3 +529,38 @@ failover-decide site since the run loop's structure is flatter.
 fake-provider integration test that patches `asyncio.sleep` and asserts
 the paced delay fires before the chain walk); 9/9 pass. Total PI
 run-loop suite: 120 pass.
+
+
+## Session-expired classification + context-window guard (2026-05-01)
+
+Two more upstream-parity ports surfaced by the openclaw audit
+(`3f7f2c8dc9`):
+
+**HTTP 410 → `SESSION_EXPIRED` (failover trigger)**
+- Previously oxenclaw mapped 410 to `UNKNOWN` non-retryable, terminating
+  long-running sessions that hit provider session expiry (Cloud Code
+  Assist, hosted IDE backends after long idle).
+- New `FailoverReason.SESSION_EXPIRED` in `error_classifier.py:54-60`,
+  routed from status_code 410. Mirrors openclaw `failover-error.ts:64`.
+- The classifier marks it `retryable=False, should_fallback=True` so
+  the run loop walks the chain instead of dead-ending.
+
+**Context-window pre-flight guard**
+- New `oxenclaw/pi/run/context_window_guard.py` ports
+  `agents/context-window-guard.ts:1-74`. Constants pinned identical to
+  upstream: `CONTEXT_WINDOW_HARD_MIN_TOKENS=16_000`,
+  `CONTEXT_WINDOW_WARN_BELOW_TOKENS=32_000`.
+- Exposes `evaluate_context_window_guard(tokens)` (returns flags) and
+  `assert_context_window_usable(model_id, tokens)` (raises
+  `ContextWindowTooSmallError` below hard min).
+- PiAgent `__init__` calls the *warning-only* path so misconfigured
+  tiny windows surface in logs without breaking the catalog's
+  intentionally-small entries (e.g. `gemma3:4b` at 8k). Operators who
+  want hard-fail behaviour invoke `assert_context_window_usable`
+  directly.
+
+**Tests**:
+- `tests/test_error_classifier.py` adds 1 case (410 → SESSION_EXPIRED).
+- `tests/test_context_window_guard.py` adds 7 cases (warn / block /
+  clean / unknown-window / raise / threshold pin).
+- Total PI run-loop suite: 152 pass.

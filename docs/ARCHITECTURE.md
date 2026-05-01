@@ -820,22 +820,45 @@ verifier give-up-after-cap; fallback when no plan; plan-validator
 NO→replan→YES; plan-validator NO×cap→proceed-with-last-plan;
 `plan_retry_cap=0` runs the validator exactly once.
 
-**Live benchmark (qwen3.5:9b on RTX 3050, `think=False`, n=12)**:
+**Live benchmark (qwen3.5 9B Q4 on RTX 3050, `think=False`, n=12)**:
 harness at `/tmp/oxenclaw_pe_bench.py`. 12 verifiable multi-step
 tasks across arithmetic, string-pipeline, structured-data,
-date-time, and information-extraction families. Single-call
-baseline: 6/12. Plan-then-execute (validator on, `verifier_retry_cap`
-∈ {0, 1, 2}): 10/12 in all three settings. Zero observed
-single-call→pe regression on this suite — pe-mode strictly added 4
-correct answers (`arith_chain`, `arith_compound`, `even_squares`,
-`filter_sort`). cap=2 added zero accuracy over cap=0 and doubled
-worst-case wall time on tasks where the verifier emits content-blind
-NOs (the `vowel_count` case: 20.9s/12-turn → 40.3s/20-turn).
-Default `verifier_retry_cap=1` chosen as a Pareto compromise — keeps
-a single recovery attempt for transient format errors, bounds
-worst-case wall time at ~1.5× cap=0. Validator triggered a replan on
-1/12 tasks (`extract_emails`); cost is ~+1 turn (~1.5s) on the
-other 11. **Generalisation note**: n=12 is not a population — the
-2nd retry's expected value is "≤ measured" on this suite, not zero
-in the wild. Treat the defaults as the best evidence-backed call,
-not as universal optima.
+date-time, and information-extraction families.
+
+*Ollama (Q4_K_M, `think:false`)*. Single-call baseline: 6/12.
+Plan-then-execute (validator on, `verifier_retry_cap` ∈ {0, 1, 2}):
+10/12 in all three settings. Zero observed single-call→pe regression
+— pe-mode strictly added 4 correct answers (`arith_chain`,
+`arith_compound`, `even_squares`, `filter_sort`). cap=2 added zero
+accuracy over cap=0 and doubled worst-case wall time on tasks where
+the verifier emits content-blind NOs (`vowel_count`: 21.2s/12-turn →
+41.5s/20-turn). Default `verifier_retry_cap=1` chosen as a Pareto
+compromise — keeps a single recovery attempt for transient format
+errors, bounds worst-case wall time at ~1.5× cap=0. Validator
+triggered a replan on 1/12 tasks (`extract_emails`); cost is ~+1
+turn (~1.5s) on the other 11.
+
+*llamacpp-direct (UD-Q4_K_XL, `--reasoning off --reasoning-budget 0`)*
+on the same suite, same defaults: single-call 6/12, pe_cap{0,1,2}
+**11/12** (one extra: `text_pipeline` lands `GNINNALP` correctly
+under all three caps where Ollama Q4_K_M produces character-level
+errors). Average plan-execute wall time **~1.8–2.0× faster** than
+Ollama, peaking at **3.5×** on the heaviest task (`extract_emails`:
+41.5s → 11.7s under cap=0). vowel_count worst-case (cap=2): 41.5s
+→ 18.1s (2.3×). Single-call latency is essentially identical
+(~0.5s) — the provider edge accumulates with token volume. Caveats:
+the comparison mixes two variables (decoder *and* quantisation —
+Q4_K_M vs UD-Q4_K_XL); a same-GGUF run on both providers would
+isolate decoder speed.
+
+| | single | pe_cap0 | pe_cap1 | pe_cap2 |
+|---|---:|---:|---:|---:|
+| ollama avg | 0.6s · 6/12 | 20.0s · 10/12 | 20.8s · 10/12 | 21.7s · 10/12 |
+| llamacpp avg | 0.5s · 6/12 | 10.2s · **11/12** | 10.6s · **11/12** | 11.3s · **11/12** |
+| ollama max | 1.5s | 41.5s | 41.4s | 41.6s |
+| llamacpp max | 0.9s | 15.7s | 16.3s | 18.1s |
+
+**Generalisation note**: n=12 is not a population — the 2nd retry's
+expected value is "≤ measured" on this suite, not zero in the wild.
+Treat the defaults as the best evidence-backed call, not as
+universal optima.

@@ -185,10 +185,7 @@ async def _resolve_num_ctx(base_url: str, model_id: str) -> int:
             _resolved_ctx_cache[model_id] = _DEFAULT_NUM_CTX
             return _DEFAULT_NUM_CTX
         detected = _pick_context_length(info)
-        if detected is None:
-            resolved = _DEFAULT_NUM_CTX
-        else:
-            resolved = min(detected, _NUM_CTX_AUTO_CAP)
+        resolved = _DEFAULT_NUM_CTX if detected is None else min(detected, _NUM_CTX_AUTO_CAP)
         _resolved_ctx_cache[model_id] = resolved
         kv_gb = _estimate_kv_cache_gb(info, resolved)
         kv_note = f" (~{kv_gb:.1f} GiB KV cache)" if kv_gb else ""

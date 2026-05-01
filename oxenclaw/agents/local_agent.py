@@ -33,12 +33,12 @@ from typing import Any, Literal
 import aiohttp
 
 from oxenclaw.agents.base import AgentContext
-from oxenclaw.observability import llm_trace
 from oxenclaw.agents.history import ConversationHistory
 from oxenclaw.agents.tools import ToolRegistry
 from oxenclaw.clawhub.loader import format_skills_for_prompt, load_installed_skills
 from oxenclaw.config.paths import OxenclawPaths, default_paths
 from oxenclaw.memory.retriever import MemoryRetriever, format_memories_for_prompt
+from oxenclaw.observability import llm_trace
 from oxenclaw.plugin_sdk.channel_contract import InboundEnvelope, SendParams
 from oxenclaw.plugin_sdk.reply_runtime import chunk_text
 from oxenclaw.plugin_sdk.runtime_env import get_logger

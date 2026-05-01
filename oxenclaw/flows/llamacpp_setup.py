@@ -435,7 +435,7 @@ class LlamaCppSetupWizard:
                 return None
 
         build_dir = clone_dir / "build"
-        configure = ["cmake", "-S", str(clone_dir), "-B", str(build_dir)] + cmake_flags
+        configure = ["cmake", "-S", str(clone_dir), "-B", str(build_dir), *cmake_flags]
         self.io.emit(f"  Configuring: {' '.join(configure)}")
         rc, output = self.io.run_subprocess(configure, timeout=600)
         if rc != 0:

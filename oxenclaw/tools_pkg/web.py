@@ -32,7 +32,6 @@ from pydantic import BaseModel, Field, model_validator
 
 from oxenclaw.agents.tools import FunctionTool, Tool
 from oxenclaw.pi.registry import AuthStorage
-from oxenclaw.tools_pkg._desc import hermes_desc
 from oxenclaw.plugin_sdk.runtime_env import get_logger
 from oxenclaw.security.net import NetPolicy
 from oxenclaw.security.net.guarded_fetch import (
@@ -40,6 +39,7 @@ from oxenclaw.security.net.guarded_fetch import (
     policy_pre_flight,
 )
 from oxenclaw.security.net.ssrf import SsrFBlockedError
+from oxenclaw.tools_pkg._desc import hermes_desc
 
 logger = get_logger("tools.web")
 

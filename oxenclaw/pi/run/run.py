@@ -814,31 +814,45 @@ async def run_agent_turn(
         # Apply per-tool result truncation from EffectiveToolPolicy when set.
         # Mirrors openclaw's `effective-tool-policy.maxResultCharsFor` —
         # operators can clamp noisy tools (web_fetch, fs_read) without
-        # touching the global default.
-        if getattr(config, "tool_policy", None) is not None:
-            from oxenclaw.pi.tool_runtime import truncate_tool_result
+        # touching the global default. Smart head+tail truncation (port
+        # of `tool-result-truncation.ts`) preserves error/JSON/summary
+        # text near the end so the model still sees what failed.
+        from oxenclaw.pi.run.tool_result_truncation import (
+            calculate_max_tool_result_chars,
+            truncate_tool_result_text,
+        )
 
-            policy = config.tool_policy
-            new_results: list[ToolExecutionResult] = []
-            for r in results:
+        policy = getattr(config, "tool_policy", None)
+        # Unconditional context-share cap — even without a tool_policy,
+        # a single tool result must not exceed ~30% of the model's
+        # context window. This is the upstream
+        # `tool-result-truncation.ts` floor: a 9 GB web_fetch into a
+        # 32K-context model gets clipped to ~10K tokens automatically.
+        ctx_share_cap = calculate_max_tool_result_chars(active_model.context_window)
+        new_results: list[ToolExecutionResult] = []
+        for r in results:
+            cap = ctx_share_cap
+            if policy is not None:
                 try:
-                    cap = policy.max_chars_for(r.name)
+                    policy_cap = policy.max_chars_for(r.name)
                 except Exception:
-                    cap = None
-                if cap and r.output and len(r.output) > cap:
-                    new_text, _ = truncate_tool_result(r.output, max_chars=cap)
-                    new_results.append(
-                        ToolExecutionResult(
-                            id=r.id,
-                            name=r.name,
-                            output=new_text,
-                            is_error=r.is_error,
-                            duration_seconds=r.duration_seconds,
-                        )
+                    policy_cap = None
+                if policy_cap is not None and policy_cap > 0:
+                    cap = min(cap, policy_cap)
+            if r.output and len(r.output) > cap:
+                new_text = truncate_tool_result_text(r.output, cap)
+                new_results.append(
+                    ToolExecutionResult(
+                        id=r.id,
+                        name=r.name,
+                        output=new_text,
+                        is_error=r.is_error,
+                        duration_seconds=r.duration_seconds,
                     )
-                else:
-                    new_results.append(r)
-            results = new_results
+                )
+            else:
+                new_results.append(r)
+        results = new_results
         # Layer-2/3 tool-result persistence: when a storage dir is wired,
         # walk the freshly-returned results and spill any oversize outputs
         # to disk before they enter the context. If the aggregate of this

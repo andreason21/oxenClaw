@@ -607,3 +607,70 @@ Two more upstream-parity ports (openclaw `3f7f2c8dc9`).
   zero / negative disable, timeout returns None, on_timeout callback,
   callback exception swallowed, inner exception propagates).
 - Total PI run-loop suite: 167 pass.
+
+
+## Smart per-tool-result truncation, context-window aware (2026-05-01)
+
+Final batch of openclaw-parity ports. The architect's audit flagged two
+gaps in oxenclaw's tool-result handling: (1) the per-tool truncator was
+opt-in via `EffectiveToolPolicy` so most callers got no clipping at
+all, and (2) when policy *was* configured, the head-only
+`[...truncated N chars]` strategy lost error/JSON/summary content at
+the tail.
+
+**`oxenclaw/pi/run/tool_result_truncation.py`** — port of
+`pi-embedded-runner/tool-result-truncation.ts:1-360`. Pinned constants:
+- `MAX_TOOL_RESULT_CONTEXT_SHARE = 0.3`
+- `HARD_MAX_TOOL_RESULT_CHARS = 400_000`
+- `MIN_KEEP_CHARS = 2_000`
+- `_CHARS_PER_TOKEN = 4`
+
+Public API:
+- `truncate_tool_result_text(text, max_chars)` — head+tail aware
+  string truncator. When the trailing ~2K chars match
+  `error|exception|failed|...` keywords or close a JSON object, the
+  function reserves `min(budget // 3, 4_000)` for the tail and cuts
+  the head, with a `MIDDLE_OMISSION_MARKER` between. Otherwise keeps
+  the head and clips at the nearest newline boundary above 80 % of
+  the budget. Operator-supplied tight caps (e.g. `max_result_chars=200`)
+  override the `MIN_KEEP_CHARS` floor.
+- `calculate_max_tool_result_chars(context_window_tokens)` — resolves
+  per-result char budget from the model's context window: 30 % share,
+  capped at 400K chars (≈100K tokens). 32K-window → 38_400 chars;
+  200K-window → 240_000 chars; 2M-window → 400_000.
+- `truncate_tool_result_message(msg, max_chars)` — operates on a
+  `ToolResultMessage`, distributes budget proportionally across text
+  blocks for multi-text tool outputs.
+- `truncate_oversized_tool_results_in_messages(messages, ...)` — bulk
+  in-place pass; idempotent, safe to call every turn.
+- `session_likely_has_oversized_tool_results(messages, ...)` — fast
+  detection so the compress-then-retry path can skip work when nothing
+  needs trimming.
+
+**Run-loop wiring** — `run.py` now applies a *two-tier* per-tool cap
+unconditionally on every tool result, before it lands in
+`ToolResultMessage`:
+1. `min(EffectiveToolPolicy.max_chars_for(name), ctx_share_cap)` —
+   policy override (when set) AND context-share cap (always).
+2. The smart head+tail truncator handles the actual trim.
+
+This serves the same role as openclaw's
+`tool-result-context-guard.ts` runtime guard: oversize tool output
+never enters history. The more elaborate cumulative
+`compactExistingToolResultsInPlace` path is left to oxenclaw's
+existing `preemptive_compaction` / `OpenclawContextEngine`.
+
+**Real-world impact**: a `web_fetch` returning 50 KB of HTML against
+`gemma3:4b` (8K context window) used to flow through unclipped if no
+`tool_policy` was configured (most call paths). It now auto-clips to
+~9.6 KB (30 % × 8K × 4 chars/tok = 9_600). For `qwen3.5:9b` (256K
+context) the same fetch passes through cleanly — both ends correct.
+
+**Tests**: `tests/test_tool_result_truncation.py` adds 13 cases
+(passthrough, head-only newline boundary, head+tail on error keyword,
+head+tail on JSON close, all four budget calculations including hard
+cap and floor, single-string message, multi-block message, session
+under-budget skip, session over-budget trim, idempotency, fast-detect
+predicate). Existing `test_run_loop_tool_policy.py` updated to
+accommodate the new informative truncation suffix. Total PI run-loop
+suite: 180 pass.

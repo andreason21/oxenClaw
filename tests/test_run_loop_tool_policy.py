@@ -124,6 +124,13 @@ async def test_tool_policy_truncates_oversize_results() -> None:
     # must be at most cap + sentinel length.
     from oxenclaw.pi.messages import ToolResultMessage
 
+    # The smart truncator (port of openclaw `tool-result-truncation.ts`)
+    # uses an informative suffix that's longer than the legacy
+    # "[...truncated N chars]" sentinel. With an explicit cap of 200,
+    # the body collapses to roughly the suffix alone — well under the
+    # original 10K input but above the legacy tight bound. We just
+    # verify truncation happened and the result is a small fraction of
+    # the original.
     found = False
     for m in result.appended_messages:
         if isinstance(m, ToolResultMessage):
@@ -131,5 +138,5 @@ async def test_tool_policy_truncates_oversize_results() -> None:
                 if r.tool_use_id == "t1":
                     found = True
                     assert "truncated" in (r.content or "")
-                    assert len(r.content or "") <= 220  # cap + sentinel
+                    assert len(r.content or "") <= 1_000  # << 10K original
     assert found

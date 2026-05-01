@@ -94,6 +94,29 @@ _GATEWAY_START_EPILOG = """**Config & env.** Runtime state lives under `$OXENCLA
 Validate config before booting with `oxenclaw config validate`
 (or pass `--skip-preflight` to skip; the gateway runs this on startup anyway).
 
+**Provider config.** Persistent provider/model selection lives in
+`config.yaml` under `agents:`. CLI flags (`--provider`, `--model`,
+`--base-url`, `--api-key`, `--system-prompt`) override the matching
+agent for THIS run only — they don't write back to the file.
+
+Minimum `agents:` entry (one block per agent id):
+
+* `provider: auto` — `auto` | `ollama` | `llamacpp-direct` | `llamacpp` | `vllm` | `lmstudio`
+
+* `model: qwen3.5:9b` — provider-native id; omit to use the provider default
+
+* `system_prompt: |` then inline text, or `@/abs/path/to/prompt.md`
+
+* `base_url:` — optional; only for `vllm` / `lmstudio` / external `llamacpp`
+
+* `api_key: ${MY_KEY}` — env interpolation supported
+
+* `extra:` block — provider knobs (e.g. `gguf_path`, `n_ctx`, `n_gpu_layers` for `llamacpp-direct`)
+
+`provider: auto` picks `llamacpp-direct` when `$OXENCLAW_LLAMACPP_GGUF`
+is set and `llama-server` is on PATH, else `ollama`. Full per-provider
+recipes + per-channel routing: `docs/AGENTS.md`.
+
 **Key env vars** (full list: `docs/OPERATIONS.md`):
 
 * `OXENCLAW_HOME` — override the state dir

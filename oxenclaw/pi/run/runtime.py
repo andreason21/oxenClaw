@@ -110,6 +110,14 @@ class RuntimeConfig:
     # before giving up. (oxenClaw choice; openclaw doesn't expose an
     # equivalent named constant.)
     max_compression_self_heals: int = 3
+    # Aggregate wall-clock cap on a single compaction call. Mirrors the
+    # `aggregateTimeoutMs` knob in openclaw
+    # `pi-embedded-runner/run/compaction-retry-aggregate-timeout.ts`.
+    # A stuck summariser (auxiliary LLM hung mid-stream, network black
+    # hole) can otherwise park the entire run indefinitely. None
+    # disables; set a positive float in seconds to enable. PiAgent
+    # wraps `engine.compact` in `asyncio.wait_for` against this value.
+    compaction_timeout_seconds: float | None = 120.0
 
     # Abort
     abort_event: asyncio.Event | None = None

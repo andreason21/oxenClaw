@@ -760,6 +760,23 @@ class PiAgent:
             repair_incomplete_turn(s.messages)
         except Exception:
             logger.exception("incomplete-turn repair failed for %s/%s", self.id, key)
+        # Drop malformed tool_use blocks that survived rehydration —
+        # crashed-mid-stream sessions can leave blocks with empty `id`
+        # or missing `input` that the provider would 400 on. Ports
+        # openclaw `sanitizeReplayToolCallInputs`
+        # (`pi-embedded-runner/run/attempt.ts:649-848`, commit
+        # `c3972982b5`). Idempotent on well-formed transcripts.
+        try:
+            from oxenclaw.pi.run.replay_sanitizer import (
+                sanitize_replay_tool_calls,
+            )
+
+            sanitize_replay_tool_calls(
+                s.messages,
+                allowed_tool_names=set(self._tools._tools.keys()),
+            )
+        except Exception:
+            logger.exception("replay tool-call sanitize failed for %s/%s", self.id, key)
         self._session_ids[key] = s.id
         return s
 
@@ -1342,7 +1359,7 @@ class PiAgent:
         # `maybe_compact` path. Custom engines that own their own message
         # store ignore the session and operate on `messages`.
         active_summarizer = self._build_summarizer(ctx.session_key)
-        await self._engine.compact(
+        compact_coro = self._engine.compact(
             session_id=session.id,
             messages=session.messages,
             token_budget=self._model.context_window,
@@ -1353,6 +1370,18 @@ class PiAgent:
                     "keep_tail_turns": self._compact_keep_tail,
                 }
             ),
+        )
+        # Aggregate timeout shield: a stuck summariser shouldn't park the
+        # run forever. Mirrors openclaw
+        # `compaction-retry-aggregate-timeout.ts`. On timeout the helper
+        # logs + returns None so the run continues with uncompacted
+        # history (preemptive compaction will trim on the next attempt).
+        from oxenclaw.pi.run.compaction_timeout import with_compaction_timeout
+
+        await with_compaction_timeout(
+            compact_coro,
+            timeout_seconds=getattr(self._runtime, "compaction_timeout_seconds", None),
+            label=f"engine.compact (session={session.id})",
         )
 
         await self._sessions.save(session)

@@ -564,3 +564,46 @@ Two more upstream-parity ports surfaced by the openclaw audit
 - `tests/test_context_window_guard.py` adds 7 cases (warn / block /
   clean / unknown-window / raise / threshold pin).
 - Total PI run-loop suite: 152 pass.
+
+
+## Replay sanitiser + compaction aggregate timeout (2026-05-01)
+
+Two more upstream-parity ports (openclaw `3f7f2c8dc9`).
+
+**Replay tool-call sanitiser**
+- New `oxenclaw/pi/run/replay_sanitizer.py` ports
+  `pi-embedded-runner/run/attempt.ts:649-848` (commit `c3972982b5`).
+  When a session is reloaded from disk (SQLite, ACP transcript) the
+  persisted `ToolUseBlock`s may have been written mid-stream by a prior
+  crashed run. The sanitiser walks each AssistantMessage and drops
+  blocks with empty `id`, missing `input`, whitespace/overlong/
+  unregistered `name`. AssistantMessages with no surviving content are
+  removed entirely.
+- Wired into PiAgent `_ensure_session` right after the existing
+  `repair_incomplete_turn` step, so a corrupt-on-disk transcript can't
+  ride into the next turn and 400 the provider.
+
+**Compaction aggregate timeout**
+- New `oxenclaw/pi/run/compaction_timeout.py` ports
+  `pi-embedded-runner/run/compaction-retry-aggregate-timeout.ts`. A
+  stuck summariser (auxiliary LLM hung mid-stream, network black hole)
+  could otherwise park the entire run forever — preemptive compaction
+  exists for exactly this fallback, but only if we let go of the stuck
+  call first.
+- `with_compaction_timeout(coro, timeout_seconds=...)` wraps the
+  coroutine in `asyncio.wait_for`, swallows `TimeoutError` (returns
+  None), invokes an optional `on_timeout` callback, and propagates any
+  inner exception unchanged.
+- New `RuntimeConfig.compaction_timeout_seconds: float | None = 120.0`
+  knob. PiAgent wraps `engine.compact(...)` with the helper so a
+  default 120s ceiling kicks in without operator action.
+
+**Tests**:
+- `tests/test_replay_sanitizer.py` adds 8 cases (well-formed
+  passthrough, drop-empty-id, drop-unregistered-name,
+  drop-whitespace-name, drop-overlong-name, no-allowlist passthrough,
+  partial-survival, idempotency).
+- `tests/test_compaction_timeout.py` adds 7 cases (passthrough, None /
+  zero / negative disable, timeout returns None, on_timeout callback,
+  callback exception swallowed, inner exception propagates).
+- Total PI run-loop suite: 167 pass.

@@ -107,9 +107,74 @@ def test_is_length_truncation_only_for_empty_length() -> None:
     )
     assert not is_length_truncation(msg_tool)
 
-    # other stop reasons fall through
-    msg_end = AssistantMessage(content=[TextContent(text="")], stop_reason="end_turn")
-    assert not is_length_truncation(msg_end)
+    # plain refusal-class empty (no thinking present) falls through to nudge path.
+    msg_refusal = AssistantMessage(content=[TextContent(text="")], stop_reason="end_turn")
+    assert not is_length_truncation(msg_refusal)
+
+
+def test_is_length_truncation_thinking_only_natural_stop() -> None:
+    """qwen3.5/deepseek-r1: stop=stop with ThinkingBlock present and no
+    visible text means the model thought without responding. Same fix
+    as length cutoff (bump max_tokens), so we reuse the path."""
+    from oxenclaw.pi.messages import ThinkingBlock
+
+    msg_thinking_stop = AssistantMessage(
+        content=[ThinkingBlock(thinking="Let me reason step by step...")],
+        stop_reason="stop",
+    )
+    assert is_length_truncation(msg_thinking_stop)
+
+    msg_thinking_end_turn = AssistantMessage(
+        content=[ThinkingBlock(thinking="...")],
+        stop_reason="end_turn",
+    )
+    assert is_length_truncation(msg_thinking_end_turn)
+
+    # Thinking + visible text → NOT a recovery case (model spoke).
+    msg_thinking_with_text = AssistantMessage(
+        content=[ThinkingBlock(thinking="..."), TextContent(text="Hi.")],
+        stop_reason="end_turn",
+    )
+    assert not is_length_truncation(msg_thinking_with_text)
+
+    # Thinking + tool_use → tool path owns it.
+    msg_thinking_with_tool = AssistantMessage(
+        content=[
+            ThinkingBlock(thinking="..."),
+            ToolUseBlock(id="t1", name="x", input={}),
+        ],
+        stop_reason="tool_use",
+    )
+    assert not is_length_truncation(msg_thinking_with_tool)
+
+
+def test_split_thinking_tags_strips_leaked_visible_text() -> None:
+    """Some llama.cpp / vLLM builds leak `<think>...</think>` into
+    the visible stream. attempt.py post-processor must strip them."""
+    from oxenclaw.pi.run.attempt import _split_thinking_tags
+
+    visible, leaked = _split_thinking_tags("Hello <think>internal reasoning here</think> world")
+    assert visible == "Hello  world"
+    assert "internal reasoning here" in leaked
+
+    # No tags → passthrough.
+    visible, leaked = _split_thinking_tags("just text")
+    assert visible == "just text"
+    assert leaked == ""
+
+    # Only thinking → empty visible (this is the case that flips
+    # the assembled message into a length-truncation pattern).
+    visible, leaked = _split_thinking_tags("<think>only this</think>")
+    assert visible == ""
+    assert "only this" in leaked
+
+    # Multi-line thinking with markup-like content inside.
+    visible, leaked = _split_thinking_tags(
+        "before\n<think>line1\nline2\n{json: 'shaped'}</think>\nafter"
+    )
+    assert "line1" not in visible
+    assert "before" in visible and "after" in visible
+    assert "line1" in leaked and "json" in leaked
 
 
 def test_default_max_tokens_for_thinking_vs_plain() -> None:

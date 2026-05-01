@@ -7,6 +7,7 @@ to loop again based on the assembled message's `stop_reason`.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -52,6 +53,36 @@ class AttemptResult:
     text_emitted: bool = False
 
 
+# Some llama.cpp / vLLM builds leak `<think>...</think>` tags into the
+# visible text stream when the runtime's reasoning-format feature is
+# disabled (or the model emits them outside the chat template). Strip
+# them at message-assembly time so:
+#   1. The user-visible TextContent doesn't contain raw thinking.
+#   2. `stop_recovery.is_length_truncation` can correctly classify a
+#      thinking-only turn as recoverable (visible text==empty after
+#      strip ⇒ matches the thinking-only natural-stop pattern).
+# Captured thinking is preserved on the ThinkingBlock so observability
+# / token accounting still has it.
+_THINK_TAG_RE = re.compile(r"<think>.*?</think>", re.IGNORECASE | re.DOTALL)
+
+
+def _split_thinking_tags(text: str) -> tuple[str, str]:
+    """Return `(visible_text, captured_thinking)` from a possibly-leaky stream.
+
+    Idempotent on inputs that don't contain `<think>` tags.
+    """
+    if "<think" not in text.lower():
+        return text, ""
+    captured: list[str] = []
+
+    def _capture(match: re.Match[str]) -> str:
+        captured.append(match.group(0))
+        return ""
+
+    visible = _THINK_TAG_RE.sub(_capture, text)
+    return visible.strip(), "\n".join(captured)
+
+
 def default_max_tokens_for(model: Model) -> int:
     """Model-aware ``num_predict`` fallback when nothing is pinned.
 
@@ -95,6 +126,14 @@ async def run_attempt(
         effective_max_tokens = config.max_tokens
     else:
         effective_max_tokens = default_max_tokens_for(model)
+    # Gate `cache_control_breakpoints` on `model.supports_prompt_cache`.
+    # The breakpoints are an Anthropic-specific cache marker; sending
+    # them to local providers (Ollama, llama.cpp, vLLM) is at best
+    # ignored and at worst breaks `--jinja` template rendering when
+    # an unexpected `cache_control` key lands on a user/assistant block.
+    # When caching isn't supported we still cut the system prompt at
+    # natural boundaries — just without the explicit Anthropic markers.
+    cache_breakpoints = config.cache_control_breakpoints if model.supports_prompt_cache else 0
     ctx = Context(
         model=model,
         api=api,
@@ -104,7 +143,7 @@ async def run_attempt(
         temperature=config.temperature,
         max_tokens=effective_max_tokens,
         thinking=config.thinking,
-        cache_control_breakpoints=config.cache_control_breakpoints,
+        cache_control_breakpoints=cache_breakpoints,
         extra=ctx_extra,
     )
     opts = SimpleStreamOptions(
@@ -169,7 +208,24 @@ async def run_attempt(
             )
         )
     if text_parts:
-        content.append(TextContent(text="".join(text_parts)))
+        joined = "".join(text_parts)
+        visible, leaked = _split_thinking_tags(joined)
+        if leaked:
+            # Leaked thinking goes into the ThinkingBlock for accountability;
+            # if no thinking block existed yet, synthesise one.
+            existing = next(
+                (b for b in content if isinstance(b, ThinkingBlock)),
+                None,
+            )
+            if existing is None:
+                content.append(ThinkingBlock(thinking=leaked, signature=None))
+            else:
+                # Append leaked thinking to the existing block's text.
+                merged = (existing.thinking + "\n" + leaked).strip()
+                idx = content.index(existing)
+                content[idx] = ThinkingBlock(thinking=merged, signature=existing.signature)
+        if visible:
+            content.append(TextContent(text=visible))
     for tid in tool_order:
         slot = tool_buf[tid]
         # Guard against an out-of-order delta race: if input_delta arrived

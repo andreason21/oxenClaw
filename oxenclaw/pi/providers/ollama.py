@@ -240,7 +240,17 @@ def _serialize_message(msg: Any) -> list[dict[str, Any]]:
         for r in msg.results:
             if isinstance(r.content, str):
                 content = r.content
+            elif isinstance(r.content, list) and all(isinstance(b, TextContent) for b in r.content):
+                # Pure-text result: emit a flat string. Wrapping a
+                # tool result in a JSON envelope (`[{"type":"text",...}]`)
+                # makes 7-13B models think the *tool* returned an
+                # envelope and they paraphrase / re-wrap on the next
+                # turn — burning tokens and ignoring the actual content.
+                content = "\n".join(b.text for b in r.content if isinstance(b, TextContent))
             else:
+                # Mixed (text + image / unknown blocks): keep the JSON
+                # envelope shape so downstream parsers can recover the
+                # full structure.
                 content = json.dumps(
                     [
                         {"type": "text", "text": b.text}
@@ -285,6 +295,20 @@ def _serialize_tools(tools: list[Any]) -> list[dict[str, Any]]:
     return out
 
 
+def _resolve_keep_alive() -> str:
+    """How long Ollama keeps the model warm after the current request.
+
+    Default `30m`. The Ollama server's own default is `5m`, which is too
+    short for agent runs — compaction + tool round-trips + paced backoff
+    routinely exceed 5 minutes, the model gets unloaded, and the next
+    call pays a 30-90s cold-load penalty that often classifies as a
+    transport timeout. Override via `OXENCLAW_OLLAMA_KEEP_ALIVE` (any
+    string Ollama accepts: `"30m"`, `"2h"`, `"-1"` for infinite, `"0"`
+    to evict immediately).
+    """
+    return os.environ.get("OXENCLAW_OLLAMA_KEEP_ALIVE", "30m").strip() or "30m"
+
+
 def build_ollama_payload(ctx: Context, *, stream: bool, num_ctx: int) -> dict[str, Any]:
     messages = _serialize_messages(ctx.messages)
     if ctx.system:
@@ -302,6 +326,7 @@ def build_ollama_payload(ctx: Context, *, stream: bool, num_ctx: int) -> dict[st
         "messages": messages,
         "stream": stream,
         "options": options,
+        "keep_alive": _resolve_keep_alive(),
     }
     if ctx.tools:
         payload["tools"] = _serialize_tools(ctx.tools)
@@ -449,18 +474,14 @@ async def stream_ollama_native(
 ) -> AsyncIterator[AssistantMessageEvent]:
     """Native Ollama `/api/chat` event stream → AssistantMessageEvent.
 
-    For tool-using rounds we run non-streaming: native streaming only
-    surfaces `tool_calls` in the final `done` frame anyway, and
-    nonstream gives us a single deterministic JSON to parse.
+    Streams text deltas as they arrive; native Ollama batches
+    `tool_calls` in the final `done` frame which we synthesise as
+    Start/InputDelta/End events. Streaming on tool-using rounds keeps
+    `text_emitted` accurate (silent-retry budget logic depends on it)
+    and gives downstream UIs a heartbeat during long generations
+    instead of a multi-second freeze.
     """
     base_url = _native_base_url(ctx.api.base_url)
-
-    if ctx.tools:
-        async for ev in _request_ollama_nonstream(
-            ctx, opts, payload_patch=payload_patch, base_url=base_url
-        ):
-            yield ev
-        return
 
     num_ctx = await _resolve_num_ctx(base_url, ctx.model.id)
     payload = build_ollama_payload(ctx, stream=True, num_ctx=num_ctx)

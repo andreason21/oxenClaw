@@ -674,3 +674,70 @@ under-budget skip, session over-budget trim, idempotency, fast-detect
 predicate). Existing `test_run_loop_tool_policy.py` updated to
 accommodate the new informative truncation suffix. Total PI run-loop
 suite: 180 pass.
+
+
+## Local-LLM operability batch (2026-05-01)
+
+Architect audit focused on the project goal — running the openclaw
+agent loop on local models (qwen3.5, gemma4, llama3.1 via Ollama;
+direct llama.cpp HTTP) — surfaced six discrete gaps. Two passes landed
+together.
+
+**Pass A — Ollama / shim hygiene (4 fixes)**
+
+- `oxenclaw/pi/providers/ollama.py:288-310` — `keep_alive` defaults to
+  `"30m"` (override via `OXENCLAW_OLLAMA_KEEP_ALIVE`). Ollama's own
+  default is `5m`; long agent turns (compaction + tool round-trips +
+  paced backoff) routinely exceed that and the model gets unloaded
+  mid-session, paying a 30-90s cold-load penalty that classifies as a
+  transport timeout.
+- `oxenclaw/pi/providers/ollama.py:455-465` — dropped the
+  `if ctx.tools: nonstream` short-circuit. Native streaming already
+  surfaces `tool_calls` from the `done` frame as synthesised
+  Start/InputDelta/End events, so streaming on tool-using rounds keeps
+  `text_emitted` accurate and gives downstream UIs a heartbeat instead
+  of a multi-second freeze.
+- `oxenclaw/pi/providers/ollama.py:241-265` — pure-text
+  `ToolResultBlock.content` is now serialised as a flat newline-joined
+  string for the `tool` role. The JSON-envelope shape
+  (`[{"type":"text","text":"..."}]`) is reserved for genuinely-mixed
+  (text + image) results. 7-13B local models otherwise mistake the
+  envelope as the tool's return shape and re-wrap on the next turn,
+  burning tokens and ignoring the actual content.
+- `oxenclaw/pi/run/attempt.py:128-150` — gate
+  `cache_control_breakpoints` on `Model.supports_prompt_cache`. Cache
+  markers are an Anthropic-specific feature; emitting them on Ollama,
+  llama.cpp, or vLLM is at best ignored and at worst breaks `--jinja`
+  template rendering.
+
+**Pass B — Thinking-model recovery (qwen3.5 / deepseek-r1)**
+
+- `oxenclaw/pi/run/stop_recovery.py:57-89` — `is_length_truncation`
+  now also fires for `stop_reason in {None, "stop", "end_turn"}` when
+  the assistant turn has a `ThinkingBlock` but no visible text and no
+  `tool_use`. This is the operator-visible "thought without
+  responding" failure: the model finished thinking under-budget and
+  decided it was done. The fix is structural (bump `max_tokens` and
+  retry), reusing the existing length-recovery branch in `run.py`.
+- `oxenclaw/pi/run/attempt.py:56-83` — `_split_thinking_tags(text)`
+  strips `<think>...</think>` (case-insensitive, multiline) from the
+  assembled visible text and preserves the captured thinking on the
+  `ThinkingBlock`. Some llama.cpp / vLLM builds leak think tags into
+  the visible stream when reasoning-format support is off; without the
+  strip those leaked tags would block the thinking-only-stop classifier
+  and the user would see raw `<think>...` in the channel.
+
+**Tests**: `tests/test_pi_providers.py` adds 3 cases (keep_alive default,
+env override, tool_result flat-string). New
+`tests/test_pi_attempt_cache_gate.py` adds 3 cases (gate off / on /
+operator-disabled). `tests/test_pi_stop_recovery.py` adds 2 cases
+(thinking-only natural stop, `_split_thinking_tags` correctness). Total
+PI run-loop suite: **194 pass**.
+
+Deferred from the audit: tool-call delta race for vLLM parallel tools
+(M, our deployments don't run vLLM with parallel tool calls today),
+provider-specific `stop_reason` normalisation (S, llama.cpp-direct only,
+better as a hotfix when observed), shared-Ollama embed contention (M,
+hardware-bound), CodingAgent / LocalAgent pseudo-tool autofire (M,
+those agents have their own tool flow), system-prompt shrink for tiny
+models (M, design choice — auto vs opt-in).

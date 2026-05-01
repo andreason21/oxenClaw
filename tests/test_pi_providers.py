@@ -105,6 +105,55 @@ def test_ollama_max_tokens_aliased_to_num_predict() -> None:
     assert payload["num_predict"] == 512
 
 
+def test_ollama_native_payload_includes_keep_alive() -> None:
+    """Default `keep_alive=30m` keeps the model warm across long agent turns."""
+    from oxenclaw.pi.providers.ollama import build_ollama_payload
+
+    model = Model(id="qwen3.5:9b", provider="ollama")
+    api = Api(base_url="http://127.0.0.1:11434/v1")
+    ctx = Context(model=model, api=api, messages=[text_message("hi")])
+    payload = build_ollama_payload(ctx, stream=False, num_ctx=32768)
+    assert payload["keep_alive"] == "30m"
+
+
+def test_ollama_native_payload_keep_alive_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    from oxenclaw.pi.providers.ollama import build_ollama_payload
+
+    monkeypatch.setenv("OXENCLAW_OLLAMA_KEEP_ALIVE", "2h")
+    model = Model(id="qwen3.5:9b", provider="ollama")
+    api = Api(base_url="http://127.0.0.1:11434/v1")
+    ctx = Context(model=model, api=api, messages=[text_message("hi")])
+    payload = build_ollama_payload(ctx, stream=False, num_ctx=32768)
+    assert payload["keep_alive"] == "2h"
+
+
+def test_ollama_native_tool_result_pure_text_is_flat_string() -> None:
+    """Pure-text tool_result list → joined string, not JSON envelope.
+
+    7-13B local models otherwise mistake the wrapped envelope as the
+    tool's return shape and re-wrap on the next turn (token waste +
+    result-ignored loops).
+    """
+    from oxenclaw.pi.messages import TextContent
+    from oxenclaw.pi.providers.ollama import build_ollama_payload
+
+    block = ToolResultBlock(
+        tool_use_id="t1",
+        content=[TextContent(text="line one"), TextContent(text="line two")],
+        is_error=False,
+    )
+    tr = ToolResultMessage(results=[block])
+    model = Model(id="qwen3.5:9b", provider="ollama")
+    api = Api(base_url="http://127.0.0.1:11434/v1")
+    ctx = Context(model=model, api=api, messages=[tr])
+    payload = build_ollama_payload(ctx, stream=False, num_ctx=32768)
+    tool_msg = payload["messages"][0]
+    assert tool_msg["role"] == "tool"
+    # Flat newline-joined string, NOT a JSON envelope.
+    assert tool_msg["content"] == "line one\nline two"
+    assert not tool_msg["content"].startswith("[{")
+
+
 # ─── SSE event translation (mocked transport) ───────────────────────
 
 

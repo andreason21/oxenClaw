@@ -17,6 +17,7 @@ from __future__ import annotations
 from oxenclaw.pi.messages import (
     AssistantMessage,
     TextContent,
+    ThinkingBlock,
     ToolUseBlock,
     UserMessage,
 )
@@ -57,19 +58,36 @@ def is_recoverable_empty(message: AssistantMessage) -> bool:
 def is_length_truncation(message: AssistantMessage) -> bool:
     """Output budget ran out before the model could speak.
 
-    `stop_reason="length"` with no visible text + no tool_use blocks
-    means the model spent its entire `num_predict` allotment on
-    hidden/thinking tokens (qwen3.5, deepseek-r1) and produced nothing
-    the user can see. The fix is structural — bump max_tokens and retry
-    — not a content nudge, so the run loop handles this on a separate
-    code path from refusal-style empties.
+    Two patterns map to the same operator-visible failure:
+      1. `stop_reason="length"` + no visible text + no tool_use — the
+         classic length cap (model spent the whole `num_predict`
+         allotment).
+      2. `stop_reason in {"stop", "end_turn", None}` + no visible text
+         + no tool_use + at least one ThinkingBlock present — qwen3.5 /
+         deepseek-r1 finished thinking under-budget but never emitted a
+         visible answer. The model "stopped naturally" without
+         speaking. Bumping `num_predict` typically lets the actual
+         answer come out on retry; a content nudge wastes a turn
+         because the model already thinks it's done.
+
+    The fix is structural in both cases — bump `max_tokens` and retry —
+    so we route them through the same recovery branch as length cuts.
+    Tool-use turns are excluded; the regular run loop handles those.
     """
-    if message.stop_reason != "length":
-        return False
     if any(isinstance(b, ToolUseBlock) for b in message.content):
         return False
     has_text = any(isinstance(b, TextContent) and (b.text or "").strip() for b in message.content)
-    return not has_text
+    if has_text:
+        return False
+    if message.stop_reason == "length":
+        return True
+    # Thinking-only natural stop: only treat it as length-style when
+    # we actually see thinking output. Otherwise it's a refusal-class
+    # empty and the existing nudge path is correct.
+    if message.stop_reason in (None, "stop", "end_turn"):
+        has_thinking = any(isinstance(b, ThinkingBlock) for b in message.content)
+        return has_thinking
+    return False
 
 
 def build_recovery_nudge(stop_reason: str | None) -> UserMessage:

@@ -448,3 +448,48 @@ upstream equivalent. Each entry below labels the lineage explicitly.
 
 **Tests**: 2064 passed (8 new modules, 1 updated assertion).
 **Lint**: ruff strict + pyright strict clean across all touched files.
+
+
+## Length-cutoff recovery + model-aware num_predict (2026-05-01)
+
+Follow-up to the 2026-04-30 reliability pass. Thinking-class models
+(qwen3.5, deepseek-r1) frequently spend their entire `num_predict`
+allotment on hidden tokens and emit `stop_reason="length"` with no
+visible text — the user sees an empty reply that previously terminated
+the turn.
+
+**`oxenclaw/pi/run/stop_recovery.py`** — new `is_length_truncation()`
+helper: `stop_reason == "length"` AND no visible text AND no
+`tool_use` blocks. Tool-use turns are excluded so the normal tool-loop
+path stays in charge of mid-chain length stops.
+
+**`oxenclaw/pi/run/attempt.py`** — `default_max_tokens_for(model)`
+chooses the per-attempt `num_predict` when nothing is pinned: thinking
+models get `min(max_output_tokens, 4096)` (≈4× plain), non-thinking
+get `min(max_output_tokens, 1024)`. `run_attempt(...)` accepts a new
+`max_tokens_override: int | None` parameter so the run loop can pass a
+bumped value on retry without mutating `RuntimeConfig`.
+
+**`oxenclaw/pi/run/runtime.py`** — two new knobs:
+- `length_recovery_attempts: int = 1` (set 0 to disable)
+- `length_recovery_growth: float = 2.0` (multiplier per retry, capped at
+  `model.max_output_tokens`)
+
+**`oxenclaw/pi/run/run.py`** — when `is_length_truncation(msg)` fires,
+the loop pops the noise turn from `appended` / `working` (zero-content
+message, no value to retain), bumps `length_max_tokens_override`, and
+re-enters the attempt loop. No synthetic user nudge — the fix is
+structural, not content-shaped.
+
+Live verification: cap=100 / grow=10× on `qwen3.5:9b` reproduces the
+empty-length first attempt → 100 → 1000 bump → `'OK'` returned in 47s
+(`elapsed=47.1s, attempts=2, stop=stop`). Multi-turn live suite
+(memory_recall + tool_roundtrip + multi_fact) passes 3/3 with the new
+defaults.
+
+This is an oxenClaw addition; openclaw upstream doesn't expose an
+equivalent length-recovery knob.
+
+**Tests**: `tests/test_pi_stop_recovery.py` adds 4 cases (predicate +
+default helper + run-loop recovery + disabled path); 12/12 pass.
+118 PI run-loop suite tests pass.

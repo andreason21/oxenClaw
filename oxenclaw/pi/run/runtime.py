@@ -65,6 +65,12 @@ class RuntimeConfig:
     # nudge prefix asking for the answer in plain language. Set to 0
     # to disable. Mirrors openclaw `attempt.stop-reason-recovery.ts`.
     stop_reason_recovery_attempts: int = 1
+    # Length-cutoff recovery: when the model emits stop_reason="length"
+    # with no visible text (thinking model burned its whole num_predict
+    # budget on hidden tokens), retry with `max_tokens *= length_recovery_growth`,
+    # capped at model.max_output_tokens. Set to 0 to disable.
+    length_recovery_attempts: int = 1
+    length_recovery_growth: float = 2.0
     # Assistant-failover: when the primary model returns persistent
     # errors (provider_error / overloaded / sustained empty replies),
     # walk this chain. The agent's main model is the implicit head;

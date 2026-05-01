@@ -14,8 +14,10 @@ from oxenclaw.pi import (
 )
 from oxenclaw.pi.registry import InMemoryModelRegistry
 from oxenclaw.pi.run import RuntimeConfig, run_agent_turn
+from oxenclaw.pi.run.attempt import default_max_tokens_for
 from oxenclaw.pi.run.stop_recovery import (
     build_recovery_nudge,
+    is_length_truncation,
     is_recoverable_empty,
 )
 from oxenclaw.pi.streaming import StopEvent, TextDeltaEvent
@@ -88,6 +90,110 @@ async def test_run_loop_re_asks_on_empty_then_succeeds() -> None:
     assert state["calls"] == 2  # first empty, second real
     assert result.stopped_reason == "end_turn"
     assert "real answer" in result.final_message.content[0].text
+
+
+def test_is_length_truncation_only_for_empty_length() -> None:
+    msg_empty = AssistantMessage(content=[TextContent(text="")], stop_reason="length")
+    assert is_length_truncation(msg_empty)
+
+    # text present → not a length truncation worth recovering
+    msg_text = AssistantMessage(content=[TextContent(text="partial")], stop_reason="length")
+    assert not is_length_truncation(msg_text)
+
+    # tool_use turn → run-loop handles via the normal tool path
+    msg_tool = AssistantMessage(
+        content=[ToolUseBlock(id="t1", name="x", input={})],
+        stop_reason="length",
+    )
+    assert not is_length_truncation(msg_tool)
+
+    # other stop reasons fall through
+    msg_end = AssistantMessage(content=[TextContent(text="")], stop_reason="end_turn")
+    assert not is_length_truncation(msg_end)
+
+
+def test_default_max_tokens_for_thinking_vs_plain() -> None:
+    thinking = Model(id="t", provider="ollama", max_output_tokens=8192, supports_thinking=True)
+    plain = Model(id="p", provider="ollama", max_output_tokens=8192, supports_thinking=False)
+    # thinking → 4× plain default
+    assert default_max_tokens_for(thinking) == 4096
+    assert default_max_tokens_for(plain) == 1024
+    # tiny model is honoured (no upscaling above the model's ceiling)
+    tiny = Model(id="x", provider="ollama", max_output_tokens=512, supports_thinking=True)
+    assert default_max_tokens_for(tiny) == 512
+
+
+async def test_run_loop_recovers_from_length_truncation() -> None:
+    """Empty `length` reply: run loop should bump max_tokens and retry,
+    surfacing the second-call answer instead of returning the empty msg."""
+    seen_max_tokens: list[int | None] = []
+    state = {"calls": 0}
+
+    async def fake_stream(ctx, opts):  # type: ignore[no-untyped-def]
+        seen_max_tokens.append(ctx.max_tokens)
+        state["calls"] += 1
+        if state["calls"] == 1:
+            yield StopEvent(reason="length")
+        else:
+            yield TextDeltaEvent(delta="full answer")
+            yield StopEvent(reason="end_turn")
+
+    register_provider_stream("lengthrec", fake_stream)
+    reg = InMemoryModelRegistry(
+        models=[
+            Model(
+                id="m",
+                provider="lengthrec",  # type: ignore[arg-type]
+                max_output_tokens=2048,
+                supports_thinking=True,
+                extra={"base_url": "x"},
+            )
+        ]
+    )
+    model = reg.list()[0]
+    api = await resolve_api(model, InMemoryAuthStorage({"lengthrec": "x"}))  # type: ignore[dict-item]
+    cfg = RuntimeConfig(
+        max_tokens=512,
+        length_recovery_attempts=1,
+        length_recovery_growth=2.0,
+    )
+    result = await run_agent_turn(
+        model=model, api=api, system=None, history=[], tools=[], config=cfg
+    )
+    assert state["calls"] == 2
+    # First call sees configured 512; second call sees 1024 (2× bump).
+    assert seen_max_tokens == [512, 1024]
+    assert result.stopped_reason == "end_turn"
+    assert "full answer" in result.final_message.content[0].text  # type: ignore[union-attr]
+
+
+async def test_run_loop_length_recovery_disabled() -> None:
+    """When length_recovery_attempts=0, the empty length turn is final."""
+    state = {"calls": 0}
+
+    async def fake_stream(ctx, opts):  # type: ignore[no-untyped-def]
+        state["calls"] += 1
+        yield StopEvent(reason="length")
+
+    register_provider_stream("lengthrec_off", fake_stream)
+    reg = InMemoryModelRegistry(
+        models=[
+            Model(
+                id="m",
+                provider="lengthrec_off",  # type: ignore[arg-type]
+                max_output_tokens=2048,
+                extra={"base_url": "x"},
+            )
+        ]
+    )
+    model = reg.list()[0]
+    api = await resolve_api(model, InMemoryAuthStorage({"lengthrec_off": "x"}))  # type: ignore[dict-item]
+    cfg = RuntimeConfig(length_recovery_attempts=0)
+    result = await run_agent_turn(
+        model=model, api=api, system=None, history=[], tools=[], config=cfg
+    )
+    assert state["calls"] == 1
+    assert result.stopped_reason == "length"
 
 
 async def test_run_loop_does_not_re_ask_when_disabled() -> None:

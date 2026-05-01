@@ -54,6 +54,24 @@ def is_recoverable_empty(message: AssistantMessage) -> bool:
     return False
 
 
+def is_length_truncation(message: AssistantMessage) -> bool:
+    """Output budget ran out before the model could speak.
+
+    `stop_reason="length"` with no visible text + no tool_use blocks
+    means the model spent its entire `num_predict` allotment on
+    hidden/thinking tokens (qwen3.5, deepseek-r1) and produced nothing
+    the user can see. The fix is structural — bump max_tokens and retry
+    — not a content nudge, so the run loop handles this on a separate
+    code path from refusal-style empties.
+    """
+    if message.stop_reason != "length":
+        return False
+    if any(isinstance(b, ToolUseBlock) for b in message.content):
+        return False
+    has_text = any(isinstance(b, TextContent) and (b.text or "").strip() for b in message.content)
+    return not has_text
+
+
 def build_recovery_nudge(stop_reason: str | None) -> UserMessage:
     """Return a synthetic user turn that nudges the model to retry.
 
@@ -80,5 +98,6 @@ def build_recovery_nudge(stop_reason: str | None) -> UserMessage:
 __all__ = [
     "RECOVERABLE_STOP_REASONS",
     "build_recovery_nudge",
+    "is_length_truncation",
     "is_recoverable_empty",
 ]

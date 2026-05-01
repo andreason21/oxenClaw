@@ -45,6 +45,7 @@ from oxenclaw.pi.run.preemptive_compaction import (
 from oxenclaw.pi.run.runtime import RuntimeConfig
 from oxenclaw.pi.run.stop_recovery import (
     build_recovery_nudge,
+    is_length_truncation,
     is_recoverable_empty,
 )
 from oxenclaw.pi.run.token_estimator import chars_per_token_for
@@ -395,6 +396,8 @@ async def run_agent_turn(
     unknown_tool_reinject_used = False  # one-shot tool-list nudge before abort
     arg_loop = ArgLoopDetector(threshold=getattr(config, "arg_loop_threshold", 4))
     recoveries_used = 0  # stop-reason recovery counter
+    length_recoveries_used = 0  # length-cutoff recovery counter
+    length_max_tokens_override: int | None = None
     # Compress-then-retry self-heal counter (per turn). Context-overflow
     # / payload-too-large failures break to the outer iteration so the
     # preemptive compactor can shrink context before the next attempt.
@@ -507,6 +510,7 @@ async def run_agent_turn(
                 tools=tools,
                 config=config,
                 on_event=on_event,
+                max_tokens_override=length_max_tokens_override,
             )
             attempts.append(result)
             if result.error is None:
@@ -687,6 +691,34 @@ async def run_agent_turn(
 
         tool_uses = [b for b in msg.content if isinstance(b, ToolUseBlock)]
         if not tool_uses or msg.stop_reason not in ("tool_use", "tool_calls"):
+            # Length-cutoff recovery: thinking models sometimes burn the
+            # entire `num_predict` allotment on hidden tokens and emit
+            # `stop_reason="length"` with no visible text. Bumping the
+            # output budget on the next attempt is the structural fix —
+            # we drop the noise turn (zero content) before retrying.
+            if length_recoveries_used < config.length_recovery_attempts and is_length_truncation(
+                msg
+            ):
+                length_recoveries_used += 1
+                base = length_max_tokens_override
+                if base is None:
+                    base = (
+                        config.max_tokens
+                        if config.max_tokens is not None
+                        else max(256, active_model.max_output_tokens)
+                    )
+                grown = int(base * max(1.0, config.length_recovery_growth))
+                length_max_tokens_override = min(grown, active_model.max_output_tokens)
+                logger.warning(
+                    "length recovery: stop_reason=length → bump max_tokens %d → %d (attempt %d/%d)",
+                    base,
+                    length_max_tokens_override,
+                    length_recoveries_used,
+                    config.length_recovery_attempts,
+                )
+                appended.pop()
+                working.pop()
+                continue
             # Stop-reason recovery: empty reply or refusal → re-ask once.
             # We don't trigger inside a tool-use chain (those have their
             # own follow-up turn).

@@ -52,6 +52,20 @@ class AttemptResult:
     text_emitted: bool = False
 
 
+def default_max_tokens_for(model: Model) -> int:
+    """Model-aware ``num_predict`` fallback when nothing is pinned.
+
+    Thinking models (qwen3.5, deepseek-r1, ...) burn a large share of
+    their output budget on hidden tokens that never reach the user, so
+    we give them ~4× the headroom of plain instruct models. The caps
+    are intentionally below ``model.max_output_tokens`` — operators who
+    want to use the full ceiling set ``RuntimeConfig.max_tokens``
+    explicitly.
+    """
+    cap = max(256, model.max_output_tokens)
+    return min(cap, 4096) if model.supports_thinking else min(cap, 1024)
+
+
 async def run_attempt(
     *,
     model: Model,
@@ -61,6 +75,7 @@ async def run_attempt(
     tools: list[Any],
     config: RuntimeConfig,
     on_event: Any | None = None,
+    max_tokens_override: int | None = None,
 ) -> AttemptResult:
     """Stream one provider call and assemble the final AssistantMessage.
 
@@ -74,6 +89,12 @@ async def run_attempt(
     ctx_extra: dict[str, Any] = {}
     if getattr(config, "rate_limit_tracker", None) is not None:
         ctx_extra["rate_limit_tracker"] = config.rate_limit_tracker
+    if max_tokens_override is not None:
+        effective_max_tokens: int | None = max_tokens_override
+    elif config.max_tokens is not None:
+        effective_max_tokens = config.max_tokens
+    else:
+        effective_max_tokens = default_max_tokens_for(model)
     ctx = Context(
         model=model,
         api=api,
@@ -81,7 +102,7 @@ async def run_attempt(
         messages=list(messages),
         tools=list(tools),
         temperature=config.temperature,
-        max_tokens=config.max_tokens,
+        max_tokens=effective_max_tokens,
         thinking=config.thinking,
         cache_control_breakpoints=config.cache_control_breakpoints,
         extra=ctx_extra,

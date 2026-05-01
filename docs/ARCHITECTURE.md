@@ -751,43 +751,91 @@ routinely emit tool calls mid-thought before the plan settles, which
 shows up as truncated outputs, repeated failed tool calls, or just
 forgetting the goal after the first tool result.
 
-**`oxenclaw/agents/plan_execute.py`** (~340 LOC) — stateless
-orchestrator around `run_agent_turn`:
+**`oxenclaw/agents/plan_execute.py`** — stateless orchestrator around
+`run_agent_turn`:
 
 - **Phase 1 (planning)**: `tools=[]`, system addition forces a
   numbered plan as text only (3-7 actionable steps). The constrained
   tools=[] is structural — no matter what the model wants to do, it
-  cannot call a tool here.
+  cannot call a tool here. The planner is told to describe the
+  ACTION only — never to pre-compute, embed, or quote the expected
+  output of a step.
+- **Plan-validator turn**: a second `tools=[]` turn after planning
+  judges the plan as a critic, not the author: "does any step embed
+  a pre-computed result, skip a needed action, or read as
+  ambiguous?" Reply shape mirrors the step verifier (`YES:` /
+  `NO:`). On NO we replan up to `plan_retry_cap` (default 1) more
+  times with the validator's complaint as a synthetic nudge. After
+  the cap we proceed with the last plan rather than stranding the
+  caller.
 - **Phase 2 (execution)**: per step, run with full tools enabled. The
   step text becomes a synthetic user turn so the model sees a
   "execute step N: <text>" prompt.
 - **Verifier turn**: after each step, a short tools=[] turn asks "Did
   the previous turn satisfy step N? YES/NO + reason." Model judges
   its own work in a clean inference call.
-- **Retry on NO**: capped by `verifier_retry_cap` (default 2). Failed
-  verifier appends a synthetic user nudge with the reason and re-runs
-  the step.
+- **Retry on NO**: capped by `verifier_retry_cap` (default 1, lowered
+  from 2 after a 12-task qwen3.5:9b bench showed the second retry
+  contributed zero accuracy lift while doubling worst-case wall time
+  on tasks where the verifier emits information-free NOs in a loop).
+  Failed verifier appends a synthetic user nudge with the reason and
+  re-runs the step.
 - **Fallback**: when phase-1 produces no parseable numbered plan
   (just prose, or empty), the helper falls back to a normal single
-  `run_agent_turn` call so the user is never stranded.
+  `run_agent_turn` call so the user is never stranded. The
+  plan-validator turn is skipped on the fallback path.
 
 Plan parsing tolerates `"1.", "1)", "**1.**", "- 1."` line shapes;
 verdict parsing tolerates `"YES:"`, `"Yes -"`, bare `Yes`/`No`,
 leading prose; ambiguous output defaults to `met=False` so the
-retry path runs (errs toward extra work, not premature success).
+retry path runs (errs toward extra work, not premature success). The
+same parser drives both the step verifier and the plan validator.
+
+Total turns for a clean N-step run: `1 (plan) + 1 (validator) + 2N
+(step + verifier)`. With `plan_retry_cap=1` and a successful replan,
+add 2 more turns; with `verifier_retry_cap=k` retries on a step, add
+`2k` more on that step.
 
 This is opt-in: PiAgent's default flow is unchanged. Operators wire
 it as a wrapper or call `run_plan_then_execute(...)` directly.
 
-**Tests**: `tests/test_plan_execute.py` adds 15 cases (plan-parsing
-basic / paren-form / inner-prose / empty; verdict parsing all 7
-shapes including ambiguous defaults; happy 3-step path with 7-turn
-trace; retry-then-succeed; give-up-after-cap; fallback when no plan).
-Total PI run-loop suite: **209 pass**.
+**Why a plan validator?** A first 3-task qwen3.5:9b bench surfaced a
+failure mode where the planner embedded a *wrong* literal output in
+the plan itself (e.g. step 2 of "reverse + uppercase 'planning'"
+read `"...to get 'GNNINNALP'"`, an extra-N typo). The step verifier
+then accepted execution because the executor faithfully emitted what
+the plan said; retries re-emitted the same poisoned literal. A
+separate critic-mode pass over the plan, before any tool runs,
+catches this specific class of "(a) plan embeds a literal expected
+output" defect plus "(b) step missing entirely". Validator prompt
+deliberately excludes wording / ambiguity criteria — those caused
+over-rejection on a follow-up bench. Planner prompt complements the
+validator: "quote any input values verbatim, never pre-compute the
+derived output of a step."
 
-**Live benchmark deferred**: a CPU-only Ollama qwen3.5:9b run hit
-~30 minutes wall time on the plan phase due to cold-load timeouts
-(`opts.timeout_seconds=300` default, 9B Q4_K_M cold load >5 min on
-slow CPUs). Real comparison requires a GPU-accelerated environment;
-script lives at `/tmp/oxenclaw_plan_execute_bench.py` for operator
-reproduction.
+**Tests**: `tests/test_plan_execute.py` (18 cases): plan parsing
+shapes; verdict parsing shapes including ambiguous defaults; happy
+3-step path with full 8-turn trace; verifier retry-then-succeed;
+verifier give-up-after-cap; fallback when no plan; plan-validator
+NO→replan→YES; plan-validator NO×cap→proceed-with-last-plan;
+`plan_retry_cap=0` runs the validator exactly once.
+
+**Live benchmark (qwen3.5:9b on RTX 3050, `think=False`, n=12)**:
+harness at `/tmp/oxenclaw_pe_bench.py`. 12 verifiable multi-step
+tasks across arithmetic, string-pipeline, structured-data,
+date-time, and information-extraction families. Single-call
+baseline: 6/12. Plan-then-execute (validator on, `verifier_retry_cap`
+∈ {0, 1, 2}): 10/12 in all three settings. Zero observed
+single-call→pe regression on this suite — pe-mode strictly added 4
+correct answers (`arith_chain`, `arith_compound`, `even_squares`,
+`filter_sort`). cap=2 added zero accuracy over cap=0 and doubled
+worst-case wall time on tasks where the verifier emits content-blind
+NOs (the `vowel_count` case: 20.9s/12-turn → 40.3s/20-turn).
+Default `verifier_retry_cap=1` chosen as a Pareto compromise — keeps
+a single recovery attempt for transient format errors, bounds
+worst-case wall time at ~1.5× cap=0. Validator triggered a replan on
+1/12 tasks (`extract_emails`); cost is ~+1 turn (~1.5s) on the
+other 11. **Generalisation note**: n=12 is not a population — the
+2nd retry's expected value is "≤ measured" on this suite, not zero
+in the wild. Treat the defaults as the best evidence-backed call,
+not as universal optima.

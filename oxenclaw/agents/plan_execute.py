@@ -17,7 +17,7 @@ Public API:
       system="...",
       tools=tools,
       config=runtime_config,
-      verifier_retry_cap=2,
+      verifier_retry_cap=1,
   )
 
 The helper is deliberately stateless — callers (PiAgent or a future
@@ -151,7 +151,10 @@ class PlanExecuteResult:
     step_runs: list[StepRun] = field(default_factory=list)
     final_text: str = ""
     fell_back_to_single_call: bool = False
-    total_turns: int = 0  # planning + per-step attempts + verifier turns
+    total_turns: int = 0  # planning + plan-validator + per-step attempts + verifier turns
+    plan_attempts: int = 0
+    plan_verdict_met: bool = False
+    plan_verdict_reason: str = ""
 
 
 _PLANNING_GUIDANCE = (
@@ -161,8 +164,36 @@ _PLANNING_GUIDANCE = (
     "Format strictly as:\n"
     "1. <step>\n2. <step>\n3. <step>\n"
     "Each step should be concrete enough that an executor can do it "
-    "with one or two tool calls. Reply with the plan only — no "
-    "preamble, no commentary."
+    "with one or two tool calls. Quote any input values from the "
+    "user's request verbatim so the executor doesn't lose them — "
+    "but never pre-compute, embed, or quote the *derived output* of "
+    "a step (the upper-cased string, the sum, the sorted list, etc.). "
+    "Reply with the plan only — no preamble, no commentary."
+)
+
+_PLAN_VALIDATOR_GUIDANCE = (
+    "Review the plan above as a critic, not the author. Reject the "
+    "plan ONLY if one of these two concrete defects is present:\n"
+    "  (a) A step embeds a literal expected output — a quoted "
+    "      transformed string, a numeric sum, a sorted list, etc. "
+    "      Re-stating input verbatim is fine; pre-computing a "
+    "      derived result is not.\n"
+    "  (b) A step required by the user's request is missing entirely.\n"
+    "Do NOT reject for wording, brevity, ambiguity, style, or "
+    "minor redundancy — those are the executor's problem, not the "
+    "plan's. When in doubt, answer YES.\n"
+    "Reply on a single line:\n"
+    "  YES: <one-line reason the plan is sound>\n"
+    "or\n"
+    "  NO: <step number + which defect (a) or (b) and the literal "
+    "      embedded value, if any>"
+)
+
+_REPLAN_NUDGE_TEMPLATE = (
+    "The previous plan was rejected. Reason: {reason}\n"
+    "Produce a corrected numbered plan now. Describe the ACTION only "
+    "for each step — do NOT include expected outputs or pre-computed "
+    "values. Reply with the plan only."
 )
 
 _STEP_GUIDANCE_TEMPLATE = (
@@ -193,7 +224,8 @@ async def run_plan_then_execute(
     tools: list[Any],
     config: RuntimeConfig,
     history: Iterable[Any] | None = None,
-    verifier_retry_cap: int = 2,
+    verifier_retry_cap: int = 1,
+    plan_retry_cap: int = 1,
 ) -> PlanExecuteResult:
     """Two-phase orchestrator. See module docstring.
 
@@ -210,22 +242,66 @@ async def run_plan_then_execute(
 
     # ── Phase 1: planning (tools disabled) ───────────────────────────
     plan_system = system + _PLANNING_GUIDANCE
-    plan_history = [
+    plan_history: list[Any] = [
         *base_history,
         UserMessage(content=f"User request: {user_request}\n\nProduce the plan."),
     ]
-    plan_turn = await run_agent_turn(
-        model=model,
-        api=api,
-        system=plan_system,
-        history=plan_history,
-        tools=[],
-        config=config,
-    )
-    out.total_turns += 1
-    out.plan_text = _extract_text(plan_turn.final_message)
-    out.plan_steps = extract_numbered_steps(out.plan_text)
-
+    last_verdict = Verdict(met=False, reason="")
+    for plan_attempt in range(plan_retry_cap + 1):
+        plan_turn = await run_agent_turn(
+            model=model,
+            api=api,
+            system=plan_system,
+            history=plan_history,
+            tools=[],
+            config=config,
+        )
+        out.total_turns += 1
+        out.plan_attempts = plan_attempt + 1
+        out.plan_text = _extract_text(plan_turn.final_message)
+        out.plan_steps = extract_numbered_steps(out.plan_text)
+        if not out.plan_steps:
+            break  # fallback path runs below
+        # Plan-validator turn (tools disabled).
+        validator_history = [
+            *plan_history,
+            *plan_turn.appended_messages,
+            UserMessage(content=_PLAN_VALIDATOR_GUIDANCE),
+        ]
+        validator_turn = await run_agent_turn(
+            model=model,
+            api=api,
+            system=system,
+            history=validator_history,
+            tools=[],
+            config=config,
+        )
+        out.total_turns += 1
+        last_verdict = parse_verdict(_extract_text(validator_turn.final_message))
+        out.plan_verdict_met = last_verdict.met
+        out.plan_verdict_reason = last_verdict.reason
+        if last_verdict.met:
+            logger.info(
+                "plan-execute: plan accepted (attempt %d/%d) — %s",
+                plan_attempt + 1,
+                plan_retry_cap + 1,
+                last_verdict.reason[:80],
+            )
+            break
+        logger.warning(
+            "plan-execute: plan rejected (attempt %d/%d) — %s",
+            plan_attempt + 1,
+            plan_retry_cap + 1,
+            last_verdict.reason[:80],
+        )
+        if plan_attempt < plan_retry_cap:
+            plan_history = [
+                *plan_history,
+                *plan_turn.appended_messages,
+                UserMessage(
+                    content=_REPLAN_NUDGE_TEMPLATE.format(reason=last_verdict.reason)
+                ),
+            ]
     if not out.plan_steps:
         # Fallback: model didn't produce a parseable plan. Run the
         # request as a single call so we don't strand the user.

@@ -102,6 +102,7 @@ from oxenclaw.pi.system_prompt import (
     skills_contribution,
     skills_mandatory_contribution,
 )
+from oxenclaw.agents.prompts import build_system_prompt
 from oxenclaw.pi.thinking import ThinkingLevel
 from oxenclaw.plugin_sdk.channel_contract import InboundEnvelope, SendParams
 from oxenclaw.plugin_sdk.reply_runtime import chunk_text
@@ -110,120 +111,19 @@ from oxenclaw.plugin_sdk.runtime_env import get_logger
 logger = get_logger("agents.pi")
 
 
-DEFAULT_SYSTEM_PROMPT = (
-    "You are oxenClaw, a helpful assistant reached via chat channels. "
-    "Be concise. Use tools when helpful.\n"
-    "\n"
-    "Tool calls: emit a real `tool_use` block — do NOT write the tool\n"
-    "call as JSON in your reply text (the runtime auto-fires such\n"
-    "pseudo-calls as a best-effort safety net, but rely on real\n"
-    "tool_use blocks).\n"
-    "\n"
-    "Time + freshness. You do NOT know the current date or time without\n"
-    'calling a tool. If the user asks about "now", "today", "이번 주",\n'
-    '"지금", or any question whose answer depends on the current\n'
-    "date/time, call `get_time` first. Never guess the date.\n"
-    "\n"
-    "Memory playbook. Long-term facts about the user / project / past\n"
-    "decisions live in a vector-indexed memory store with two tiers:\n"
-    "the raw `inbox` (everything you save) and the curated `short_term`\n"
-    "tier (durable facts you've explicitly promoted).\n"
-    '  - `memory_save(text="...", tags=["..."])` — append a stable fact\n'
-    "    to the inbox whenever the user asks you to remember something\n"
-    "    OR you learn a durable preference (their name, role, deadline,\n"
-    "    tooling preference). Rules of thumb for `text`:\n"
-    "      * Write a COMPLETE natural-language sentence, not a\n"
-    '        `key:value` line. "사용자는 수원에 거주한다. The user lives\n'
-    '        in Suwon, South Korea." beats `user_location:Suwon`.\n'
-    "      * Include BOTH the user's language and English when the\n"
-    "        user wrote in a non-English language — same fact, two\n"
-    "        phrasings. The embedding store hits cross-language\n"
-    '        queries that way ("내가 사는 곳 날씨" / "weather where I\n'
-    '        live" both surface the chunk).\n'
-    "    Arg names are exactly `text` (string) and `tags` (list of\n"
-    "    strings). Common-alias forms (`content`, `body`, `note`,\n"
-    "    `key`, `category`, `tag`) are also accepted but `text`+`tags`\n"
-    "    is the canonical shape — prefer it. Skip ephemeral chat-\n"
-    "    transcript details.\n"
-    "  - `memory_search(query, k?)` — explicit recall when the auto-\n"
-    "    injected memory block at prompt-time didn't surface what you\n"
-    '    need (e.g. "what did I tell you about X last week?",\n'
-    '    "remember my deadline?").\n'
-    "  - When the user explicitly says \"this is important, don't\n"
-    "    forget\" or you've verified a fact across multiple turns, use\n"
-    "    `memory.promote` (RPC) to lift the inbox chunk into\n"
-    "    `short_term` with a confidence score + tags. Operators see\n"
-    "    promoted facts highlighted in the Memory dashboard tab.\n"
-    "\n"
-    "Skill discovery + execution. The system prompt's\n"
-    "`<available_skills>` block lists installed skills with their\n"
-    "SKILL.md `<usage>` excerpt (first ~1500 chars: scripts + sample\n"
-    "args). To run an installed skill's documented script, call the\n"
-    "`skill_run` tool — e.g. for stock-analysis on Samsung Electronics:\n"
-    '  `skill_run(skill="stock-analysis", script="analyze_stock.py",\n'
-    '            args=["005930.KS"])`\n'
-    "(Korean tickers use the `<6-digit>.KS` (KOSPI) / `.KQ` (KOSDAQ)\n"
-    "Yahoo suffix.) Pick the right script + args from the `<usage>`\n"
-    "excerpt; do NOT emit a tool_use block named after the skill —\n"
-    "the registry has no such function and the call will fail.\n"
-    "\n"
-    "ANTI-REFUSAL RULE — strict: when an installed skill in\n"
-    "`<available_skills>` covers the user's domain (stocks/주식/주가\n"
-    "→ stock-analysis, weather → weather tool, code search → repo\n"
-    "skills, etc.), DO NOT reply 'I can't access real-time data /\n"
-    "current prices / live information / external services'. Those\n"
-    "refusals are wrong when the relevant skill is installed — the\n"
-    "skill IS your access. Call `skill_run` with the appropriate\n"
-    "script; if you don't know the right script, call it with your\n"
-    "best guess and read the error message (the tool lists every\n"
-    "available script when you guess wrong). The auto-injected\n"
-    "[INSTALLED SKILL DETECTED] prelude on the user message names\n"
-    "the matching skill + a sample call shape — follow it.\n"
-    "\n"
-    "If the user's request implies a domain no installed skill covers,\n"
-    'call `skill_resolver(query="...")` — it searches ClawHub,\n'
-    "installs the best match, then call `skill_run` afterwards.\n"
-    "Don't refuse before trying skill_resolver.\n"
-    "\n"
-    "Weather playbook. For weather / temperature / forecast questions\n"
-    '("날씨", "weather", "temperature", "forecast", "비 와?")\n'
-    "ALWAYS prefer the dedicated `weather` tool — do NOT use web_search\n"
-    "for weather. Required arg: `city` (string) OR `lat`+`lon` (numbers).\n"
-    '  - If the user named a city: `weather(city="<city>")`.\n'
-    "  - If they didn't: check the recalled-memories block first for a\n"
-    '    location fact (e.g. "User lives in Suwon") and use that. Only\n'
-    "    if neither the question nor recall reveals a location, ask the\n"
-    '    user once: "어느 도시 날씨를 알려드릴까요?".\n'
-    "  - The tool returns one short line (e.g. `Suwon: 🌦 +18°C`); read\n"
-    "    it back to the user. wttr.in is the upstream provider — it\n"
-    "    rarely returns errors so don't fall back to web_search after\n"
-    "    one weather-tool call.\n"
-    "\n"
-    "Web research playbook (mirrors openclaw's chaining guide). When the\n"
-    "user asks a factual / current-events / market-research question and\n"
-    "you need fresh information:\n"
-    "  1. Try `web_search` first. The result is a ranked URL list.\n"
-    "  2. If it returns 0 hits OR the snippets aren't enough to answer,\n"
-    "     do NOT give up — pick the best matching URL (or a known\n"
-    "     authoritative source) and call `web_fetch` to load the actual\n"
-    "     page body. Repeat with another URL if the first is 404 / off-\n"
-    "     topic. A 404 from web_fetch is data, not a stopping signal.\n"
-    "  3. Try alternate query phrasings (English / Korean / domain\n"
-    "     site: filters) before reporting that nothing was found.\n"
-    "  4. When you do answer from web data, cite the URLs you fetched.\n"
-    "  5. NEVER use web_search for queries that have a dedicated tool\n"
-    "     (weather → `weather`, github → `github`, current time →\n"
-    "     `get_time`). Reach for the specialised tool first.\n"
-    "\n"
-    "Wiki playbook. The wiki vault stores *durable* knowledge that\n"
-    "survives across many sessions (decisions, entities, concepts,\n"
-    "sources). Two rules:\n"
-    "  - When the user asks 'what do you know about X?' or 'remember\n"
-    "    our decision on Y', call `wiki_search` first. It returns pages\n"
-    "    from the vault ranked by keyword overlap.\n"
-    "  - If nothing matches AND the user is sharing a new authoritative\n"
-    "    claim or decision, propose `wiki_save` — explain the page you\n"
-    "    would create (kind, title, body) before calling it.\n"
+# Backwards-compat constant for callers that imported the old monolithic
+# prompt directly. Built with the full bundled tool surface so external
+# callers get the same content as before; PiAgent itself rebuilds with
+# the actual loaded tools / model / channel via `build_system_prompt`.
+DEFAULT_SYSTEM_PROMPT = build_system_prompt(
+    model_id="qwen3.5:9b",
+    tool_names=(
+        "memory_save",
+        "skill_run",
+        "weather",
+        "web_search",
+        "wiki_search",
+    ),
 )
 
 
@@ -240,7 +140,8 @@ class PiAgent:
         sessions: SessionManager | None = None,
         tools: ToolRegistry | None = None,
         paths: OxenclawPaths | None = None,
-        system_prompt: str = DEFAULT_SYSTEM_PROMPT,
+        system_prompt: str | None = None,
+        channel: str | None = None,
         runtime: RuntimeConfig | None = None,
         memory: MemoryRetriever | None = None,
         memory_top_k: int = 5,
@@ -263,7 +164,22 @@ class PiAgent:
         self._sessions = sessions or InMemorySessionManager()
         self._tools = tools or ToolRegistry()
         self._paths = paths or default_paths()
-        self._system_prompt = system_prompt
+        # Build the base system prompt from the section catalog when
+        # the caller didn't pass an explicit override. We pass the
+        # actual loaded tool names + model id + channel so playbooks /
+        # model overlays / platform hints all match the deployment.
+        # An explicit `system_prompt=` arg wins outright (test harness
+        # path, custom personas).
+        self._channel = channel
+        if system_prompt is None:
+            tool_names = tuple(self._tools._tools.keys())
+            self._system_prompt = build_system_prompt(
+                model_id=model_id,
+                tool_names=tool_names,
+                channel=channel,
+            )
+        else:
+            self._system_prompt = system_prompt
         self._memory = memory
         self._memory_top_k = memory_top_k
         self._memory_weak_threshold = memory_weak_threshold

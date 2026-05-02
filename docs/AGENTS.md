@@ -50,6 +50,37 @@ bump.
 
 ---
 
+## System-prompt composition
+
+When `system_prompt` is omitted (or set to `null`) the agent assembles
+one from a section catalog at `oxenclaw/agents/prompts/builder.py`.
+Sections are conditionally injected based on what the agent actually
+has loaded:
+
+- **Always on**: identity line, `tool_use` shape rule, time / freshness reminder.
+- **Per-tool playbooks**: `memory_save` adds the memory rules; `skill_run`
+  adds skill discovery + the compressed anti-refusal; `weather`,
+  `web_search`, `wiki_search` each add their playbook. Sections for
+  tools you didn't load are skipped — saves tokens on trimmed
+  deployments.
+- **Model-family overlay**: a stronger "act, don't describe" tool-use
+  enforcement is appended for non-thinking small local models
+  (`qwen3.5`, `qwen2.5`, `llama3`, `gemma3/4`, `mistral`, `phi3/4`,
+  `deepseek-coder`). Frontier models (`claude*`, `gpt-5`, `gpt-4o`,
+  `gemini-2.x`) and thinking variants (`*-thinking`, `qwq`,
+  `deepseek-r1`) skip it — they handle it natively and the extra
+  ~150 tokens are wasted.
+- **Channel hint**: when the gateway tags a delivery with a known
+  channel id (`slack`, `discord`, `telegram`, `whatsapp`, `signal`,
+  `email`), a markdown / media-delivery hint is appended so the
+  model doesn't paste `**bold**` into a WhatsApp thread.
+
+Section order is stable across calls so an upstream prompt cache
+matches the prefix on every turn. Pass an explicit
+`system_prompt: "..."` to opt out and supply your own.
+
+---
+
 ## Minimum agent block
 
 ```yaml

@@ -277,7 +277,13 @@ def build_system_prompt(
     if "wiki_search" in tools:
         parts.append(WIKI_PLAYBOOK)
 
-    if needs_tool_use_enforcement(model_id):
+    # Tool-use enforcement only when (a) the model needs steering AND
+    # (b) at least one tool is actually registered. With zero tools the
+    # "you MUST emit a tool_use block" overlay drives the model to
+    # invent fake tools and the step verifier gets stuck rejecting
+    # every turn — measured 30+ extra turns and 2× wall time on the
+    # 12-task bench (vowel_count / extract_emails / even_squares).
+    if tools and needs_tool_use_enforcement(model_id):
         parts.append(TOOL_USE_ENFORCEMENT)
 
     if channel and channel in PLATFORM_HINTS:

@@ -110,13 +110,31 @@ def test_per_tool_playbooks_each_gated_independently() -> None:
 
 
 def test_enforcement_appended_for_small_local_model() -> None:
-    p = build_system_prompt(model_id="qwen3.5:9b", tool_names=())
+    # Pass at least one tool — enforcement is gated on tools present
+    # to avoid the empty-tools verifier-loop pathology measured on
+    # the 12-task qwen3.5:9b bench.
+    p = build_system_prompt(model_id="qwen3.5:9b", tool_names=("memory_save",))
     assert TOOL_USE_ENFORCEMENT in p
 
 
 def test_enforcement_skipped_for_frontier_model() -> None:
     p = build_system_prompt(model_id="claude-sonnet-4-6", tool_names=())
     assert TOOL_USE_ENFORCEMENT not in p
+
+
+def test_enforcement_skipped_when_no_tools_registered() -> None:
+    """Bench finding: with zero tools registered the 'MUST emit a
+    tool_use block' overlay drives the model to invent fake tools and
+    the verifier loops rejecting every turn. Skip the overlay when
+    there's nothing to call."""
+    p = build_system_prompt(model_id="qwen3.5:9b", tool_names=())
+    assert TOOL_USE_ENFORCEMENT not in p
+
+
+def test_enforcement_appended_when_at_least_one_tool_present() -> None:
+    """Single tool is enough to satisfy the gate."""
+    p = build_system_prompt(model_id="qwen3.5:9b", tool_names=("memory_save",))
+    assert TOOL_USE_ENFORCEMENT in p
 
 
 # ── channel hint ─────────────────────────────────────────────────────

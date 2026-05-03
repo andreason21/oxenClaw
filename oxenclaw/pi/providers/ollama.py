@@ -557,6 +557,27 @@ async def stream_ollama_native(
                         text_parts.append(delta)
                         yield TextDeltaEvent(delta=delta)
 
+                    # Tool calls may arrive in any frame, not just the
+                    # `done` one. gemma3/4 with a custom FC chat
+                    # template dumps `tool_calls` in the FIRST frame
+                    # (done=false) and leaves the done frame's
+                    # `message` empty — the original done-only path
+                    # silently dropped them. Pull tool_calls per-frame
+                    # here; the done block below only collects
+                    # finish_reason + usage.
+                    for i, tc in enumerate(msg.get("tool_calls") or []):
+                        norm = _normalize_tool_call(tc, i, trace_id)
+                        if norm is None:
+                            continue
+                        tc_id, name, args_str = norm
+                        tool_calls_out.append(
+                            {"id": tc_id, "name": name, "arguments": args_str}
+                        )
+                        yield ToolUseStartEvent(id=tc_id, name=name)
+                        if args_str:
+                            yield ToolUseInputDeltaEvent(id=tc_id, input_delta=args_str)
+                        yield ToolUseEndEvent(id=tc_id)
+
                     if event.get("done"):
                         finish_reason = event.get("done_reason") or "stop"
                         usage_out = {
@@ -565,20 +586,7 @@ async def stream_ollama_native(
                             "total_tokens": (event.get("prompt_eval_count") or 0)
                             + (event.get("eval_count") or 0),
                         }
-                        # Native may dump batched tool_calls in the done frame
-                        # even on a streaming run.
-                        for i, tc in enumerate(msg.get("tool_calls") or []):
-                            norm = _normalize_tool_call(tc, i, trace_id)
-                            if norm is None:
-                                continue
-                            tc_id, name, args_str = norm
-                            tool_calls_out.append(
-                                {"id": tc_id, "name": name, "arguments": args_str}
-                            )
-                            yield ToolUseStartEvent(id=tc_id, name=name)
-                            if args_str:
-                                yield ToolUseInputDeltaEvent(id=tc_id, input_delta=args_str)
-                            yield ToolUseEndEvent(id=tc_id)
+                        if tool_calls_out:
                             finish_reason = "tool_calls"
                         if usage_out:
                             yield UsageEvent(usage=usage_out)

@@ -149,3 +149,55 @@ Look for:
 Don't set this to the model's max "just in case." A 9B model at
 262 144 ctx costs ~36 GiB of KV cache and Ollama allocates it
 **up-front when the model loads**, even for one-line prompts.
+
+## gemma3 / gemma4 function calling (recipe)
+
+Out of the box, Ollama's `gemma4:latest` ships a passthrough chat
+template (`TEMPLATE {{ .Prompt }}`) — its built-in `RENDERER gemma4`
+does not inject the tool list into the prompt or the
+`<tool_call>...</tool_call>` markup the model expects. As a result a
+plain `gemma4` model never emits tool calls in oxenClaw, even when
+the prompt explicitly tells it to. Override with a Modelfile that
+hands tools into the user turn and tells the model how to format
+calls:
+
+```
+FROM gemma4:latest
+TEMPLATE """{{- if or .System .Tools }}<start_of_turn>user
+{{- if .System }}
+{{ .System }}
+{{- end }}
+{{- if .Tools }}
+
+You have access to the following tools. To call one, emit:
+<tool_call>{"name": "<tool_name>", "arguments": {<arg_object>}}</tool_call>
+
+After a <tool_response>...</tool_response> turn, use the result to
+answer the user.
+
+Available tools:
+{{- range .Tools }}
+{{ .Function }}
+{{- end }}
+{{- end }}<end_of_turn>
+{{ end }}
+{{- range $i, $msg := .Messages }}
+...standard gemma turn cycle...
+{{- end }}<start_of_turn>model
+"""
+PARAMETER stop <end_of_turn>
+PARAMETER stop <start_of_turn>
+```
+
+Build with `ollama create gemma4-fc -f /path/to/Modelfile`.
+Measured live: a 4-task tool-calling bench went from **0/16 tool
+calls / 3/16 correct answers** on plain `gemma4` to **16/16 / 14/16**
+on `gemma4-fc`.
+
+The same bench also surfaced a separate streaming-parser bug —
+gemma3/4 dump `tool_calls` in the FIRST streamed frame
+(`done:false`) rather than in the final `done` frame. Fixed in
+`oxenclaw/pi/providers/ollama.py` by hoisting the `tool_calls`
+extraction out of the done branch so it runs per-frame. Without
+that fix the Modelfile change alone is invisible to oxenClaw —
+Ollama returns the tool calls but the parser drops them.

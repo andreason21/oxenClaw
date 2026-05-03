@@ -281,3 +281,51 @@ async def test_openai_shape_http_error_emits_retryable_event(patch_aiohttp) -> N
 
     errors = [e for e in events if isinstance(e, ErrorEvent)]
     assert errors and errors[0].retryable is True
+
+
+async def test_ollama_native_stream_pulls_tool_calls_from_first_frame(patch_aiohttp) -> None:
+    """Regression: gemma3/4 (with a custom function-calling chat template)
+    dumps `tool_calls` in the FIRST streamed frame (`done:false`) and
+    leaves the `done` frame's `message` empty. The pre-fix parser only
+    looked for tool_calls inside the done block and silently dropped
+    them — every tool round on gemma4 read as 'no tool used'. Guard
+    that the parser now extracts tool_calls per-frame regardless of
+    the done flag."""
+    from oxenclaw.pi.providers import ollama as ollama_mod
+    from oxenclaw.pi.streaming import (
+        StopEvent as _StopEvent,
+        ToolUseEndEvent as _ToolEnd,
+        ToolUseInputDeltaEvent as _ToolDelta,
+        ToolUseStartEvent as _ToolStart,
+    )
+
+    # Two NDJSON frames: first carries tool_calls + done=false,
+    # second is the empty done frame (mirrors gemma4-fc on Ollama).
+    frames = [
+        (
+            '{"model":"gemma4-fc","message":{"role":"assistant","content":"",'
+            '"tool_calls":[{"id":"call_x","function":'
+            '{"index":0,"name":"weather_lookup","arguments":{"city":"Seoul"}}}]},'
+            '"done":false}'
+        ),
+        (
+            '{"model":"gemma4-fc","message":{"role":"assistant","content":""},'
+            '"done":true,"done_reason":"stop","prompt_eval_count":40,"eval_count":15}'
+        ),
+    ]
+    patch_aiohttp(ollama_mod, frames)
+
+    model = Model(id="gemma4-fc", provider="ollama")
+    api = Api(base_url="http://127.0.0.1:11434/v1")
+    ctx = Context(model=model, api=api, messages=[text_message("weather in Seoul?")])
+    events = []
+    async for ev in ollama_mod.stream_ollama_native(ctx, SimpleStreamOptions()):
+        events.append(ev)
+
+    starts = [e for e in events if isinstance(e, _ToolStart)]
+    assert starts and starts[0].name == "weather_lookup"
+    deltas = [e for e in events if isinstance(e, _ToolDelta)]
+    assert deltas and "Seoul" in deltas[0].input_delta
+    assert any(isinstance(e, _ToolEnd) for e in events)
+    stops = [e for e in events if isinstance(e, _StopEvent)]
+    assert stops and stops[-1].reason == "tool_calls"

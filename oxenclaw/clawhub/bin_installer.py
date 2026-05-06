@@ -274,3 +274,27 @@ def find_installed_skill(
         if s.slug == slug:
             return s
     return None
+
+
+def format_plan_preview(plan: list[PlannedStep]) -> str:
+    """Multi-line human-readable preview of an install plan.
+
+    Used by `oxenclaw skills install --with-bins` to show the user
+    what's about to happen before they confirm. Same shape as the
+    runtime output of `execute()` so the preview and the actual run
+    look continuous to the operator."""
+    if not plan:
+        return ""
+    lines: list[str] = []
+    for step in plan:
+        if step.decision == "skip":
+            lines.append(
+                f"  [{step.index}/{step.total}] SKIP: {step.label} "
+                f"(kind={step.effective_kind}; {step.reason})"
+            )
+        else:
+            lines.append(
+                f"  [{step.index}/{step.total}] {step.label} "
+                f"(kind={step.effective_kind})\n      $ {step.reason}"
+            )
+    return "\n".join(lines)

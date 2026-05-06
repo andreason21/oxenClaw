@@ -330,3 +330,198 @@ def test_cli_install_bins_propagates_failure_exit_code(isolated_home, monkeypatc
     assert "✗" in result.output or "failed" in result.output
 
 
+# ---------- chained `install` → bin install flow ----------
+
+
+def _stub_skill_install_chain(monkeypatch, manifest_yaml: str, target_dir: Path):
+    """Stub the network-side install so `oxenclaw skills install <slug>`
+    doesn't hit ClawHub. We replace `SkillInstaller.install` with an
+    AsyncMock returning a fake `InstallResult`, and turn the
+    `MultiRegistryClient` constructor + aclose into no-ops.
+
+    Tests using this fixture only exercise the post-install branching
+    (preview / confirm / bin-execute); the network and on-disk install
+    are covered by `test_clawhub_installer.py`."""
+    from unittest.mock import AsyncMock
+
+    from oxenclaw.clawhub.frontmatter import parse_skill_text
+    from oxenclaw.clawhub.installer import InstallResult
+
+    manifest, _body = parse_skill_text(manifest_yaml)
+    fake = InstallResult(
+        slug="yahoo-finance-cli",
+        version="1.0.0",
+        target_dir=target_dir,
+        integrity="sha256-stub",
+        manifest=manifest,
+        findings=[],
+        registry_name="public",
+        registry_url="https://example.invalid",
+        trust="official",
+    )
+
+    async def _fake_install(self, slug, **kw):  # type: ignore[no-untyped-def]
+        return fake
+
+    monkeypatch.setattr(
+        "oxenclaw.cli.skills_cmd.SkillInstaller.install", _fake_install
+    )
+
+    class _StubMulti:
+        def __init__(self, *_a, **_kw) -> None:
+            return None
+
+        async def aclose(self) -> None:
+            return None
+
+    monkeypatch.setattr("oxenclaw.cli.skills_cmd.MultiRegistryClient", _StubMulti)
+    monkeypatch.setattr(
+        "oxenclaw.cli.skills_cmd._multi_from_config_with_overrides",
+        lambda *_a, **_kw: _StubMulti(),
+    )
+    return fake
+
+
+_YAHOO_MANIFEST = """---
+name: yahoo-finance
+description: stock prices.
+metadata:
+  openclaw:
+    requires:
+      bins: [jq, yf]
+    install:
+      - {id: jq, kind: brew, formula: jq, label: "Install jq"}
+      - {id: yf, kind: node, package: yahoo-finance2, label: "Install yf"}
+      - {id: link, kind: exec, command: "ln -sf a b", label: "Link yf"}
+---
+
+# body
+"""
+
+
+def test_cli_install_with_no_bins_flag_skips_prompt_and_shows_hint(
+    isolated_home, monkeypatch
+):
+    """`--no-bins` is the CI escape: the user doesn't want the
+    interactive bin-install prompt at all. We must surface the
+    classic 'missing: X — run install-bins' hint so the operator
+    still knows what's left."""
+    _stub_skill_install_chain(monkeypatch, _YAHOO_MANIFEST, isolated_home)
+    monkeypatch.setattr("oxenclaw.cli.skills_cmd.shutil.which", lambda _n: None)
+
+    def _no_run(argv):  # type: ignore[no-untyped-def]
+        raise AssertionError("--no-bins must not invoke the runner")
+
+    monkeypatch.setattr("oxenclaw.clawhub.bin_installer._default_runner", _no_run)
+    result = runner.invoke(
+        app, ["skills", "install", "yahoo-finance-cli", "--no-bins"]
+    )
+    assert result.exit_code == 0, result.output
+    assert "install-bins yahoo-finance-cli" in result.output
+    assert "missing: jq, yf" in result.output
+
+
+def test_cli_install_yes_flag_auto_runs_bin_plan(isolated_home, monkeypatch):
+    """`--yes` chains install → preview → batch execute without
+    asking. This is the "one shot" path the user described:
+    'show what's needed, install everything in one go.'"""
+    _stub_skill_install_chain(monkeypatch, _YAHOO_MANIFEST, isolated_home)
+    monkeypatch.setattr("oxenclaw.cli.skills_cmd.shutil.which", lambda _n: None)
+    monkeypatch.setattr(
+        "oxenclaw.clawhub.bin_installer.platform.system", lambda: "Linux"
+    )
+    monkeypatch.setattr(
+        "oxenclaw.clawhub.bin_installer._on_path", lambda _n: False
+    )
+    calls: list[tuple[str, ...]] = []
+
+    def _runner(argv):  # type: ignore[no-untyped-def]
+        calls.append(tuple(argv))
+        return subprocess.CompletedProcess(
+            args=list(argv), returncode=0, stdout="", stderr=""
+        )
+
+    monkeypatch.setattr("oxenclaw.clawhub.bin_installer._default_runner", _runner)
+    result = runner.invoke(
+        app, ["skills", "install", "yahoo-finance-cli", "--yes"]
+    )
+    assert result.exit_code == 0, result.output
+    # Plan was previewed before execution.
+    assert "missing binaries: jq, yf" in result.output
+    assert "the skill ships these install steps" in result.output
+    # Both runnable steps fired; exec step is skipped per policy.
+    assert calls == [
+        ("apt-get", "install", "-y", "jq"),
+        ("npm", "install", "-g", "yahoo-finance2"),
+    ]
+    assert "summary: 2 ok, 0 failed, 1 skipped" in result.output
+
+
+def test_cli_install_decline_prompt_falls_through_to_manual_hint(
+    isolated_home, monkeypatch
+):
+    """If the user declines the umbrella prompt, the command must NOT
+    run anything but must still leave behind the manual recipe so the
+    operator can pick up later via `install-bins`."""
+    _stub_skill_install_chain(monkeypatch, _YAHOO_MANIFEST, isolated_home)
+    monkeypatch.setattr("oxenclaw.cli.skills_cmd.shutil.which", lambda _n: None)
+
+    def _no_run(argv):  # type: ignore[no-untyped-def]
+        raise AssertionError("decline must not invoke the runner")
+
+    monkeypatch.setattr("oxenclaw.clawhub.bin_installer._default_runner", _no_run)
+    result = runner.invoke(
+        app, ["skills", "install", "yahoo-finance-cli"], input="n\n"
+    )
+    assert result.exit_code == 0, result.output
+    assert "missing binaries: jq, yf" in result.output
+    assert "install-bins yahoo-finance-cli" in result.output
+
+
+def test_cli_install_no_missing_bins_no_prompt(isolated_home, monkeypatch):
+    """Bins already on PATH → no prompt, no preview, plain install."""
+    _stub_skill_install_chain(monkeypatch, _YAHOO_MANIFEST, isolated_home)
+    # Pretend everything is on PATH.
+    monkeypatch.setattr(
+        "oxenclaw.cli.skills_cmd.shutil.which", lambda _n: "/usr/bin/x"
+    )
+
+    def _no_run(argv):  # type: ignore[no-untyped-def]
+        raise AssertionError("no missing bins → must not invoke the runner")
+
+    monkeypatch.setattr("oxenclaw.clawhub.bin_installer._default_runner", _no_run)
+    result = runner.invoke(app, ["skills", "install", "yahoo-finance-cli"])
+    assert result.exit_code == 0, result.output
+    assert "missing binaries" not in result.output
+    assert "the skill ships these install steps" not in result.output
+
+
+_NO_INSTALL_SPECS_MANIFEST = """---
+name: yahoo-finance
+description: stock prices.
+metadata:
+  openclaw:
+    requires:
+      bins: [jq, yf]
+---
+
+# body
+"""
+
+
+def test_cli_install_with_missing_bins_but_no_install_specs(
+    isolated_home, monkeypatch
+):
+    """Manifest declares required bins but ships no install plan: we
+    can't auto-install, but we still surface the recipe pointer + the
+    explicit list of missing bins so the operator knows what to do."""
+    _stub_skill_install_chain(
+        monkeypatch, _NO_INSTALL_SPECS_MANIFEST, isolated_home
+    )
+    monkeypatch.setattr("oxenclaw.cli.skills_cmd.shutil.which", lambda _n: None)
+    result = runner.invoke(app, ["skills", "install", "yahoo-finance-cli"])
+    assert result.exit_code == 0, result.output
+    assert "missing: jq, yf" in result.output
+    assert "no auto-installable specs" in result.output
+
+

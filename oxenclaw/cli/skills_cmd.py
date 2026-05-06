@@ -26,8 +26,10 @@ from oxenclaw.clawhub import (
 )
 from oxenclaw.clawhub.bin_installer import (
     PlannedStep,
+    StepResult,
     execute as execute_bin_plan,
     find_installed_skill,
+    format_plan_preview,
     plan_install,
 )
 from oxenclaw.clawhub.registries import ClawHubRegistries, RegistryConfig
@@ -60,6 +62,33 @@ def _multi_from_config_with_overrides(
             ],
         )
     return MultiRegistryClient(registries)
+
+
+def _print_plan_summary(results: list[StepResult]) -> bool:
+    """Emit the post-execute summary line + per-failure details.
+    Returns True if every executed step exited 0 (or no steps ran)."""
+    ran_ok = sum(1 for r in results if r.executed and r.exit_code == 0)
+    failed = sum(1 for r in results if r.executed and (r.exit_code or 0) != 0)
+    skipped = sum(1 for r in results if not r.executed)
+    typer.echo(f"\nsummary: {ran_ok} ok, {failed} failed, {skipped} skipped")
+    for r in results:
+        if r.executed and (r.exit_code or 0) != 0:
+            tail = (r.stderr_tail or "").replace("\n", " | ")
+            typer.echo(
+                f"  ✗ {r.step.label}: exit={r.exit_code} {tail}", err=True
+            )
+    return failed == 0
+
+
+class _AutoApprovePrompter:
+    """Prompter for the post-install batch flow: the user already
+    confirmed once at the umbrella level, so each step auto-runs."""
+
+    def confirm(self, step: PlannedStep) -> bool:
+        return True
+
+    def notify(self, message: str) -> None:
+        typer.echo("  " + message)
 
 
 @app.command("registries")
@@ -123,8 +152,42 @@ def install(
     allow_critical: bool = typer.Option(
         False, "--allow-critical", help="Override skill-scanner refusal."
     ),
+    yes: bool = typer.Option(
+        False,
+        "--yes",
+        "-y",
+        help=(
+            "Auto-confirm the post-install bin-install prompt. Skill "
+            "files are always installed unconditionally; this flag only "
+            "affects the bin-dependency follow-up."
+        ),
+    ),
+    no_bins: bool = typer.Option(
+        False,
+        "--no-bins",
+        help=(
+            "Skip the post-install bin-install prompt entirely. Useful "
+            "for CI / scripted installs where the operator will handle "
+            "binaries separately."
+        ),
+    ),
 ) -> None:
-    """Install a skill from ClawHub or a verified mirror."""
+    """Install a skill from ClawHub or a verified mirror.
+
+    After the skill files are installed, if the manifest declares
+    binary dependencies that are not yet on PATH AND the manifest
+    ships an install plan, the command previews the plan and asks
+    once whether to install everything in a single batch. This
+    consolidates the previous two-step `install` + `install-bins`
+    into one "install + (preview) → confirm → install" flow so the
+    operator never has to remember to chain the second command.
+
+    Refused install kinds (`exec`, `download`) are surfaced in the
+    preview with their original spec so they can be run by hand.
+    apt steps that need root will fail with permission denied — the
+    summary makes that visible per-step, and the operator can re-run
+    the bin install under sudo via `oxenclaw skills install-bins`.
+    """
 
     async def _run() -> None:
         multi = _multi_from_config_with_overrides(base_url, registry)
@@ -145,15 +208,10 @@ def install(
             typer.echo(f"  integrity: {res.integrity}")
             req = res.manifest.openclaw.requires
             req_bins = list(req.bins) + list(req.any_bins)
+            missing: list[str] = []
             if req_bins:
                 typer.echo(f"  requires on PATH: {', '.join(req_bins)}")
                 missing = [b for b in req_bins if shutil.which(b) is None]
-                if missing:
-                    typer.echo(
-                        f"  missing: {', '.join(missing)}  →  "
-                        f"`oxenclaw skills install-bins {res.slug}` "
-                        "to install with explicit per-step confirm"
-                    )
             if res.findings:
                 typer.echo(f"  scanner findings: {len(res.findings)}")
         except (ClawHubError, InstallError) as exc:
@@ -161,6 +219,52 @@ def install(
             raise typer.Exit(code=1) from exc
         finally:
             await multi.aclose()
+
+        if no_bins or not missing:
+            if missing:
+                # User opted out of auto-flow; surface manual recipe.
+                typer.echo(
+                    f"  missing: {', '.join(missing)}  →  "
+                    f"`oxenclaw skills install-bins {res.slug}` "
+                    "to install with explicit per-step confirm"
+                )
+            return
+
+        plan = plan_install(res.manifest)
+        runnable = [s for s in plan if s.decision == "run"]
+        if not runnable:
+            # Manifest declares missing bins but ships no auto-runnable
+            # spec (or every spec is exec/download/refused). Print the
+            # original guidance so the user knows where to look.
+            typer.echo(
+                f"  missing: {', '.join(missing)}  →  no auto-installable "
+                "specs in the manifest; install manually using the install "
+                "block in SKILL.md"
+            )
+            if plan:
+                typer.echo("  install steps documented by the skill:")
+                typer.echo(format_plan_preview(plan))
+            return
+
+        typer.echo("")
+        typer.echo(f"missing binaries: {', '.join(missing)}")
+        typer.echo("the skill ships these install steps:")
+        typer.echo(format_plan_preview(plan))
+        typer.echo("")
+        if not yes:
+            proceed = typer.confirm(
+                "install required binaries now?", default=True
+            )
+            if not proceed:
+                typer.echo(
+                    f"skipped. Run `oxenclaw skills install-bins {res.slug}` "
+                    "later for a step-by-step install."
+                )
+                return
+        results = execute_bin_plan(plan, _AutoApprovePrompter())
+        all_ok = _print_plan_summary(results)
+        if not all_ok:
+            raise typer.Exit(code=1)
 
     asyncio.run(_run())
 
@@ -222,18 +326,7 @@ def install_bins(
             typer.echo("  " + message)
 
     results = execute_bin_plan(plan, _CliPrompter(), dry_run=dry_run)
-
-    ran_ok = sum(1 for r in results if r.executed and r.exit_code == 0)
-    failed = sum(1 for r in results if r.executed and (r.exit_code or 0) != 0)
-    skipped = sum(1 for r in results if not r.executed)
-    typer.echo(f"\nsummary: {ran_ok} ok, {failed} failed, {skipped} skipped")
-    if failed:
-        for r in results:
-            if r.executed and (r.exit_code or 0) != 0:
-                tail = (r.stderr_tail or "").replace("\n", " | ")
-                typer.echo(
-                    f"  ✗ {r.step.label}: exit={r.exit_code} {tail}", err=True
-                )
+    if not _print_plan_summary(results):
         raise typer.Exit(code=1)
 
 

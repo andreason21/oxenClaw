@@ -88,3 +88,92 @@ def gated_tool(
         format_prompt=format_prompt or default_format_prompt,
         timeout=timeout,
     )
+
+
+class _ConditionallyGatedTool:
+    """Like `_GatedTool`, but with a per-call escape hatch.
+
+    Some tool calls are safe enough to skip the approval queue —
+    `yf quote AAPL` reading public market data, `ls`, `cat README`,
+    etc. Routing those through the queue every time turns the queue
+    into spam and trains operators to rubber-stamp it. This wrapper
+    consults `auto_approve(args)` first; if it returns True the call
+    runs raw. Otherwise the regular ApprovalManager flow kicks in.
+
+    The `auto_approve` predicate is intentionally a callable, not a
+    config blob, so the policy can be as rich as the tool needs
+    (shell uses a whitelist + metachar refusal; a future tool could
+    use rate limits or a per-arg validator)."""
+
+    is_gated: bool = True
+
+    def __init__(
+        self,
+        wrapped: Tool,
+        *,
+        manager: ApprovalManager,
+        auto_approve: Callable[[dict[str, Any]], bool],
+        format_prompt: Callable[[str, dict[str, Any]], str] = default_format_prompt,
+        timeout: float | None = None,
+    ) -> None:
+        self._wrapped = wrapped
+        self._manager = manager
+        self._auto_approve = auto_approve
+        self._format = format_prompt
+        self._timeout = timeout
+
+    @property
+    def name(self) -> str:
+        return self._wrapped.name
+
+    @property
+    def wrapped(self) -> Tool:
+        return self._wrapped
+
+    @property
+    def description(self) -> str:
+        return (
+            f"{self._wrapped.description} (read-only invocations "
+            "auto-approve; mutating ones require human approval)"
+        )
+
+    @property
+    def input_schema(self) -> dict[str, Any]:
+        return self._wrapped.input_schema
+
+    async def execute(self, args: dict[str, Any]) -> str:
+        if self._auto_approve(args):
+            return await self._wrapped.execute(args)
+        result = await self._manager.request(
+            self._format(self._wrapped.name, args),
+            context={"tool": self._wrapped.name, "args": args},
+            timeout=self._timeout,
+        )
+        if result.status is ApprovalStatus.APPROVED:
+            return await self._wrapped.execute(args)
+        verb = {
+            ApprovalStatus.DENIED: "denied by approver",
+            ApprovalStatus.TIMED_OUT: "no approver responded in time",
+            ApprovalStatus.CANCELLED: "approval cancelled",
+        }.get(result.status, f"not approved ({result.status.value})")
+        return f"tool call {verb}" + (f": {result.reason}" if result.reason else "")
+
+
+def gated_tool_with_whitelist(
+    tool: Tool,
+    *,
+    manager: ApprovalManager,
+    auto_approve: Callable[[dict[str, Any]], bool],
+    format_prompt: Callable[[str, dict[str, Any]], str] | None = None,
+    timeout: float | None = None,
+) -> Tool:
+    """Wrap `tool` so calls run raw when `auto_approve(args)` returns
+    True and otherwise go through `manager`. See `_ConditionallyGatedTool`
+    for the rationale."""
+    return _ConditionallyGatedTool(
+        tool,
+        manager=manager,
+        auto_approve=auto_approve,
+        format_prompt=format_prompt or default_format_prompt,
+        timeout=timeout,
+    )

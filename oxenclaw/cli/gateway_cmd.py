@@ -554,6 +554,69 @@ async def _run_gateway(
             turn_dream_cfg.model_id or "(main)",
         )
 
+    # Approvals manager — moved up from its old position (post-agent
+    # build) so the assistant-shell wiring below can wrap the shell
+    # tool with this manager *before* the agent is constructed. Old
+    # call sites further down still see the same `approvals` binding.
+    approvals = ApprovalManager(state_path=paths.home / "approvals.json")
+
+    # Optional opt-in: register the `shell` tool on the assistant agent
+    # behind a per-call gate. Off by default — shell access is a
+    # meaningful privilege escalation. Turn on with
+    # `OXENCLAW_ASSISTANT_SHELL=1`.
+    #
+    # When on, the gate is two-layered:
+    #   1. `whitelist.is_auto_approvable` — read-only commands (yf,
+    #      ls, cat, jq, plus skill-declared `requires.bins` and any
+    #      `OXENCLAW_SHELL_WHITELIST` extras) bypass the approval queue
+    #      and execute directly. Shell metachars (;, &&, ||, >, $(, …)
+    #      always disqualify; pipes are allowed only when every
+    #      segment's leading binary is whitelisted (`yf … | jq …`).
+    #   2. Anything not auto-approved goes through `approvals` like
+    #      any other gated mutating tool.
+    #
+    # The shell tool's own hardline/dangerous classifier still runs
+    # after this layer, so even auto-approved commands hit the
+    # tier-three refusal for genuinely destructive patterns.
+    from oxenclaw.approvals.whitelist import (
+        assistant_shell_enabled,
+        build_shell_whitelist,
+        is_auto_approvable,
+    )
+
+    if assistant_shell_enabled():
+        from oxenclaw.approvals.tool_wrap import gated_tool_with_whitelist
+        from oxenclaw.tools_pkg.fs_tools import shell_run_tool
+
+        skill_declared_bins: set[str] = set()
+        try:
+            from oxenclaw.clawhub.loader import load_installed_skills as _load_skills
+
+            for installed in _load_skills(paths):
+                req = installed.manifest.openclaw.requires
+                skill_declared_bins.update(b for b in req.bins if isinstance(b, str))
+                skill_declared_bins.update(
+                    b for b in req.any_bins if isinstance(b, str)
+                )
+        except Exception:
+            logger.exception("shell-whitelist: failed to read skill-declared bins")
+        whitelist = build_shell_whitelist(skill_bins=skill_declared_bins)
+        tool_registry.register(
+            gated_tool_with_whitelist(
+                shell_run_tool(),
+                manager=approvals,
+                auto_approve=lambda args: is_auto_approvable(
+                    str(args.get("command", "")), whitelist
+                ),
+            )
+        )
+        logger.info(
+            "assistant shell enabled: whitelist=%d entries "
+            "(builtin + skill bins + OXENCLAW_SHELL_WHITELIST); "
+            "non-whitelisted commands go to the approval queue",
+            len(whitelist),
+        )
+
     agents = AgentRegistry()
     agents.register(
         build_agent(
@@ -598,7 +661,6 @@ async def _run_gateway(
             cron_defaults=cron_defaults,
         )
     )
-    approvals = ApprovalManager(state_path=paths.home / "approvals.json")
 
     # ClawHub registries pulled from config.yaml `clawhub` section. Operators
     # who want to lock down to a private mirror declare it there.

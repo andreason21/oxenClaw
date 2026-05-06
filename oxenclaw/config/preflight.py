@@ -303,6 +303,13 @@ def check_chat_endpoint(
 
     effective_base_url = (base_url or _INLINE_DEFAULT_BASE_URL[canonical]).rstrip("/")
     effective_model = model or PROVIDER_DEFAULT_MODELS.get(canonical)
+    # `managed://` is a sentinel for providers whose lifecycle oxenClaw
+    # owns (currently `llamacpp-direct`): the real URL is an ephemeral
+    # port chosen at spawn time, not known at boot. Probing it here
+    # would just emit a noisy "unknown url type: managed" warning every
+    # startup. Readiness will surface at the first chat call.
+    if effective_base_url.startswith("managed://"):
+        return
     url = f"{effective_base_url}/models"
     req = urllib.request.Request(url, method="GET")
     if api_key:

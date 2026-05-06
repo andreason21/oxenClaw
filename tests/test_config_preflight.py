@@ -94,3 +94,23 @@ def test_preflight_finding_format_is_human_readable():
 
     f = PreflightFinding(severity="error", source="config.yaml", message="missing 'channels'")
     assert f.format() == "[error] config.yaml: missing 'channels'"
+
+
+def test_check_chat_endpoint_skips_managed_scheme(monkeypatch):
+    """`managed://` is a sentinel — never probe it with urllib."""
+    import urllib.request
+
+    from oxenclaw.config.preflight import PreflightReport, check_chat_endpoint
+
+    def _boom(*_a, **_kw):  # pragma: no cover — must not be called
+        raise AssertionError("urlopen must not be called for managed:// URL")
+
+    monkeypatch.setattr(urllib.request, "urlopen", _boom)
+    report = PreflightReport()
+    check_chat_endpoint(
+        report,
+        provider="llamacpp-direct",
+        model="anything",
+        base_url=None,
+    )
+    assert report.findings == []

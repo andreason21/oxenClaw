@@ -897,6 +897,14 @@ pre.code-block {
 .skill-card .meta { font-size: 11px; color: var(--fg-3); }
 .skill-card .actions { display: flex; gap: 6px; margin-top: var(--sp-2); }
 .skill-card .req { display: inline-block; margin-right: 4px; }
+.skill-card .skill-options {
+  display: flex; align-items: center; gap: 6px;
+  margin-top: var(--sp-2);
+  font-size: 12px; color: var(--fg-2);
+  cursor: pointer; user-select: none;
+}
+.skill-card .skill-options input[type=checkbox] { margin: 0; }
+.skill-card .skill-options__label { line-height: 1.2; }
 .search-bar { display: flex; gap: 8px; margin-bottom: var(--sp-4); }
 .search-bar input { flex: 1; }
 .skill-detail { margin-top: var(--sp-3); }

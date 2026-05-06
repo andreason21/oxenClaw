@@ -2718,6 +2718,32 @@ const SkillsView = {
       if (r.summary) card.append(el("div", { class: "summary" }, r.summary));
       if (r.updatedAt) card.append(el("div", { class: "meta" }, `updated ${fmtTime(r.updatedAt / 1000)}`));
 
+      // "Auto-install related tools" — opt-in toggle next to Install.
+      // Many ClawHub skills are knowledge-style (yahoo-finance-cli calls
+      // `yf`, eightctl calls `eightctl`, etc.) and need extra binaries
+      // declared in `metadata.openclaw.install` to actually run. With
+      // this checked, the install RPC runs the bin plan in batch on
+      // the gateway side; without it, only skill files install. The
+      // gateway-side execution is itself gated on the operator's
+      // `OXENCLAW_GATEWAY_BIN_AUTO_INSTALL` env flag — when that's
+      // off, the install response carries an actionable `bin_install
+      // .reason` we surface to the user as a warn toast.
+      const withBinsKey = "samp.skills.with_bins";
+      const withBinsInitial = localStorage.getItem(withBinsKey) === "1";
+      const withBinsBox = el("input", {
+        type: "checkbox",
+        class: "skill-with-bins",
+        checked: withBinsInitial,
+      });
+      withBinsBox.addEventListener("change", () => {
+        try { localStorage.setItem(withBinsKey, withBinsBox.checked ? "1" : "0"); } catch {}
+      });
+      const optionsRow = el("label", { class: "skill-options" },
+        withBinsBox,
+        el("span", { class: "skill-options__label" }, "관련 툴 자동 설치"),
+      );
+      card.append(optionsRow);
+
       const installed = installedSlugs.has(slug);
       const actions = el("div", { class: "actions" });
       actions.append(
@@ -2725,11 +2751,33 @@ const SkillsView = {
           class: "btn btn-primary btn-sm",
           onclick: async () => {
             actions.querySelectorAll("button").forEach((b) => (b.disabled = true));
-            const res = await safeRpc("skills.install", { slug, force: installed });
+            const withBins = withBinsBox.checked;
+            const res = await safeRpc("skills.install", {
+              slug,
+              force: installed,
+              with_bins: withBins,
+            });
             if (res.ok) {
               Toast.success(`installed ${res.slug}`, `v${res.version}`);
               const reqBins = [...(res.manifest?.requires?.bins || []), ...(res.manifest?.requires?.anyBins || [])];
               if (reqBins.length) Toast.warn("requires on PATH", reqBins.join(", "));
+              // Surface the bin-install outcome when the user asked for it.
+              const bi = res.bin_install;
+              if (withBins && bi) {
+                if (!bi.executed) {
+                  // Operator hasn't opted in (or no auto-runnable specs).
+                  // Reason is an actionable string — show it verbatim so
+                  // the user can act on it (set the env var, etc.).
+                  Toast.warn("bin install skipped", bi.reason || "no reason given");
+                } else if (bi.ok) {
+                  const ran = (bi.results || []).filter((r2) => r2.executed).length;
+                  Toast.success("bin install complete", `${ran} step(s) ok`);
+                } else {
+                  const failed = (bi.results || []).filter((r2) => r2.executed && r2.exit_code !== 0);
+                  const detail = failed.map((r2) => r2.step.label || "?").join(", ") || "see logs";
+                  Toast.error("bin install: some steps failed", detail);
+                }
+              }
             }
             actions.querySelectorAll("button").forEach((b) => (b.disabled = false));
             await render();

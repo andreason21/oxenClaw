@@ -231,7 +231,7 @@ def _build_default_tools(
         from oxenclaw.approvals.tool_wrap import gated_tool
 
         for t in raw_mut:
-            reg.register(gated_tool(t, approval_manager=approval_manager))
+            reg.register(gated_tool(t, manager=approval_manager))
     else:
         # No approver wired — register raw. Operators who don't want
         # a default agent to write files / run shell on this box

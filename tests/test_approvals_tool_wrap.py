@@ -75,6 +75,29 @@ async def test_timeout_surfaces_distinct_from_denial() -> None:
     assert "denied" not in result
 
 
+def test_factory_default_tools_wraps_mutating_tools_with_approval() -> None:
+    """`_build_default_tools` previously called `gated_tool(t,
+    approval_manager=...)` — wrong kwarg name (the wrapper expects
+    `manager=...`). The kwarg mismatch meant the gating branch was
+    dead code: it would have raised `TypeError: unexpected keyword
+    argument 'approval_manager'` the first time anyone wired an
+    ApprovalManager into the factory. This test exercises the live
+    branch so that mistake can't recur silently."""
+    from oxenclaw.agents.factory import _build_default_tools
+
+    manager = ApprovalManager()
+    reg = _build_default_tools(
+        agent_id="assistant",
+        mcp_tools=None,
+        approval_manager=manager,
+    )
+    # The mutating tools (shell/write/edit/process) must be wrapped —
+    # wrapped tools expose `is_gated = True` via _GatedTool.
+    shell_tool = reg.get("shell")
+    assert shell_tool is not None
+    assert getattr(shell_tool, "is_gated", False) is True
+
+
 async def test_custom_format_prompt_used() -> None:
     manager = ApprovalManager()
 

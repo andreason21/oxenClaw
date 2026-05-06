@@ -821,7 +821,7 @@ wheels = [
 
 [[package]]
 name = "oxenclaw"
-version = "0.1.0rc21"
+version = "0.1.0rc31"
 source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },

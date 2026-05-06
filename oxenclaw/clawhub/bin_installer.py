@@ -276,6 +276,60 @@ def find_installed_skill(
     return None
 
 
+class BatchPrompter:
+    """Non-interactive prompter for headless callers (gateway RPC, etc.).
+
+    Auto-confirms every runnable step and routes notifications to a
+    configurable sink — defaults to a logger so the caller's stdout
+    stays clean. Use this when the user has already given umbrella
+    consent at the API layer (`with_bins=True`) and per-step prompts
+    would never be answered."""
+
+    def __init__(self, *, log_sink: Callable[[str], None] | None = None) -> None:
+        if log_sink is None:
+            log_sink = lambda msg: logger.info("bin-install: %s", msg)  # noqa: E731
+        self._log = log_sink
+
+    def confirm(self, step: PlannedStep) -> bool:
+        return True
+
+    def notify(self, message: str) -> None:
+        self._log(message)
+
+
+def serialise_step(step: PlannedStep) -> dict[str, object]:
+    """JSON-friendly view of a `PlannedStep`. Stable shape for clients
+    (dashboard / external automation) that consume the plan."""
+    return {
+        "index": step.index,
+        "total": step.total,
+        "label": step.label,
+        "kind": step.spec.kind or "",
+        "effective_kind": step.effective_kind,
+        "decision": step.decision,
+        "reason": step.reason,
+        "argv": list(step.argv) if step.argv else None,
+    }
+
+
+def serialise_plan(plan: list[PlannedStep]) -> list[dict[str, object]]:
+    return [serialise_step(s) for s in plan]
+
+
+def serialise_result(result: StepResult) -> dict[str, object]:
+    return {
+        "step": serialise_step(result.step),
+        "confirmed": result.confirmed,
+        "executed": result.executed,
+        "exit_code": result.exit_code,
+        "stderr_tail": result.stderr_tail,
+    }
+
+
+def serialise_results(results: list[StepResult]) -> list[dict[str, object]]:
+    return [serialise_result(r) for r in results]
+
+
 def format_plan_preview(plan: list[PlannedStep]) -> str:
     """Multi-line human-readable preview of an install plan.
 

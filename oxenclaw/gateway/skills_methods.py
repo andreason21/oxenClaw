@@ -53,6 +53,16 @@ class _InstallParams(BaseModel):
     force: bool = False
     allow_critical_findings: bool = False
     registry: str | None = None
+    # When True, after the skill files are installed, the gateway also
+    # runs the manifest's `metadata.openclaw.install` plan in batch
+    # (auto-approve every runnable step; refuse exec/download per the
+    # bin_installer policy). Gated on the
+    # `OXENCLAW_GATEWAY_BIN_AUTO_INSTALL` env flag — when the operator
+    # hasn't opted in we still return `bin_install_plan` so dashboards
+    # can preview the plan, plus a `bin_install` block that explains
+    # why nothing ran. The CLI's `--yes` path runs in the operator's
+    # own shell and ignores this flag.
+    with_bins: bool = False
 
 
 def _annotate_and_filter(
@@ -220,6 +230,51 @@ def register_skills_methods(
             }
             for f in result.findings
         ]
+        # Always compute + return the bin-install plan so dashboards can
+        # preview "this skill needs to install X, Y, Z next" without a
+        # second round-trip. Plan is purely descriptive when no
+        # execution is requested.
+        from oxenclaw.approvals.whitelist import gateway_bin_auto_install_enabled
+        from oxenclaw.clawhub.bin_installer import (
+            BatchPrompter,
+            execute as _execute_plan,
+            plan_install,
+            serialise_plan,
+            serialise_results,
+        )
+
+        bin_plan = plan_install(result.manifest)
+        bin_install: dict[str, Any] | None = None
+        if p.with_bins:
+            if not gateway_bin_auto_install_enabled():
+                bin_install = {
+                    "executed": False,
+                    "reason": (
+                        "OXENCLAW_GATEWAY_BIN_AUTO_INSTALL is not set; "
+                        "the gateway will not run brew/apt/npm specs "
+                        "without explicit operator opt-in. Either set "
+                        "that env var and retry, or run "
+                        f"`oxenclaw skills install-bins {p.slug}` "
+                        "from the CLI."
+                    ),
+                }
+            elif not any(s.decision == "run" for s in bin_plan):
+                bin_install = {
+                    "executed": False,
+                    "reason": (
+                        "no auto-installable specs in the manifest "
+                        "(every step is exec/download/refused)"
+                    ),
+                }
+            else:
+                results = _execute_plan(bin_plan, BatchPrompter())
+                bin_install = {
+                    "executed": True,
+                    "results": serialise_results(results),
+                    "ok": all(
+                        not r.executed or r.exit_code == 0 for r in results
+                    ),
+                }
         return {
             "ok": True,
             "slug": result.slug,
@@ -238,6 +293,8 @@ def register_skills_methods(
                 "requires": result.manifest.openclaw.requires.model_dump(by_alias=True),
                 "install_specs": serialise_install_specs(result.manifest.openclaw.install),
             },
+            "bin_install_plan": serialise_plan(bin_plan),
+            "bin_install": bin_install,
         }
 
     @router.method("skills.scan", _SlugParam)

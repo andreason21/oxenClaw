@@ -222,8 +222,26 @@ def assistant_shell_enabled() -> bool:
     return raw in {"1", "true", "yes", "on"}
 
 
+def gateway_bin_auto_install_enabled() -> bool:
+    """Feature flag for letting the gateway run a skill's
+    `metadata.openclaw.install` plan when an RPC client passes
+    `with_bins=True` on `skills.install`.
+
+    Off by default for the same reason as `installer.py:1-8`'s
+    refusal to auto-run install specs — running brew/apt/npm from a
+    daemon process is a meaningful privilege escalation. Operators
+    who want one-click dashboard installs (skill files + binary
+    dependencies) opt in by setting `OXENCLAW_GATEWAY_BIN_AUTO_INSTALL=1`.
+    The CLI path (`oxenclaw skills install --yes`) is unaffected by
+    this flag — that's a foreground command run with the operator's
+    own shell credentials, not a daemon side-effect."""
+    raw = (os.environ.get("OXENCLAW_GATEWAY_BIN_AUTO_INSTALL") or "").strip().lower()
+    return raw in {"1", "true", "yes", "on"}
+
+
 __all__ = [
     "assistant_shell_enabled",
     "build_shell_whitelist",
+    "gateway_bin_auto_install_enabled",
     "is_auto_approvable",
 ]

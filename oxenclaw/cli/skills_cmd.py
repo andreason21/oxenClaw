@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import shutil
 
 import typer
 
@@ -22,6 +23,12 @@ from oxenclaw.clawhub import (
     MultiRegistryClient,
     SkillInstaller,
     load_installed_skills,
+)
+from oxenclaw.clawhub.bin_installer import (
+    PlannedStep,
+    execute as execute_bin_plan,
+    find_installed_skill,
+    plan_install,
 )
 from oxenclaw.clawhub.registries import ClawHubRegistries, RegistryConfig
 from oxenclaw.config import load_config
@@ -140,6 +147,13 @@ def install(
             req_bins = list(req.bins) + list(req.any_bins)
             if req_bins:
                 typer.echo(f"  requires on PATH: {', '.join(req_bins)}")
+                missing = [b for b in req_bins if shutil.which(b) is None]
+                if missing:
+                    typer.echo(
+                        f"  missing: {', '.join(missing)}  →  "
+                        f"`oxenclaw skills install-bins {res.slug}` "
+                        "to install with explicit per-step confirm"
+                    )
             if res.findings:
                 typer.echo(f"  scanner findings: {len(res.findings)}")
         except (ClawHubError, InstallError) as exc:
@@ -164,6 +178,63 @@ def list_installed() -> None:
         reg = (s.origin.registry_name if s.origin else None) or "?"
         trust = (s.origin.trust if s.origin else None) or "?"
         typer.echo(f"  {emoji}{s.slug:30s} v{ver:10s} [{reg}/{trust}]  {s.description[:60]}")
+
+
+@app.command("install-bins")
+def install_bins(
+    slug: str = typer.Argument(..., help="Slug of an already-installed skill."),
+    yes: bool = typer.Option(
+        False, "--yes", "-y", help="Auto-confirm every step (skip prompts)."
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Print the per-step plan without executing."
+    ),
+) -> None:
+    """Run a skill's `metadata.openclaw.install` steps with per-step confirm.
+
+    The base `install` command never executes brew/apt/npm specs — those
+    describe binaries the user must already have on PATH. This command
+    is the explicit opt-in: walk the install plan, ask before each step,
+    and run only confirmed steps.
+
+    Refused kinds in v1: `exec` (arbitrary shell), `download` (arbitrary
+    URL). The original spec is printed so you can run it manually if you
+    want. apt steps that need root will fail with permission denied;
+    re-run the CLI under sudo or invoke them by hand.
+    """
+    skill = find_installed_skill(slug)
+    if skill is None:
+        typer.echo(f"skill {slug!r} is not installed", err=True)
+        raise typer.Exit(code=1)
+    plan = plan_install(skill.manifest)
+    if not plan:
+        typer.echo(f"{slug}: no install steps declared (nothing to do)")
+        return
+    typer.echo(f"will run for skill {slug!r}:")
+
+    class _CliPrompter:
+        def confirm(self, step: PlannedStep) -> bool:
+            if yes:
+                return True
+            return typer.confirm("  proceed?", default=False)
+
+        def notify(self, message: str) -> None:
+            typer.echo("  " + message)
+
+    results = execute_bin_plan(plan, _CliPrompter(), dry_run=dry_run)
+
+    ran_ok = sum(1 for r in results if r.executed and r.exit_code == 0)
+    failed = sum(1 for r in results if r.executed and (r.exit_code or 0) != 0)
+    skipped = sum(1 for r in results if not r.executed)
+    typer.echo(f"\nsummary: {ran_ok} ok, {failed} failed, {skipped} skipped")
+    if failed:
+        for r in results:
+            if r.executed and (r.exit_code or 0) != 0:
+                tail = (r.stderr_tail or "").replace("\n", " | ")
+                typer.echo(
+                    f"  ✗ {r.step.label}: exit={r.exit_code} {tail}", err=True
+                )
+        raise typer.Exit(code=1)
 
 
 @app.command("uninstall")

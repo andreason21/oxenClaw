@@ -26,6 +26,7 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 # Light tokenizer — keep CJK runs intact, split ASCII on word boundary.
@@ -284,6 +285,30 @@ _INVOCATION_RE = re.compile(
 )
 
 
+def _is_knowledge_style(skill: Any, body: str) -> bool:
+    """True when a skill ships no `scripts/` directory and is meant to be
+    invoked via the `bash` shell tool with the CLI commands documented
+    in its SKILL.md body (e.g. `yahoo-finance-cli` runs `yf quote …`).
+
+    Detection prefers the on-disk check (`<skill_dir>/scripts/` has at
+    least one regular file). When `skill.skill_md_path` isn't available
+    — typically in unit tests using lightweight fakes — we fall back to
+    a body heuristic: a body with no `scripts/<file>` reference but at
+    least one fenced bash/shell block is treated as knowledge-style.
+    """
+    skill_md = getattr(skill, "skill_md_path", None)
+    if isinstance(skill_md, Path):
+        scripts_dir = skill_md.parent / "scripts"
+        if scripts_dir.is_dir():
+            for entry in scripts_dir.iterdir():
+                if entry.is_file():
+                    return False
+        return True
+    if _INVOCATION_RE.search(body or ""):
+        return False
+    return bool(re.search(r"```(?:bash|sh|shell)\b", body or ""))
+
+
 def _extract_sample_invocation(body: str) -> tuple[str, str] | None:
     """Return (script, sample_args_string) from the first matching
     line in the SKILL.md body. None when nothing parseable found."""
@@ -302,26 +327,39 @@ def _extract_sample_invocation(body: str) -> tuple[str, str] | None:
     return None
 
 
-def render_skill_suggestion_prelude(
-    suggestion: SkillSuggestion,
-    user_text: str,
-) -> str:
-    """Tight prelude prepended to the user message.
+_KO_TICKER_HINT = (
+    "For Korean stock tickers use the Yahoo Finance form "
+    "<6-digit>.KS (KOSPI) / .KQ (KOSDAQ) — 삼성전자 = 005930.KS, "
+    "SK하이닉스 = 000660.KS.\n"
+)
 
-    Names the matching skill and tells the model which `skill_run`
-    arguments to fill in. Deliberately *avoids* showing a literal
-    `name(arg=val)` expression — small local models will copy that
-    expression into the assistant text instead of issuing a real
-    tool call, defeating the whole point of the prelude. The shape
-    is described in prose so the model has to reach for the
-    structured tool-call channel.
+# Appended to every prelude variant. The yahoo-finance-cli regression
+# loop showed two real failure modes that small local models fall into
+# once the "do not refuse" directive is in place:
+#
+#   1. Pick the first tool whose argument shape vaguely resembles a
+#      command (the assistant's default registry has `echo` but no
+#      `shell`), call it with the intended command string, then treat
+#      the verbatim echo as if it were a real result.
+#   2. Fabricate concrete numeric values (prices, percentages, market
+#      caps) to satisfy the user — worse than the original refusal
+#      because the answer looks authoritative.
+#
+# Both fail loudly to a human reviewer but silently to a casual user.
+# The footer is the cheapest available counter — explicit prohibition.
+_ANTI_HALLUCINATION_FOOTER = (
+    "If the only tool result you obtain is the verbatim echo of your "
+    "input (e.g. an `echo` tool returning the same string you sent), "
+    "that means NO execution happened — say so honestly to the user. "
+    "Under no circumstances may you invent numeric values such as "
+    "prices, percentages, market caps, dates, or any other concrete "
+    "data point that you did not get from a real tool result."
+)
 
-    User-side (not system-side) for the same reason as
-    `format_memories_as_prelude`: small local models attend much
-    more strongly to user-message context."""
-    skill = suggestion.skill
+
+def _render_script_prelude(suggestion: SkillSuggestion, body: str) -> str:
+    """Existing path: skill ships `scripts/`; route the model at `skill_run`."""
     slug = suggestion.slug
-    body = getattr(skill, "body", "") or ""
     extracted = _extract_sample_invocation(body)
     if extracted is None:
         script_hint = "the script name shown in the skill's <usage> block"
@@ -344,14 +382,122 @@ def render_skill_suggestion_prelude(
         f"  - skill: {slug}\n"
         f"  - script: {script_hint}\n"
         f"  - args: {args_hint}\n"
-        "For Korean stock tickers use the Yahoo Finance form "
-        "<6-digit>.KS (KOSPI) / .KQ (KOSDAQ) — 삼성전자 = 005930.KS, "
-        "SK하이닉스 = 000660.KS.\n"
-        "If you fall back to writing the call as JSON in your reply "
+        + _KO_TICKER_HINT
+        + "If you fall back to writing the call as JSON in your reply "
         "text instead of a structured tool_use block, include the tool "
         "name as a `tool` field alongside the arguments so the autofire "
-        "backstop can route it correctly."
+        "backstop can route it correctly.\n"
+        + _ANTI_HALLUCINATION_FOOTER
     )
+
+
+def _render_knowledge_prelude(
+    suggestion: SkillSuggestion,
+    *,
+    shell_available: bool,
+) -> str:
+    """Knowledge-style skills have no `scripts/` — they document a CLI
+    in their SKILL.md body and expect the model to invoke that CLI via
+    the registered `shell` tool directly.
+
+    Three failure modes the wording here is calibrated against:
+      1. Routing through `skill_run` returns "(scripts/ dir empty or
+         missing)" and the model paraphrases that back as a refusal.
+      2. Saying "use the bash tool" makes small models look for a tool
+         literally named `bash`, fail to find one, and fall into a
+         `list_dir` exploration loop.
+      3. When `shell` is NOT in the agent's tool registry (the default
+         assistant is read-only — `shell` is gated behind an
+         ApprovalManager), small models pick the closest-named tool
+         (`echo` with a `text` arg) and treat the echoed string as a
+         real result, then fabricate plausible numbers. That is worse
+         than honest refusal because it looks authoritative. We branch
+         on `shell_available` so the model is never told to call a
+         tool that doesn't exist for this agent.
+    """
+    slug = suggestion.slug
+    if shell_available:
+        return (
+            f"[INSTALLED SKILL DETECTED] The user's request matches the installed "
+            f"`{slug}` skill (matched: {', '.join(suggestion.matched_terms)}). "
+            f"This is a knowledge-style skill — it ships NO `scripts/` directory "
+            "and MUST NOT be invoked via `skill_run` (that returns '(scripts/ "
+            "dir empty or missing)'). The registered tool to use is named "
+            "exactly `shell` (NOT `bash`, NOT `list_dir`, NOT `echo`); it takes "
+            "a single `command` argument that goes through `sh -c`. Read the "
+            f"documented CLI commands in the `{slug}` <usage> block above and "
+            "invoke them via a `shell` tool call — for example, for a stock "
+            "price query the call is `shell` with "
+            "`command: \"yf quote 005930.KS\"`. Do NOT respond with a generic "
+            "'I can't access real-time data' refusal, do NOT enumerate the "
+            "skill directory with `list_dir`, do NOT route the command "
+            "through `echo` (that just mirrors your text and runs nothing), "
+            "and do NOT write the command as plain text in your reply — the "
+            "runtime only sees structured tool calls.\n"
+            + _KO_TICKER_HINT
+            + _ANTI_HALLUCINATION_FOOTER
+        )
+    return (
+        f"[INSTALLED SKILL DETECTED, BUT NOT EXECUTABLE IN THIS AGENT] The "
+        f"user's request matches the installed `{slug}` skill (matched: "
+        f"{', '.join(suggestion.matched_terms)}), which is a knowledge-style "
+        "skill that needs a `shell` tool to actually run its documented CLI "
+        "commands. THIS AGENT'S TOOL REGISTRY HAS NO `shell` TOOL, so the "
+        "skill cannot be executed in this conversation. Tell the user "
+        "honestly that you can describe the skill but cannot fetch real "
+        f"data — name `{slug}` so they know which capability is gated, and "
+        "suggest enabling the shell tool (gateway-side configuration) if "
+        "they need real execution. Do NOT call `skill_run` (no scripts), "
+        "do NOT call `echo` and treat its mirrored text as a result, do "
+        "NOT call `list_dir` to enumerate the skill, and absolutely DO NOT "
+        "fabricate prices, percentages, market caps, or any other concrete "
+        "values in lieu of a real result.\n"
+        + _ANTI_HALLUCINATION_FOOTER
+    )
+
+
+def render_skill_suggestion_prelude(
+    suggestion: SkillSuggestion,
+    user_text: str,
+    *,
+    available_tool_names: set[str] | None = None,
+) -> str:
+    """Tight prelude prepended to the user message.
+
+    Branches on skill style and on tool availability. Script-style
+    skills (`<skill>/scripts/` populated) get the `skill_run` shape.
+    Knowledge-style skills (e.g. `yahoo-finance-cli` — only SKILL.md,
+    documents a CLI) get a directive pointing at the registered
+    `shell` tool when one is in `available_tool_names`. When `shell`
+    is NOT available (the default assistant agent's read-only bundle),
+    we instead emit an honest-refusal prelude — telling the model the
+    skill is detected but unexecutable in this agent and explicitly
+    forbidding fabrication. That branch exists because the previous
+    "use the shell tool" wording, when issued to an agent without a
+    shell tool, drove the model to call `echo` and then hallucinate
+    a stock price from the echoed command string.
+
+    Deliberately *avoids* showing a literal `name(arg=val)` expression
+    in any branch — small local models will copy that expression
+    into the assistant text instead of issuing a real tool call,
+    defeating the whole point of the prelude.
+
+    `available_tool_names` defaults to None for callers that haven't
+    been updated yet; in that case we assume `shell` IS available so
+    existing behavior is preserved (the script branch is unchanged
+    and the knowledge branch falls back to its original wording).
+
+    User-side (not system-side) for the same reason as
+    `format_memories_as_prelude`: small local models attend much
+    more strongly to user-message context."""
+    skill = suggestion.skill
+    body = getattr(skill, "body", "") or ""
+    if _is_knowledge_style(skill, body):
+        shell_available = (
+            True if available_tool_names is None else "shell" in available_tool_names
+        )
+        return _render_knowledge_prelude(suggestion, shell_available=shell_available)
+    return _render_script_prelude(suggestion, body)
 
 
 __all__ = [

@@ -161,8 +161,20 @@ def skill_run_tool(*, paths: OxenclawPaths | None = None) -> Tool:
                 if scripts_dir.is_dir()
                 else []
             )
-            avail_str = ", ".join(available) or "(scripts/ dir empty or missing)"
-            return f"skill_run error: {exc}. Available scripts: {avail_str}"
+            if available:
+                avail_str = ", ".join(available)
+                return f"skill_run error: {exc}. Available scripts: {avail_str}"
+            # No scripts/ at all → almost certainly a knowledge-style skill.
+            # Send the model back to the shell tool instead of letting it
+            # paraphrase "no scripts" as "skill is broken" and refuse.
+            return (
+                f"skill_run error: {exc}. This skill ships no `scripts/` "
+                "directory — it is knowledge-style and must be invoked via "
+                "the `bash` (shell) tool using the CLI commands documented "
+                f"in its <usage> block (look up {args.skill!r} in the "
+                "<available_skills> system message). Do NOT call skill_run "
+                "again for this skill."
+            )
 
         argv, err = _build_argv(script_path, args.args, shutil.which)
         if err is not None:

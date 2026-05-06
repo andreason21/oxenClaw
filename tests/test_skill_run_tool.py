@@ -78,6 +78,34 @@ async def test_unknown_script_lists_available(tmp_path: Path) -> None:
     assert "alpha.py" in out and "beta.py" in out
 
 
+async def test_knowledge_skill_redirects_to_bash_tool(tmp_path: Path) -> None:
+    """Skills with no `scripts/` dir (yahoo-finance-cli shape) must NOT
+    return the previous '(scripts/ dir empty or missing)' phrasing —
+    small models paraphrase that as 'this skill is broken' and refuse.
+
+    The post-fix message tells the model to use the bash/shell tool
+    with the documented CLI commands instead, and forbids retrying
+    skill_run on the same slug."""
+    paths = OxenclawPaths(home=tmp_path)
+    paths.ensure_home()
+    sd = tmp_path / "skills" / "yahoo-finance-cli"
+    sd.mkdir(parents=True)
+    (sd / "SKILL.md").write_text(
+        "---\nname: yahoo-finance\ndescription: stock prices via yf CLI.\n---\n"
+        "\n```bash\nyf quote AAPL\n```\n",
+        encoding="utf-8",
+    )
+    tool = skill_run_tool(paths=paths)
+    out = await tool.execute(
+        {"skill": "yahoo-finance-cli", "script": "anything.py", "args": []}
+    )
+    assert "knowledge-style" in out
+    assert "bash" in out.lower() or "shell" in out.lower()
+    assert "Do NOT call skill_run again" in out
+    # The misleading old phrasing must be gone.
+    assert "(scripts/ dir empty or missing)" not in out
+
+
 async def test_path_traversal_rejected(tmp_path: Path) -> None:
     _install_skill(tmp_path, "demo", {"x.py": "print('x')\n"})
     # Attempt to escape via ../

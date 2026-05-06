@@ -1065,7 +1065,11 @@ class PiAgent:
                 logger.exception("skill-suggest probe failed")
                 suggestion = None
             if suggestion is not None:
-                skill_prelude = render_skill_suggestion_prelude(suggestion, text)
+                skill_prelude = render_skill_suggestion_prelude(
+                    suggestion,
+                    text,
+                    available_tool_names=set(self._tools._tools.keys()),
+                )
                 user_text_for_model = f"{skill_prelude}\n\n{user_text_for_model}"
                 logger.info(
                     "skill-suggest prelude injected: skill=%s matched=%s",

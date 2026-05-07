@@ -120,12 +120,16 @@ from oxenclaw.agents.factory import build_agent, load_mcp_tools
 mcp_tools, pool = await load_mcp_tools()
 agent = build_agent(
     agent_id="default",
-    provider="local",        # or "pi", "anthropic", "vllm"
-    model="gemma4-fc",       # see docs/OLLAMA.md for the Modelfile build;
-                             # plain "gemma4:latest" never emits tool_call
-                             # blocks so MCP tools end up unused on it.
+    # Documented default: llamacpp-direct serving the Unsloth
+    # gemma-4-E4B GGUF from HF. See docs/LLAMACPP_DIRECT.md for
+    # the wizard / manual setup. Ollama with `gemma4-fc` is the
+    # alternative — see docs/OLLAMA.md for that Modelfile.
+    provider="llamacpp-direct",
+    model="local-gguf",      # any label; weights come from gguf_path / env
     mcp_tools=mcp_tools,
 )
+# Set OXENCLAW_LLAMACPP_GGUF=<path to gemma-4-E4B-it-UD-Q4_K_XL.gguf>
+# in the environment, or pass `extra={"gguf_path": "..."}` to build_agent.
 # ... agent.handle(...) ...
 if pool is not None:
     await pool.close()

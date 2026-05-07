@@ -72,25 +72,53 @@ ollama pull qwen3.5:9b              # chat
 ollama pull nomic-embed-text        # embeddings (memory features)
 ```
 
-Override the model with `--model <id>`. Tested models:
+### Recommended default — `llamacpp-direct` + `gemma-4-E4B-it-UD-Q4_K_XL.gguf`
+
+The documented default is the `llamacpp-direct` provider serving the
+Unsloth-quantised `gemma-4-E4B-it-UD-Q4_K_XL.gguf` from Hugging Face.
+On a single RTX 3050 it benchmarks at ~16.6 tok/s vs Ollama's ~5.6
+tok/s on the same Q4_K_XL weights, and the GGUF is a single ~4.8 GiB
+file you can pin to a known commit — reproducible across machines
+without rebuilding a Modelfile per host.
+
+```bash
+# 1. Build llama.cpp + download the GGUF (one-shot wizard).
+oxenclaw setup llamacpp
+
+# Or do it by hand:
+pip install -U "huggingface_hub[cli]"
+hf download unsloth/gemma-4-E4B-it-GGUF \
+    gemma-4-E4B-it-UD-Q4_K_XL.gguf --local-dir ~/models
+
+# 2. Point the gateway at the GGUF.
+export OXENCLAW_LLAMACPP_GGUF=$HOME/models/gemma-4-E4B-it-UD-Q4_K_XL.gguf
+oxenclaw gateway start          # `--provider auto` resolves to llamacpp-direct
+```
+
+Full guide (`oxenclaw setup llamacpp` walkthrough, manual install,
+embedder swap, perf comparison): [`docs/LLAMACPP_DIRECT.md`](./docs/LLAMACPP_DIRECT.md).
+
+### Alternative — Ollama
+
+When you'd rather stay on Ollama, override with `--model <id>`. Tested
+models:
 
 | Model | Context | Notes |
 |---|---|---|
-| **`gemma4-fc`** *(recommended default)* | 128K | Custom Modelfile built on top of `gemma4:latest` with a tool-calling chat template — required for the assistant to actually emit `tool_call` blocks. See [`docs/OLLAMA.md`](./docs/OLLAMA.md#gemma3--gemma4-function-calling--full-setup) for the 3-step build. Live tool-calling bench 16/16. |
+| **`gemma4-fc`** *(Ollama path's recommended default)* | 128K | Custom Modelfile built on top of `gemma4:latest` with a tool-calling chat template — required for the assistant to actually emit `tool_call` blocks. See [`docs/OLLAMA.md`](./docs/OLLAMA.md#gemma3--gemma4-function-calling--full-setup) for the 3-step build. Live tool-calling bench 16/16. |
 | `gemma4:latest` (= `e4b`) | 128K | The base model `gemma4-fc` derives from. Stock template never emits tool calls (live bench 0/16) — use `gemma4-fc` for any tool-calling workflow; this row is the build prerequisite. ~9.6 GB. |
 | `qwen3.5:9b` | 256K | Multimodal (vision), native function calling + thinking, ~6.6 GB Q4_K_M. Live e2e gate 18/18 PASS. Currently the `PROVIDER_DEFAULT_MODELS["ollama"]` fallback when `--model` is omitted. |
 | `gemma4:e2b` | 128K | Lighter (~7.2 GB) — same family, smaller. |
 | `gemma4:26b` / `31b` | 256K | Heavier MoE variants when you have the RAM. |
 | `qwen2.5:7b-instruct` | 32K | Strong tool calling. |
 | `llama3.1:8b` | 128K | Broadly capable. |
-
-> The "recommended default" annotation reflects the **documentation
-> guidance** — pass `--model gemma4-fc` for assistant / tool-calling
-> work. The bare-`oxenclaw gateway start --provider ollama` (no
-> `--model`) still resolves to `qwen3.5:9b` via the
-> `PROVIDER_DEFAULT_MODELS` map; that's the code-level fallback for
-> users who haven't built `gemma4-fc` yet.
 | `mistral-nemo:12b` | 128K | Slower, more verbose. |
+
+> Both paths are tested. Pick `llamacpp-direct` for the fastest local
+> inference and reproducible weights; pick Ollama when you want a
+> single binary that also serves embeddings out of the box. The
+> bare-`oxenclaw gateway start --provider ollama` (no `--model`)
+> resolves to `qwen3.5:9b` via the `PROVIDER_DEFAULT_MODELS` map.
 
 You can run oxenClaw with no LLM (RPC + tools only) by using
 `--provider echo` for testing.
@@ -576,20 +604,51 @@ oxenclaw config validate
 ollama pull qwen3.5:9b
 ```
 
-기본값은 `--model <id>`로 오버라이드. 검증된 모델:
+### 권장 기본값 — `llamacpp-direct` + `gemma-4-E4B-it-UD-Q4_K_XL.gguf`
+
+문서 기준 디폴트는 `llamacpp-direct` 프로바이더가 Hugging Face 의
+Unsloth 양자화 GGUF `gemma-4-E4B-it-UD-Q4_K_XL.gguf` 를 직접 서빙하는
+구성입니다. 단일 RTX 3050 기준 약 16.6 tok/s 로 같은 Q4_K_XL 가중치를
+Ollama 로 돌릴 때(약 5.6 tok/s) 대비 빠르고, GGUF 가 약 4.8 GiB 단일 파일
+이라 머신 간 재현성도 좋습니다 (호스트마다 Modelfile 다시 빌드할 필요
+없음).
+
+```bash
+# 1. llama.cpp 빌드 + GGUF 다운로드 (one-shot 위저드).
+oxenclaw setup llamacpp
+
+# 또는 수동:
+pip install -U "huggingface_hub[cli]"
+hf download unsloth/gemma-4-E4B-it-GGUF \
+    gemma-4-E4B-it-UD-Q4_K_XL.gguf --local-dir ~/models
+
+# 2. 게이트웨이가 GGUF 를 가리키게.
+export OXENCLAW_LLAMACPP_GGUF=$HOME/models/gemma-4-E4B-it-UD-Q4_K_XL.gguf
+oxenclaw gateway start          # `--provider auto` 가 llamacpp-direct 로 분기
+```
+
+전체 가이드 (`oxenclaw setup llamacpp` 위저드, 수동 설치, 임베더 교체,
+성능 비교): [`docs/LLAMACPP_DIRECT.md`](./docs/LLAMACPP_DIRECT.md).
+
+### 대안 — Ollama
+
+Ollama 를 유지하고 싶다면 `--model <id>` 로 오버라이드. 검증된 모델:
 
 | 모델 | 컨텍스트 | 비고 |
 |---|---|---|
-| **`gemma4-fc`** *(권장 기본값)* | 128K | `gemma4:latest` 위에 도구 호출용 chat template 을 입힌 커스텀 Modelfile. 어시스턴트가 실제로 `tool_call` 을 발화하려면 필요. 빌드 3-step: [`docs/OLLAMA.md`](./docs/OLLAMA.md#gemma3--gemma4-function-calling--full-setup). 라이브 도구 호출 bench 16/16. |
+| **`gemma4-fc`** *(Ollama 경로 권장 기본값)* | 128K | `gemma4:latest` 위에 도구 호출용 chat template 을 입힌 커스텀 Modelfile. 어시스턴트가 실제로 `tool_call` 을 발화하려면 필요. 빌드 3-step: [`docs/OLLAMA.md`](./docs/OLLAMA.md#gemma3--gemma4-function-calling--full-setup). 라이브 도구 호출 bench 16/16. |
 | `gemma4:latest` (= `e4b`) | 128K | `gemma4-fc` 의 베이스 모델. 기본 template 으로는 도구 호출이 안 일어남 (live bench 0/16) — 도구 호출이 필요한 워크플로우엔 `gemma4-fc` 쓰고, 이 줄은 빌드 전제 모델. 약 9.6 GB. |
 | `qwen3.5:9b` | 256K | 멀티모달(vision), 네이티브 함수 호출 + thinking, 약 6.6 GB (Q4_K_M). 라이브 e2e 18/18 PASS. `--model` 생략 시 `PROVIDER_DEFAULT_MODELS["ollama"]` fallback 으로 현재 이게 골라짐. |
 | `gemma4:e2b` | 128K | 더 가벼움 (약 7.2 GB) — 같은 계열의 작은 변종. |
 | `gemma4:26b` / `31b` | 256K | 고RAM 환경용 MoE 변종. |
 | `qwen2.5:7b-instruct` | 32K | 강한 도구 호출. |
 | `llama3.1:8b` | 128K | 범용성 좋음. |
-
-> "권장 기본값" 표기는 **문서 가이드 기준**입니다 — 어시스턴트 / 도구 호출 워크에선 `--model gemma4-fc` 명시 권장. `--model` 없이 `oxenclaw gateway start --provider ollama` 하면 `PROVIDER_DEFAULT_MODELS` 의 `qwen3.5:9b` 가 대체로 잡히며, 이건 `gemma4-fc` 를 아직 빌드하지 않은 사용자를 위한 코드 fallback.
 | `mistral-nemo:12b` | 128K | 느리지만 verbose. |
+
+> 둘 다 검증된 경로입니다. 가장 빠른 로컬 추론과 재현성 좋은 가중치를 원하면
+> `llamacpp-direct`, 단일 바이너리로 임베딩까지 함께 서빙받고 싶으면 Ollama
+> 를 고르세요. `--model` 없이 `oxenclaw gateway start --provider ollama`
+> 하면 `PROVIDER_DEFAULT_MODELS` 의 `qwen3.5:9b` 가 잡힙니다.
 
 LLM 없이 RPC + 도구만 테스트하려면 `--provider echo` 사용.
 

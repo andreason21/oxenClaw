@@ -132,7 +132,14 @@ the provider wrapper. The `llamacpp-direct` keys are documented in
 
 ## Per-provider examples
 
-### 1. `ollama`
+> **Documented default**: `llamacpp-direct` + the Unsloth GGUF
+> `gemma-4-E4B-it-UD-Q4_K_XL.gguf` from Hugging Face — see section 2
+> below for the wizard / manual setup, or jump straight to
+> [`LLAMACPP_DIRECT.md`](./LLAMACPP_DIRECT.md). Section 1 below
+> (`ollama`) is the friendlier alternative when you want a single
+> binary that also serves embeddings.
+
+### 1. `ollama` (alternative)
 
 The friendliest setup. Ollama provides embeddings
 (`nomic-embed-text`) for memory features by default — but if you'd
@@ -155,15 +162,17 @@ agents:
       You are a helpful assistant.
 ```
 
-Tested chat models: `gemma4-fc` *(recommended for tool calling — see
+Tested chat models on the Ollama path: `gemma4-fc` *(recommended on
+this path for tool calling — see
 [`OLLAMA.md` → gemma3 / gemma4 function calling](./OLLAMA.md#gemma3--gemma4-function-calling--full-setup)
 for the Modelfile build)*, `qwen3.5:9b` (current code-level fallback
 when `--model` is omitted), `gemma4:latest` (base model `gemma4-fc`
 derives from — passthrough template, never emits tool calls on its
 own), `gemma4:e2b`, `qwen2.5:7b-instruct`, `llama3.1:8b`. Full list +
-sizing: [`OLLAMA.md`](./OLLAMA.md).
+sizing: [`OLLAMA.md`](./OLLAMA.md). For the documented default path
+(`llamacpp-direct` + Hugging Face GGUF), see section 2 below.
 
-### 2. `llamacpp-direct` (recommended for chat)
+### 2. `llamacpp-direct` (documented default — fastest local + reproducible weights)
 
 oxenClaw spawns its own `llama-server` with the unsloth-studio fast
 preset. Live measurement: 16.6 tok/s vs Ollama's 5.6 tok/s on the same

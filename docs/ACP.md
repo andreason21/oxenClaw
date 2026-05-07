@@ -227,7 +227,7 @@ notifications to stdout. Two backends ship in core:
 | `--backend` | what it is | when to use |
 |---|---|---|
 | `fake` (default) | `InMemoryFakeRuntime` — echoes the prompt as one `text_delta` then `done`. No LLM. | Smoke tests, doctor-style probes, IDE wiring sanity check. |
-| `pi` | `PiAgentAcpRuntime` wrapping a real `PiAgent` (Ollama / `gemma4-fc` recommended; see [`OLLAMA.md` → gemma3 / gemma4 function calling](./OLLAMA.md#gemma3--gemma4-function-calling--full-setup)). Memory tools + `delegate_to_acp` auto-registered, recall prelude path live, tool-call telemetry projected mid-flight. | What an IDE-side ACP integration actually wants when oxenclaw IS the agent. |
+| `pi` | `PiAgentAcpRuntime` wrapping a real `PiAgent` (default: `llamacpp-direct` serving `gemma-4-E4B-it-UD-Q4_K_XL.gguf` — see [`LLAMACPP_DIRECT.md`](./LLAMACPP_DIRECT.md); Ollama with `gemma4-fc` is the alternative, see [`OLLAMA.md` → gemma3 / gemma4 function calling](./OLLAMA.md#gemma3--gemma4-function-calling--full-setup)). Memory tools + `delegate_to_acp` auto-registered, recall prelude path live, tool-call telemetry projected mid-flight. | What an IDE-side ACP integration actually wants when oxenclaw IS the agent. |
 
 The `pi` backend reads the user's standard `~/.oxenclaw/` paths and
 builds a `MemoryRetriever` against the default Ollama embedder

@@ -43,188 +43,141 @@ production-grade observability.
 > supported (sandbox + signal + Linux networking dependencies).
 
 ```bash
-# Clone and install in editable mode
 git clone https://github.com/andreason21/oxenClaw.git
 cd oxenClaw
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 
-# Sanity check
-oxenclaw paths
-oxenclaw config validate
+oxenclaw paths             # print resolved ~/.oxenclaw paths
+oxenclaw config validate   # smoke check (uses defaults if no config.yaml yet)
 ```
 
-**Linux / macOS / WSL2** are supported. Requires Python **3.11+**. The
-default chat backend is **`llamacpp-direct`** (managed `llama-server`,
-`--provider auto`); it auto-falls-back to **Ollama** when no GGUF is
-configured. Two paths:
-
-```bash
-# Path A (recommended) — llamacpp-direct, ~3x faster decode.
-#   1. Put `llama-server` on $PATH (any recent llama.cpp build).
-#   2. Download a GGUF you want to serve, then:
-export OXENCLAW_LLAMACPP_GGUF=$HOME/models/your-model.gguf
-# `--provider auto` (the default) now picks llamacpp-direct.
-# Full guide: docs/LLAMACPP_DIRECT.md
-
-# Path B — classic Ollama (also used for embeddings regardless of A).
-ollama pull qwen3.5:9b              # chat
-ollama pull nomic-embed-text        # embeddings (memory features)
-```
-
-### Recommended default — `llamacpp-direct` + `gemma-4-E4B-it-UD-Q4_K_XL.gguf`
-
-The documented default is the `llamacpp-direct` provider serving the
-Unsloth-quantised `gemma-4-E4B-it-UD-Q4_K_XL.gguf` from Hugging Face.
-On a single RTX 3050 it benchmarks at ~16.6 tok/s vs Ollama's ~5.6
-tok/s on the same Q4_K_XL weights, and the GGUF is a single ~4.8 GiB
-file you can pin to a known commit — reproducible across machines
-without rebuilding a Modelfile per host.
-
-```bash
-# 1. Build llama.cpp + download the GGUF (one-shot wizard).
-oxenclaw setup llamacpp
-
-# Or do it by hand:
-pip install -U "huggingface_hub[cli]"
-hf download unsloth/gemma-4-E4B-it-GGUF \
-    gemma-4-E4B-it-UD-Q4_K_XL.gguf --local-dir ~/models
-
-# 2. Point the gateway at the GGUF.
-export OXENCLAW_LLAMACPP_GGUF=$HOME/models/gemma-4-E4B-it-UD-Q4_K_XL.gguf
-oxenclaw gateway start          # `--provider auto` resolves to llamacpp-direct
-```
-
-Full guide (`oxenclaw setup llamacpp` walkthrough, manual install,
-embedder swap, perf comparison): [`docs/LLAMACPP_DIRECT.md`](./docs/LLAMACPP_DIRECT.md).
-
-### Alternative — Ollama
-
-When you'd rather stay on Ollama, override with `--model <id>`. Tested
-models:
-
-| Model | Context | Notes |
-|---|---|---|
-| **`gemma4-fc`** *(Ollama path's recommended default)* | 128K | Custom Modelfile built on top of `gemma4:latest` with a tool-calling chat template — required for the assistant to actually emit `tool_call` blocks. See [`docs/OLLAMA.md`](./docs/OLLAMA.md#gemma3--gemma4-function-calling--full-setup) for the 3-step build. Live tool-calling bench 16/16. |
-| `gemma4:latest` (= `e4b`) | 128K | The base model `gemma4-fc` derives from. Stock template never emits tool calls (live bench 0/16) — use `gemma4-fc` for any tool-calling workflow; this row is the build prerequisite. ~9.6 GB. |
-| `qwen3.5:9b` | 256K | Multimodal (vision), native function calling + thinking, ~6.6 GB Q4_K_M. Live e2e gate 18/18 PASS. Currently the `PROVIDER_DEFAULT_MODELS["ollama"]` fallback when `--model` is omitted. |
-| `gemma4:e2b` | 128K | Lighter (~7.2 GB) — same family, smaller. |
-| `gemma4:26b` / `31b` | 256K | Heavier MoE variants when you have the RAM. |
-| `qwen2.5:7b-instruct` | 32K | Strong tool calling. |
-| `llama3.1:8b` | 128K | Broadly capable. |
-| `mistral-nemo:12b` | 128K | Slower, more verbose. |
-
-> Both paths are tested. Pick `llamacpp-direct` for the fastest local
-> inference and reproducible weights; pick Ollama when you want a
-> single binary that also serves embeddings out of the box. The
-> bare-`oxenclaw gateway start --provider ollama` (no `--model`)
-> resolves to `qwen3.5:9b` via the `PROVIDER_DEFAULT_MODELS` map.
-
-You can run oxenClaw with no LLM (RPC + tools only) by using
-`--provider echo` for testing.
-
-#### Internal vLLM server
-
-If your team runs an internal vLLM (`vllm serve …`) box, point the
-gateway at it directly — no Ollama required:
-
-```bash
-oxenclaw gateway start \
-    --provider vllm \
-    --base-url http://internal-vllm.lan:8000/v1 \
-    --model meta-llama/Llama-3.1-8B-Instruct \
-    --api-key "$VLLM_API_KEY"   # only if vLLM was started with --api-key
-```
-
-`--provider vllm` is a strict-OpenAI-shape variant of `local` (no Ollama
-extras like `num_predict`, no warmup ping). `--base-url` defaults to
-`http://127.0.0.1:8000/v1`. `--api-key` is optional — pass it when vLLM
-was started with its own `--api-key`. The same shape works in
-`config.yaml`:
-
-```yaml
-agents:
-  default:
-    provider: vllm
-    model: meta-llama/Llama-3.1-8B-Instruct
-    base_url: http://internal-vllm.lan:8000/v1
-    api_key: ${VLLM_API_KEY}
-```
+**Linux / macOS / WSL2** supported. Python **3.11+** required.
 
 ---
 
-## Quick start
+## Quick start — zero to running with `llamacpp-direct`
 
-### 1. Minimum config
+The default chat path is **`llamacpp-direct`**: oxenClaw owns the
+lifecycle of its own `llama-server` and serves the Unsloth-quantised
+`gemma-4-E4B-it-UD-Q4_K_XL.gguf` from Hugging Face. ~16.6 tok/s on a
+single RTX 3050 — about **3× the same GGUF over Ollama** — and the
+GGUF is a single ~4.8 GiB file you can pin to a known commit
+(reproducible across machines, no per-host Modelfile rebuild).
 
-Create `~/.oxenclaw/config.yaml`:
+### Step 1 — Run the setup wizard
 
-```yaml
-channels: {}     # populate per channel below
-agents:
-  default:
-    id: default
-    provider: auto               # auto (default) | llamacpp-direct | ollama | vllm | anthropic | …
-    model: qwen3.5:9b
-    system_prompt: |
-      You are a helpful assistant.
+```bash
+oxenclaw setup llamacpp
 ```
 
-### 2. Optional — wire Slack outbound alerts
+The wizard walks four interactive steps; every one short-circuits
+when its prerequisite is already in place, so it's safe to re-run:
 
-Slack is the only outbound integration. Drop a workspace bot token at
-`~/.oxenclaw/credentials/slack/main.json`:
+1. **Install or locate `llama-server`.** Default path: `git clone` +
+   `cmake build` at `~/.oxenclaw/llama.cpp/`, auto-picking the right
+   backend (CUDA / Metal / Vulkan / CPU). Already have it? Point it
+   at the binary instead.
+2. **Download the GGUF.** Default:
+   `unsloth/gemma-4-E4B-it-GGUF/gemma-4-E4B-it-UD-Q4_K_XL.gguf`
+   (~4.8 GiB, fits an 8 GiB GPU).
+3. **Persist paths to `~/.oxenclaw/env`.** Optional `source ~/.oxenclaw/env`
+   line for your shell rc so the env follows you across terminals.
+4. **CPU smoke test.** `llama-server --version` plus a one-token
+   decode against the GGUF.
 
-```json
-{ "token": "xoxb-..." }
+Manual recipe + alternative download paths (release zip, package
+manager, custom GGUFs) are in
+[`docs/LLAMACPP_DIRECT.md`](docs/LLAMACPP_DIRECT.md).
+
+```bash
+oxenclaw doctor   # verify llama-server binary, GGUF, env, paths
 ```
 
-Add the binding to `config.yaml`:
-
-```yaml
-channels:
-  slack:
-    accounts:
-      - account_id: main
-        display_name: "Workspace Alerts"
-```
-
-### 3. Start the gateway
+### Step 2 — Generate a token + start the gateway
 
 ```bash
 export OXENCLAW_GATEWAY_TOKEN=$(openssl rand -hex 32)
-oxenclaw gateway start              # --provider defaults to 'auto'
+oxenclaw gateway start
 ```
 
-The gateway binds to `127.0.0.1` only — it **refuses to expose
-itself beyond loopback** unless you pass `--allow-non-loopback`
-explicitly. Default-safe stance: the agent is reachable only by the
-local OS user on this machine. See
+Boot logs should include:
+
+```
+INFO  oxenclaw.pi.llamacpp_server: llama-server: spawn ... (port=...)
+INFO  oxenclaw.gateway.server:    gateway listening on http://127.0.0.1:7331
+```
+
+The gateway binds to `127.0.0.1` only — it **refuses to expose itself
+beyond loopback** unless you pass `--allow-non-loopback`. The agent
+is reachable only by the local OS user on this machine. See
 [`docs/OPERATIONS.md`](docs/OPERATIONS.md#bind-policy-loopback-by-default)
-for opt-in setups (reverse proxy, k8s, internal corp net).
+for opt-in setups (reverse proxy, k8s, corp net).
 
-The bundled dashboard is at `http://127.0.0.1:7331/` and Prometheus
-metrics at `/metrics`. **Open the dashboard URL in any browser** — when
-auth is configured, the page detects the missing token and renders an
-in-app login gate. Paste the value of `OXENCLAW_GATEWAY_TOKEN`, click
-*Connect*, and the dashboard remembers it for 12 hours via cookie +
-`localStorage` so reloads need nothing extra.
+### Step 3 — Open the dashboard
 
-You can also bypass the form entirely with
-`http://127.0.0.1:7331/?token=<OXENCLAW_GATEWAY_TOKEN>` — the gateway
-sets the cookie on first response and the dashboard JS strips the
-token out of the address bar so it doesn't leak via screenshots or
-browser history. `/healthz`, `/readyz`, `/metrics` always remain
-unauthenticated for orchestrator probes.
+```
+http://127.0.0.1:7331/?token=<OXENCLAW_GATEWAY_TOKEN>
+```
 
-Open the dashboard or the desktop client and send a message — the
-agent replies via the local model with full tool access.
+The token is captured into a 12-hour cookie + `localStorage` on first
+response and stripped from the address bar (no screenshot / browser-
+history leak); reloads need nothing extra. `/healthz`, `/readyz`,
+`/metrics` stay unauthenticated for orchestrator probes.
 
-### 4. Send a one-off message via CLI
+Send a chat message — the local model (gemma-4-E4B) responds with
+full tool access (memory, skills, MCP if you've wired any).
+
+### Step 4 — (optional) Smoke a one-off message via CLI
 
 ```bash
 oxenclaw message send --agent default "summarize today's news headlines"
 ```
+
+That's the full path from a fresh clone to a working assistant. The
+sections below cover alternative providers, channels, and deeper
+configuration.
+
+---
+
+## Alternative providers
+
+When you'd rather not use `llamacpp-direct`, the gateway also speaks:
+
+- **Ollama** — friendliest path, ships `nomic-embed-text` for
+  embeddings out of the box. Use `gemma4-fc` (custom Modelfile with
+  a tool-calling chat template) for assistant work; plain
+  `gemma4:latest` does not emit `tool_call` blocks. Build recipe +
+  setup: [`docs/OLLAMA.md`](docs/OLLAMA.md). The CLI's `--provider
+  auto` falls back to Ollama with a one-line warning when no GGUF
+  is configured.
+
+- **External `llama-server`** — already running your own?
+  `--provider llamacpp --base-url http://127.0.0.1:8080/v1` and skip
+  the wizard.
+
+- **Internal vLLM** — strict-OpenAI-shape variant:
+
+  ```bash
+  oxenclaw gateway start \
+      --provider vllm \
+      --base-url http://internal-vllm.lan:8000/v1 \
+      --model meta-llama/Llama-3.1-8B-Instruct \
+      --api-key "$VLLM_API_KEY"   # only if vLLM was started with --api-key
+  ```
+
+- **Cloud (Anthropic / OpenAI / Google / …)** — `oxenclaw setup
+  provider <id>` prints the env var the runtime expects (e.g.
+  `ANTHROPIC_API_KEY`); set it and pass `--provider <id> --model
+  <model-id>`. Full provider list:
+  [`docs/AGENTS.md`](docs/AGENTS.md).
+
+- **No LLM** — `--provider echo` runs the gateway, sessions, RPC,
+  and tool plumbing without a real model. Useful for testing
+  channels / tools / dashboard surfaces in CI.
+
+For Slack outbound alerts (the only outbound channel in core),
+see [`docs/SLACK.md`](docs/SLACK.md).
 
 ---
 
@@ -592,162 +545,125 @@ cd oxenClaw
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 
-oxenclaw paths
-oxenclaw config validate
+oxenclaw paths             # ~/.oxenclaw 경로 출력
+oxenclaw config validate   # config.yaml 없어도 디폴트로 검증
 ```
 
-**Linux / macOS / WSL2** 지원. Python **3.11+** 필요. 기본 LLM 백엔드는
-[Ollama](https://ollama.ai/)
-(`127.0.0.1:11434`). Ollama 설치 후 도구 호출 가능한 모델을 받는다, 예:
+**Linux / macOS / WSL2** 지원. Python **3.11+** 필요.
+
+---
+
+### 빠른 시작 — 0 → 실행, `llamacpp-direct` 디폴트
+
+기본 챗 경로는 **`llamacpp-direct`** — oxenClaw 가 자체 `llama-server`
+를 띄우고 Hugging Face 의 Unsloth 양자화 GGUF
+`gemma-4-E4B-it-UD-Q4_K_XL.gguf` 를 서빙합니다. RTX 3050 단일 GPU 기준
+~16.6 tok/s 로 **같은 GGUF 를 Ollama 로 돌릴 때 대비 약 3배** 빠르고,
+GGUF 가 ~4.8 GiB 단일 파일이라 호스트별 Modelfile 재빌드 없이 그대로
+재현 가능합니다.
+
+#### Step 1 — 셋업 위저드 실행
 
 ```bash
-ollama pull qwen3.5:9b
-```
-
-### 권장 기본값 — `llamacpp-direct` + `gemma-4-E4B-it-UD-Q4_K_XL.gguf`
-
-문서 기준 디폴트는 `llamacpp-direct` 프로바이더가 Hugging Face 의
-Unsloth 양자화 GGUF `gemma-4-E4B-it-UD-Q4_K_XL.gguf` 를 직접 서빙하는
-구성입니다. 단일 RTX 3050 기준 약 16.6 tok/s 로 같은 Q4_K_XL 가중치를
-Ollama 로 돌릴 때(약 5.6 tok/s) 대비 빠르고, GGUF 가 약 4.8 GiB 단일 파일
-이라 머신 간 재현성도 좋습니다 (호스트마다 Modelfile 다시 빌드할 필요
-없음).
-
-```bash
-# 1. llama.cpp 빌드 + GGUF 다운로드 (one-shot 위저드).
 oxenclaw setup llamacpp
-
-# 또는 수동:
-pip install -U "huggingface_hub[cli]"
-hf download unsloth/gemma-4-E4B-it-GGUF \
-    gemma-4-E4B-it-UD-Q4_K_XL.gguf --local-dir ~/models
-
-# 2. 게이트웨이가 GGUF 를 가리키게.
-export OXENCLAW_LLAMACPP_GGUF=$HOME/models/gemma-4-E4B-it-UD-Q4_K_XL.gguf
-oxenclaw gateway start          # `--provider auto` 가 llamacpp-direct 로 분기
 ```
 
-전체 가이드 (`oxenclaw setup llamacpp` 위저드, 수동 설치, 임베더 교체,
-성능 비교): [`docs/LLAMACPP_DIRECT.md`](./docs/LLAMACPP_DIRECT.md).
+위저드는 4 단계를 대화형으로 진행합니다. 각 단계는 이미 만족된 상태면
+건너뛰므로 재실행 안전:
 
-### 대안 — Ollama
+1. **`llama-server` 설치 또는 위치 지정.** 디폴트: `~/.oxenclaw/llama.cpp/`
+   에 `git clone` + `cmake build` (백엔드 자동 선택 — CUDA / Metal /
+   Vulkan / CPU). 이미 있으면 그 경로만 가리키면 됨.
+2. **GGUF 다운로드.** 디폴트: `unsloth/gemma-4-E4B-it-GGUF/gemma-4-E4B-it-UD-Q4_K_XL.gguf`
+   (~4.8 GiB, 8 GiB GPU 에 들어감).
+3. **경로를 `~/.oxenclaw/env` 에 영속화.** 선택: `source ~/.oxenclaw/env`
+   를 셸 rc 에 넣어 새 터미널에서도 자동 적용.
+4. **CPU 스모크.** `llama-server --version` + GGUF 1-token 디코드.
 
-Ollama 를 유지하고 싶다면 `--model <id>` 로 오버라이드. 검증된 모델:
-
-| 모델 | 컨텍스트 | 비고 |
-|---|---|---|
-| **`gemma4-fc`** *(Ollama 경로 권장 기본값)* | 128K | `gemma4:latest` 위에 도구 호출용 chat template 을 입힌 커스텀 Modelfile. 어시스턴트가 실제로 `tool_call` 을 발화하려면 필요. 빌드 3-step: [`docs/OLLAMA.md`](./docs/OLLAMA.md#gemma3--gemma4-function-calling--full-setup). 라이브 도구 호출 bench 16/16. |
-| `gemma4:latest` (= `e4b`) | 128K | `gemma4-fc` 의 베이스 모델. 기본 template 으로는 도구 호출이 안 일어남 (live bench 0/16) — 도구 호출이 필요한 워크플로우엔 `gemma4-fc` 쓰고, 이 줄은 빌드 전제 모델. 약 9.6 GB. |
-| `qwen3.5:9b` | 256K | 멀티모달(vision), 네이티브 함수 호출 + thinking, 약 6.6 GB (Q4_K_M). 라이브 e2e 18/18 PASS. `--model` 생략 시 `PROVIDER_DEFAULT_MODELS["ollama"]` fallback 으로 현재 이게 골라짐. |
-| `gemma4:e2b` | 128K | 더 가벼움 (약 7.2 GB) — 같은 계열의 작은 변종. |
-| `gemma4:26b` / `31b` | 256K | 고RAM 환경용 MoE 변종. |
-| `qwen2.5:7b-instruct` | 32K | 강한 도구 호출. |
-| `llama3.1:8b` | 128K | 범용성 좋음. |
-| `mistral-nemo:12b` | 128K | 느리지만 verbose. |
-
-> 둘 다 검증된 경로입니다. 가장 빠른 로컬 추론과 재현성 좋은 가중치를 원하면
-> `llamacpp-direct`, 단일 바이너리로 임베딩까지 함께 서빙받고 싶으면 Ollama
-> 를 고르세요. `--model` 없이 `oxenclaw gateway start --provider ollama`
-> 하면 `PROVIDER_DEFAULT_MODELS` 의 `qwen3.5:9b` 가 잡힙니다.
-
-LLM 없이 RPC + 도구만 테스트하려면 `--provider echo` 사용.
-
-#### 내부 vLLM 서버 사용
-
-팀 내부에 `vllm serve …`로 띄운 vLLM 박스가 있다면 Ollama 없이 바로 그쪽으로
-붙일 수 있다:
+수동 절차 + 다른 다운로드 경로 (release zip, 패키지 매니저, 다른 GGUF):
+[`docs/LLAMACPP_DIRECT.md`](docs/LLAMACPP_DIRECT.md).
 
 ```bash
-oxenclaw gateway start \
-    --provider vllm \
-    --base-url http://internal-vllm.lan:8000/v1 \
-    --model meta-llama/Llama-3.1-8B-Instruct \
-    --api-key "$VLLM_API_KEY"   # vLLM을 --api-key로 띄운 경우만
+oxenclaw doctor   # 바이너리 / GGUF / env / 경로가 다 잡혔는지 검증
 ```
 
-`--provider vllm`은 `local`의 strict-OpenAI 변종 — Ollama 전용 필드
-(`num_predict`)나 워머핑 핑을 보내지 않는다. `--base-url` 기본값은
-`http://127.0.0.1:8000/v1`. `--api-key`는 선택 — vLLM을 `--api-key`로
-시작한 경우에만 필요. `config.yaml`도 같은 형태로 동작한다:
-
-```yaml
-agents:
-  default:
-    provider: vllm
-    model: meta-llama/Llama-3.1-8B-Instruct
-    base_url: http://internal-vllm.lan:8000/v1
-    api_key: ${VLLM_API_KEY}
-```
-
-### 빠른 시작
-
-#### 1. 최소 설정
-
-`~/.oxenclaw/config.yaml`:
-
-```yaml
-channels: {}
-agents:
-  default:
-    id: default
-    provider: local
-    model: qwen3.5:9b
-    system_prompt: |
-      You are a helpful assistant.
-```
-
-#### 2. (선택) Slack 아웃바운드 연결
-
-특별한 경우(크론 알림, 에이전트 발신 푸시 등)에만 Slack으로 아웃바운드.
-워크스페이스 봇 토큰을 `~/.oxenclaw/credentials/slack/main.json`에
-저장:
-
-```json
-{ "token": "xoxb-..." }
-```
-
-`config.yaml`에 바인딩 추가:
-
-```yaml
-channels:
-  slack:
-    accounts:
-      - account_id: main
-        display_name: "Workspace Alerts"
-```
-
-#### 3. 게이트웨이 실행
+#### Step 2 — 토큰 생성 + 게이트웨이 시작
 
 ```bash
 export OXENCLAW_GATEWAY_TOKEN=$(openssl rand -hex 32)
-oxenclaw gateway start              # --provider defaults to 'auto'
+oxenclaw gateway start
 ```
 
-게이트웨이는 `127.0.0.1`만 바인딩한다 — `--allow-non-loopback`을
-명시적으로 주지 않으면 **루프백 외부 노출은 거부**된다. 기본 보안 스탠스:
-에이전트는 이 머신의 로컬 OS 사용자만 접근 가능. 리버스 프록시, k8s,
-사내망 등 opt-in 셋업은
-[`docs/OPERATIONS.md`](docs/OPERATIONS.md#bind-policy-loopback-by-default)
-참고.
+부팅 로그에 다음 두 줄이 떠야 정상:
 
-번들 대시보드: `http://127.0.0.1:7331/`. Prometheus: `/metrics`.
-**브라우저에서 대시보드 URL을 그냥 열기** — 인증이 설정된 상태면 SPA가
-토큰 없음을 감지하고 화면 안에 로그인 폼을 띄움. `OXENCLAW_GATEWAY_TOKEN`
-값을 붙여넣고 *Connect* — 12시간 쿠키 + `localStorage`에 저장되어 새로고침
-시 별도 입력 불필요.
+```
+INFO  oxenclaw.pi.llamacpp_server: llama-server: spawn ... (port=...)
+INFO  oxenclaw.gateway.server:    gateway listening on http://127.0.0.1:7331
+```
 
-URL 한 방으로 끝내고 싶으면 `http://127.0.0.1:7331/?token=<OXENCLAW_GATEWAY_TOKEN>`
-도 가능 — 게이트웨이가 응답에 쿠키를 설정하고 SPA가 주소창에서 토큰을
-제거 (스크린샷·브라우저 히스토리 누출 방지). `/healthz`, `/readyz`,
-`/metrics`는 오케스트레이터 프로브용으로 항상 비인증 유지.
+게이트웨이는 `127.0.0.1` 만 바인딩 — `--allow-non-loopback` 을 명시적으로
+주지 않으면 **루프백 외부 노출은 거부**됩니다. 이 머신의 로컬 OS 사용자만
+접근 가능. 리버스 프록시 / k8s / 사내망 opt-in 셋업:
+[`docs/OPERATIONS.md`](docs/OPERATIONS.md#bind-policy-loopback-by-default).
 
-대시보드 또는 데스크톱 앱에서 메시지를 보내면 로컬 모델이 도구를 사용해 답한다.
+#### Step 3 — 대시보드 열기
 
-#### 4. CLI에서 일회성 메시지
+```
+http://127.0.0.1:7331/?token=<OXENCLAW_GATEWAY_TOKEN>
+```
+
+토큰은 응답 시 12시간 쿠키 + `localStorage` 에 저장되고 주소창에서 제거됨
+(스크린샷·브라우저 히스토리 누출 방지). 새로고침 시 별도 입력 불필요.
+`/healthz`, `/readyz`, `/metrics` 는 오케스트레이터 프로브용으로 항상
+비인증 유지.
+
+채팅 메시지를 보내면 로컬 모델 (gemma-4-E4B) 이 도구 (memory / skills /
+MCP) 를 사용해 답합니다.
+
+#### Step 4 — (선택) CLI 로 일회성 메시지
 
 ```bash
 oxenclaw message send --agent default "오늘 뉴스 헤드라인 요약해줘"
 ```
+
+여기까지가 fresh clone 부터 동작 확인까지의 풀 경로. 아래 섹션은 다른
+프로바이더 / 채널 / 심화 설정.
+
+---
+
+### 다른 프로바이더
+
+`llamacpp-direct` 외 게이트웨이가 지원하는 경로:
+
+- **Ollama** — 가장 친숙. `nomic-embed-text` 임베딩이 빌트인. 어시스턴트
+  용도엔 `gemma4-fc` (도구 호출 chat template 입힌 커스텀 Modelfile) 권장
+  — 일반 `gemma4:latest` 는 `tool_call` 블록 발화 안 함. 빌드 + 셋업:
+  [`docs/OLLAMA.md`](docs/OLLAMA.md). CLI `--provider auto` 는 GGUF 미설정
+  시 Ollama 로 자동 폴백 (한 줄 경고 후).
+
+- **외부 `llama-server`** — 직접 띄운 게 있으면
+  `--provider llamacpp --base-url http://127.0.0.1:8080/v1` 로 위저드 건너뛰기.
+
+- **사내 vLLM** — strict-OpenAI 변종:
+
+  ```bash
+  oxenclaw gateway start \
+      --provider vllm \
+      --base-url http://internal-vllm.lan:8000/v1 \
+      --model meta-llama/Llama-3.1-8B-Instruct \
+      --api-key "$VLLM_API_KEY"   # vLLM 을 --api-key 로 띄운 경우만
+  ```
+
+- **클라우드 (Anthropic / OpenAI / Google / …)** — `oxenclaw setup
+  provider <id>` 가 런타임이 읽는 env var 이름 (예: `ANTHROPIC_API_KEY`)
+  을 출력. 그 변수 설정 후 `--provider <id> --model <model-id>`. 전체
+  목록: [`docs/AGENTS.md`](docs/AGENTS.md).
+
+- **LLM 없음** — `--provider echo` 로 게이트웨이 / 세션 / RPC / 도구
+  플러밍을 모델 없이 검증. 채널 / 도구 / 대시보드 surface CI 테스트용.
+
+Slack 아웃바운드 알림은 [`docs/SLACK.md`](docs/SLACK.md) 참고 (코어에서
+지원하는 유일한 아웃바운드 채널).
 
 ### 클라이언트
 

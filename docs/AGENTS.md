@@ -155,8 +155,12 @@ agents:
       You are a helpful assistant.
 ```
 
-Tested chat models: `qwen3.5:9b` (default), `gemma4:latest`,
-`gemma4:e2b`, `qwen2.5:7b-instruct`, `llama3.1:8b`. Full list +
+Tested chat models: `gemma4-fc` *(recommended for tool calling — see
+[`OLLAMA.md` → gemma3 / gemma4 function calling](./OLLAMA.md#gemma3--gemma4-function-calling--full-setup)
+for the Modelfile build)*, `qwen3.5:9b` (current code-level fallback
+when `--model` is omitted), `gemma4:latest` (base model `gemma4-fc`
+derives from — passthrough template, never emits tool calls on its
+own), `gemma4:e2b`, `qwen2.5:7b-instruct`, `llama3.1:8b`. Full list +
 sizing: [`OLLAMA.md`](./OLLAMA.md).
 
 ### 2. `llamacpp-direct` (recommended for chat)

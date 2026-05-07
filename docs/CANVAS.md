@@ -121,9 +121,16 @@ Opt-in (register manually):
 
 ```bash
 export OXENCLAW_ENABLE_CANVAS=1
-oxenclaw gateway start --provider local --model gemma4:latest \
+oxenclaw gateway start --provider local --model gemma4-fc \
   --auth-token "$TOKEN"
 ```
+
+> `gemma4-fc` is the documented default — a custom Modelfile built on
+> top of `gemma4:latest` with a tool-calling chat template. Plain
+> `gemma4:latest` works for canvas dispatch (the empirical 25/25 gate
+> below was measured against the stock model) but never emits the
+> `tool_call` blocks downstream skill / shell flows depend on. Build
+> instructions: [`OLLAMA.md` → gemma3 / gemma4 function calling](./OLLAMA.md#gemma3--gemma4-function-calling--full-setup).
 
 `agents.factory._maybe_canvas_tools()` reads `OXENCLAW_ENABLE_CANVAS`
 on agent construction and registers the bundle when set. The gateway

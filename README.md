@@ -76,12 +76,20 @@ Override the model with `--model <id>`. Tested models:
 
 | Model | Context | Notes |
 |---|---|---|
-| **`qwen3.5:9b`** *(default)* | 256K | Multimodal (vision), native function calling + thinking, ~6.6 GB Q4_K_M. Live e2e gate 18/18 PASS. |
-| `gemma4:latest` (= `e4b`) | 128K | Multimodal (text+image), native function calling, ~9.6 GB. |
+| **`gemma4-fc`** *(recommended default)* | 128K | Custom Modelfile built on top of `gemma4:latest` with a tool-calling chat template — required for the assistant to actually emit `tool_call` blocks. See [`docs/OLLAMA.md`](./docs/OLLAMA.md#gemma3--gemma4-function-calling--full-setup) for the 3-step build. Live tool-calling bench 16/16. |
+| `gemma4:latest` (= `e4b`) | 128K | The base model `gemma4-fc` derives from. Stock template never emits tool calls (live bench 0/16) — use `gemma4-fc` for any tool-calling workflow; this row is the build prerequisite. ~9.6 GB. |
+| `qwen3.5:9b` | 256K | Multimodal (vision), native function calling + thinking, ~6.6 GB Q4_K_M. Live e2e gate 18/18 PASS. Currently the `PROVIDER_DEFAULT_MODELS["ollama"]` fallback when `--model` is omitted. |
 | `gemma4:e2b` | 128K | Lighter (~7.2 GB) — same family, smaller. |
 | `gemma4:26b` / `31b` | 256K | Heavier MoE variants when you have the RAM. |
 | `qwen2.5:7b-instruct` | 32K | Strong tool calling. |
 | `llama3.1:8b` | 128K | Broadly capable. |
+
+> The "recommended default" annotation reflects the **documentation
+> guidance** — pass `--model gemma4-fc` for assistant / tool-calling
+> work. The bare-`oxenclaw gateway start --provider ollama` (no
+> `--model`) still resolves to `qwen3.5:9b` via the
+> `PROVIDER_DEFAULT_MODELS` map; that's the code-level fallback for
+> users who haven't built `gemma4-fc` yet.
 | `mistral-nemo:12b` | 128K | Slower, more verbose. |
 
 You can run oxenClaw with no LLM (RPC + tools only) by using
@@ -572,12 +580,15 @@ ollama pull qwen3.5:9b
 
 | 모델 | 컨텍스트 | 비고 |
 |---|---|---|
-| **`qwen3.5:9b`** *(기본값)* | 256K | 멀티모달(vision), 네이티브 함수 호출 + thinking, 약 6.6 GB (Q4_K_M). 라이브 e2e 18/18 PASS. |
-| `gemma4:latest` (= `e4b`) | 128K | 멀티모달(text+image), 네이티브 함수 호출, 약 9.6 GB. |
+| **`gemma4-fc`** *(권장 기본값)* | 128K | `gemma4:latest` 위에 도구 호출용 chat template 을 입힌 커스텀 Modelfile. 어시스턴트가 실제로 `tool_call` 을 발화하려면 필요. 빌드 3-step: [`docs/OLLAMA.md`](./docs/OLLAMA.md#gemma3--gemma4-function-calling--full-setup). 라이브 도구 호출 bench 16/16. |
+| `gemma4:latest` (= `e4b`) | 128K | `gemma4-fc` 의 베이스 모델. 기본 template 으로는 도구 호출이 안 일어남 (live bench 0/16) — 도구 호출이 필요한 워크플로우엔 `gemma4-fc` 쓰고, 이 줄은 빌드 전제 모델. 약 9.6 GB. |
+| `qwen3.5:9b` | 256K | 멀티모달(vision), 네이티브 함수 호출 + thinking, 약 6.6 GB (Q4_K_M). 라이브 e2e 18/18 PASS. `--model` 생략 시 `PROVIDER_DEFAULT_MODELS["ollama"]` fallback 으로 현재 이게 골라짐. |
 | `gemma4:e2b` | 128K | 더 가벼움 (약 7.2 GB) — 같은 계열의 작은 변종. |
 | `gemma4:26b` / `31b` | 256K | 고RAM 환경용 MoE 변종. |
 | `qwen2.5:7b-instruct` | 32K | 강한 도구 호출. |
 | `llama3.1:8b` | 128K | 범용성 좋음. |
+
+> "권장 기본값" 표기는 **문서 가이드 기준**입니다 — 어시스턴트 / 도구 호출 워크에선 `--model gemma4-fc` 명시 권장. `--model` 없이 `oxenclaw gateway start --provider ollama` 하면 `PROVIDER_DEFAULT_MODELS` 의 `qwen3.5:9b` 가 대체로 잡히며, 이건 `gemma4-fc` 를 아직 빌드하지 않은 사용자를 위한 코드 fallback.
 | `mistral-nemo:12b` | 128K | 느리지만 verbose. |
 
 LLM 없이 RPC + 도구만 테스트하려면 `--provider echo` 사용.

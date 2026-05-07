@@ -121,7 +121,9 @@ mcp_tools, pool = await load_mcp_tools()
 agent = build_agent(
     agent_id="default",
     provider="local",        # or "pi", "anthropic", "vllm"
-    model="gemma4:latest",
+    model="gemma4-fc",       # see docs/OLLAMA.md for the Modelfile build;
+                             # plain "gemma4:latest" never emits tool_call
+                             # blocks so MCP tools end up unused on it.
     mcp_tools=mcp_tools,
 )
 # ... agent.handle(...) ...

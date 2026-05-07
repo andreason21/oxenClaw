@@ -1,0 +1,96 @@
+# Modelfile — gemma4 with tool-calling enabled.
+#
+# Stock `ollama pull gemma4:latest` ships a passthrough chat template
+# (`TEMPLATE {{ .Prompt }}`) and the built-in `RENDERER gemma4` does
+# NOT inject the tool list or the `<tool_call>...</tool_call>` markup
+# the model needs to actually emit calls. As a result, plain `gemma4`
+# never fires a tool call inside oxenClaw even when the prompt
+# explicitly asks for one.
+#
+# This Modelfile overrides TEMPLATE so the user turn carries:
+#   1. the tool list (rendered once at the top of the conversation),
+#   2. the exact JSON line shape the parser expects,
+#   3. an explicit "MUST emit, do NOT guess" instruction.
+#
+# Build:
+#   ollama create gemma4-fc -f scripts/modelfiles/gemma4-fc.Modelfile
+#
+# Use in oxenClaw:
+#   oxenclaw gateway start --provider ollama --model gemma4-fc \
+#       --base-url http://127.0.0.1:11434
+#
+# Or in config.yaml under the agent block:
+#   provider: ollama
+#   model: gemma4-fc
+#   base_url: http://127.0.0.1:11434
+#
+# Live measurement on a 4-task tool-calling bench:
+#   plain `gemma4`     :  0/16 tool calls,  3/16 correct
+#   `gemma4-fc` (this) : 16/16 tool calls, 14/16 correct
+#
+# Ollama also returns gemma3/4 tool_calls in the FIRST streamed frame
+# (`done:false`) rather than the final `done` frame. oxenClaw's
+# Ollama provider hoists the extraction out of the done branch
+# (oxenclaw/pi/providers/ollama.py) so per-frame parsing works. If
+# you fork the parser, replicate that behaviour or this Modelfile
+# alone will appear to do nothing.
+#
+# Same recipe applies to gemma3:latest — change the FROM line and
+# leave the rest as-is. (Verified working; not bundled here to avoid
+# shipping two near-identical Modelfiles.)
+
+FROM gemma4:latest
+
+TEMPLATE """{{- if or .System .Tools }}<start_of_turn>user
+{{- if .System }}
+{{ .System }}
+{{- end }}
+{{- if .Tools }}
+
+You have access to the following tools. When the user's request needs one of these tools, you MUST emit the tool call in this exact JSON line and nothing else:
+<tool_call>{"name": "<tool_name>", "arguments": {<arg_object>}}</tool_call>
+
+After the tool result is returned (in a <tool_response>...</tool_response> block), use it to produce the final answer to the user. Do NOT guess values you can get from a tool — call the tool.
+
+Available tools:
+{{- range .Tools }}
+{{ .Function  }}
+{{- end }}
+{{- end }}<end_of_turn>
+{{ end }}
+{{- range $i, $msg := .Messages }}
+{{- if eq $msg.Role "user" }}<start_of_turn>user
+{{ $msg.Content }}<end_of_turn>
+{{ else if eq $msg.Role "assistant" }}<start_of_turn>model
+{{- if $msg.Content }}
+{{ $msg.Content }}
+{{- end }}
+{{- if $msg.ToolCalls }}
+{{- range $msg.ToolCalls }}
+<tool_call>{"name": "{{ .Function.Name }}", "arguments": {{ .Function.Arguments  }}}</tool_call>
+{{- end }}
+{{- end }}<end_of_turn>
+{{ else if eq $msg.Role "tool" }}<start_of_turn>user
+<tool_response>{{ $msg.Content }}</tool_response><end_of_turn>
+{{ end }}
+{{- end }}<start_of_turn>model
+"""
+
+# Renderer + parser are kept on so non-tool turns retain stock
+# gemma4 behaviour. The custom TEMPLATE above takes precedence for
+# prompt assembly; these settings cover edge cases where Ollama
+# falls back (e.g. completion-only requests).
+RENDERER gemma4
+PARSER gemma4
+
+PARAMETER stop <end_of_turn>
+PARAMETER stop <start_of_turn>
+
+# Deterministic decoding. Tool calling regresses sharply with
+# temperature > 0 on this model — small 4B FC variants improvise the
+# argument JSON and add stray prose around the <tool_call> line.
+# Drop these three lines if you want creative chat output instead;
+# tool-calling accuracy will fall.
+PARAMETER temperature 0
+PARAMETER top_k 1
+PARAMETER top_p 0.95

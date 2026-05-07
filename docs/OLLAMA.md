@@ -150,54 +150,126 @@ Don't set this to the model's max "just in case." A 9B model at
 262 144 ctx costs ~36 GiB of KV cache and Ollama allocates it
 **up-front when the model loads**, even for one-line prompts.
 
-## gemma3 / gemma4 function calling (recipe)
+## gemma3 / gemma4 function calling — full setup
+
+### Why a custom Modelfile
 
 Out of the box, Ollama's `gemma4:latest` ships a passthrough chat
 template (`TEMPLATE {{ .Prompt }}`) — its built-in `RENDERER gemma4`
 does not inject the tool list into the prompt or the
-`<tool_call>...</tool_call>` markup the model expects. As a result a
-plain `gemma4` model never emits tool calls in oxenClaw, even when
-the prompt explicitly tells it to. Override with a Modelfile that
-hands tools into the user turn and tells the model how to format
-calls:
+`<tool_call>...</tool_call>` markup the model expects. A plain
+`gemma4` model never emits tool calls in oxenClaw even when the
+prompt explicitly tells it to. The fix is a Modelfile that overrides
+TEMPLATE so the user turn carries (a) the tool list, (b) the exact
+JSON-line shape the parser wants, and (c) an explicit "MUST emit"
+directive.
 
-```
-FROM gemma4:latest
-TEMPLATE """{{- if or .System .Tools }}<start_of_turn>user
-{{- if .System }}
-{{ .System }}
-{{- end }}
-{{- if .Tools }}
+Live measurement, 4-task tool-calling bench:
 
-You have access to the following tools. To call one, emit:
-<tool_call>{"name": "<tool_name>", "arguments": {<arg_object>}}</tool_call>
+| | tool calls | correct answers |
+|---|---|---|
+| plain `gemma4`         |  0/16 |  3/16 |
+| `gemma4-fc` (this doc) | 16/16 | 14/16 |
 
-After a <tool_response>...</tool_response> turn, use the result to
-answer the user.
-
-Available tools:
-{{- range .Tools }}
-{{ .Function }}
-{{- end }}
-{{- end }}<end_of_turn>
-{{ end }}
-{{- range $i, $msg := .Messages }}
-...standard gemma turn cycle...
-{{- end }}<start_of_turn>model
-"""
-PARAMETER stop <end_of_turn>
-PARAMETER stop <start_of_turn>
-```
-
-Build with `ollama create gemma4-fc -f /path/to/Modelfile`.
-Measured live: a 4-task tool-calling bench went from **0/16 tool
-calls / 3/16 correct answers** on plain `gemma4` to **16/16 / 14/16**
-on `gemma4-fc`.
-
-The same bench also surfaced a separate streaming-parser bug —
-gemma3/4 dump `tool_calls` in the FIRST streamed frame
-(`done:false`) rather than in the final `done` frame. Fixed in
+A separate streaming-parser bug surfaced on the same bench: gemma3/4
+return `tool_calls` in the FIRST streamed frame (`done:false`) rather
+than in the final `done` frame. Fixed in
 `oxenclaw/pi/providers/ollama.py` by hoisting the `tool_calls`
-extraction out of the done branch so it runs per-frame. Without
-that fix the Modelfile change alone is invisible to oxenClaw —
-Ollama returns the tool calls but the parser drops them.
+extraction out of the done branch so it runs per-frame. Without that
+fix, the Modelfile change alone is invisible to oxenClaw — Ollama
+returns the tool calls but the parser drops them. If you fork the
+provider, replicate the per-frame behaviour.
+
+### Build it (3 steps)
+
+The full Modelfile lives at
+[`scripts/modelfiles/gemma4-fc.Modelfile`](../scripts/modelfiles/gemma4-fc.Modelfile)
+in this repo — copy-pasteable, complete, including the deterministic
+decoding parameters that the bench used.
+
+```bash
+# 1. From the repo root, build the model. `-f` points at the file;
+#    the first arg is the local model name Ollama will register.
+ollama create gemma4-fc -f scripts/modelfiles/gemma4-fc.Modelfile
+
+# 2. Verify the build registered:
+ollama show --modelfile gemma4-fc | head -5
+# Expect: `FROM <blob path>` followed by the TEMPLATE block.
+
+# 3. Sanity-check the model loads + answers a trivial prompt:
+ollama run gemma4-fc "Reply with exactly one word: ok"
+```
+
+If step 1 fails with "model not found: gemma4:latest", run
+`ollama pull gemma4:latest` first — the FROM line in the Modelfile
+expects the base model to already exist locally.
+
+### Wire it into oxenClaw
+
+CLI:
+
+```bash
+oxenclaw gateway start \
+    --provider ollama \
+    --model gemma4-fc \
+    --base-url http://127.0.0.1:11434
+```
+
+Or in `config.yaml` (under the agent block whose model you want to
+swap — `assistant` for the default):
+
+```yaml
+agents:
+  assistant:
+    provider: ollama
+    model: gemma4-fc
+    base_url: http://127.0.0.1:11434
+```
+
+### Verify the tool-call path end-to-end
+
+After restarting the gateway with `gemma4-fc`, send a message that
+must call a tool. With the dashboard:
+
+1. Skills → Browse → install any knowledge-style skill that needs
+   shell (e.g. `yahoo-finance-cli`) with the "관련 툴 자동 설치"
+   checkbox on. (Requires `OXENCLAW_GATEWAY_BIN_AUTO_INSTALL=1` and
+   `OXENCLAW_ASSISTANT_SHELL=1` — see the `feat(assistant): opt-in
+   shell tool …` commit for details.)
+2. In a chat session, ask a question that triggers the skill —
+   e.g. `삼성전자 주가 알려줘`.
+3. In the gateway log, you should see a line like:
+
+   ```
+   INFO oxenclaw.agents.dispatch: ... tool_call name=shell …
+   ```
+
+   That line is the smoke test. If you see `turn done` with
+   `yielded=1` but no `tool_call` line in the same trace_id, the
+   model never emitted a call — most often because the wrong model
+   id is wired (plain `gemma4`, not `gemma4-fc`) or the gateway
+   hasn't been restarted after the build.
+
+### gemma3 — same recipe
+
+Change the FROM line:
+
+```
+FROM gemma3:latest
+```
+
+…and rebuild as `gemma3-fc`. Everything else (TEMPLATE, RENDERER,
+PARSER, PARAMETER lines) stays identical. Not bundled as a separate
+file in this repo to avoid shipping two near-identical Modelfiles;
+copy `gemma4-fc.Modelfile`, swap one line, run `ollama create
+gemma3-fc -f <path>`.
+
+### Troubleshooting
+
+| Symptom | Likely cause |
+|---|---|
+| `ollama create` errors with `model not found: gemma4:latest` | Run `ollama pull gemma4:latest` first. |
+| Gateway boots but no `tool_call` lines in the log | Gateway is still wired to plain `gemma4`. Restart with `--model gemma4-fc`. |
+| Tool call fires but argument JSON is malformed (parser errors) | Check `temperature` / `top_k` / `top_p` parameters — `gemma4-fc` uses 0 / 1 / 0.95. Higher temperature drops arg JSON quality sharply on this 4B model. |
+| Same model works in `ollama run` but oxenClaw never calls tools | Most likely the per-frame extraction fix didn't make it into your fork of `oxenclaw/pi/providers/ollama.py`. See the "streaming-parser bug" note above. |
+

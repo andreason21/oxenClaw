@@ -78,6 +78,15 @@ oxenclaw = "oxenclaw.cli.__main__:app"
 [project.entry-points."oxenclaw.plugins"]
 slack = "oxenclaw.extensions.slack.plugin_entry:SLACK_PLUGIN"
 
+# Skill-source plugins — third-party packages add new HTTP/SSH/etc.
+# skill catalogs without modifying oxenClaw. See
+# `oxenclaw/plugin_sdk/skill_source_contract.py` for the SDK
+# protocol; users opt a registry into a plugin via
+# `clawhub.registries[*]` { kind: plugin, plugin: <name> } in
+# config.yaml.
+[project.entry-points."oxenclaw.skill_sources"]
+oxenclaw_skill_source_demo = "oxenclaw.extensions.skill_source_demo.source:DemoSkillSource"
+
 [tool.hatch.build.targets.wheel]
 packages = ["oxenclaw"]
 

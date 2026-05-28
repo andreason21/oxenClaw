@@ -48,6 +48,18 @@ cd oxenClaw
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 
+# One-shot bootstrap — detects your Ubuntu version and installs the right
+# system packages (deadsnakes Python on 22.04, native on 24.04+, sandbox
+# `bwrap`, the llama.cpp build toolchain), scaffolds ~/.oxenclaw/config.yaml,
+# generates the gateway token, optionally sets up a local model, then runs
+# the doctor. Confirms before touching apt; `--print-only` to just see the
+# commands.
+oxenclaw setup            # interactive; same as `oxenclaw setup all`
+#   oxenclaw setup all --print-only   # show every command, change nothing
+#   oxenclaw setup all --yes          # auto-confirm the apt install
+#   oxenclaw setup all --no-apt       # skip system deps (already installed)
+
+# Sanity check (the bootstrap runs these for you)
 oxenclaw paths             # print resolved ~/.oxenclaw paths
 oxenclaw config validate   # smoke check (uses defaults if no config.yaml yet)
 ```
@@ -545,6 +557,17 @@ cd oxenClaw
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 
+# 원샷 부트스트랩 — Ubuntu 버전을 감지해 필요한 시스템 패키지를 설치하고
+# (22.04는 deadsnakes Python, 24.04+는 기본 Python, 샌드박스 `bwrap`,
+# llama.cpp 빌드 도구), ~/.oxenclaw/config.yaml 생성, 게이트웨이 토큰
+# 발급, 선택적으로 로컬 모델 설정까지 한 번에 처리한 뒤 doctor를 실행한다.
+# apt 실행 전 확인을 받으며, `--print-only`로 명령만 미리 볼 수 있다.
+oxenclaw setup            # 대화형; `oxenclaw setup all`과 동일
+#   oxenclaw setup all --print-only   # 명령만 출력, 아무것도 실행 안 함
+#   oxenclaw setup all --yes          # apt 설치 자동 승인
+#   oxenclaw setup all --no-apt       # 시스템 패키지 단계 건너뛰기
+
+# 검증 (부트스트랩이 이미 실행해 줌)
 oxenclaw paths             # ~/.oxenclaw 경로 출력
 oxenclaw config validate   # config.yaml 없어도 디폴트로 검증
 ```

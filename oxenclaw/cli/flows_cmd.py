@@ -20,8 +20,8 @@ doctor_app = typer.Typer(
 )
 setup_app = typer.Typer(
     add_completion=False,
-    no_args_is_help=True,
-    help="Interactive setup wizards (provider, model, channel).",
+    invoke_without_command=True,
+    help="Interactive setup wizards. Bare `oxenclaw setup` runs the full one-shot bootstrap.",
 )
 
 
@@ -124,6 +124,84 @@ class _TyperPrompter:
         return typer.confirm(message, default=default)
 
 
+def _run_full_setup(
+    *,
+    yes: bool,
+    skip_apt: bool,
+    print_only: bool,
+    skip_provider: bool,
+) -> None:
+    """Drive the one-shot `FullSetupWizard` and map its result to an exit code."""
+    from oxenclaw.flows.full_setup import DefaultSystemSetupIO, FullSetupWizard
+
+    interactive = sys.stdin.isatty()
+    wizard = FullSetupWizard(
+        prompter=_TyperPrompter(),
+        io=DefaultSystemSetupIO(),
+        interactive=interactive,
+        assume_yes=yes,
+        skip_apt=skip_apt,
+        print_only=print_only,
+        skip_provider=skip_provider,
+    )
+    result = wizard.run()
+    # Only the apt step can hard-fail the run; doctor warnings are advisory.
+    if result.apt_attempted and result.apt_ok is False:
+        raise typer.Exit(code=1)
+
+
+@setup_app.callback(invoke_without_command=True)
+def setup_root(ctx: typer.Context) -> None:
+    """Run the full one-shot bootstrap when invoked without a subcommand.
+
+    `oxenclaw setup` → full bootstrap (same as `oxenclaw setup all`).
+    `oxenclaw setup model` / `llamacpp` / `provider` → the focused wizards.
+    """
+    if ctx.invoked_subcommand is not None:
+        return
+    _run_full_setup(yes=False, skip_apt=False, print_only=False, skip_provider=False)
+
+
+@setup_app.command("all")
+def setup_all(
+    yes: bool = typer.Option(
+        False,
+        "--yes",
+        "-y",
+        help="Auto-confirm the apt install (still skips execution in a non-interactive shell).",
+    ),
+    skip_apt: bool = typer.Option(
+        False,
+        "--no-apt",
+        help="Skip the system-dependency (apt) step entirely.",
+    ),
+    print_only: bool = typer.Option(
+        False,
+        "--print-only",
+        help="Print every command without executing anything (apt + provider stay manual).",
+    ),
+    skip_provider: bool = typer.Option(
+        False,
+        "--skip-provider",
+        help="Don't prompt for a chat backend; leave the gateway on `--provider auto`.",
+    ),
+) -> None:
+    """One-shot full setup: system deps → config → token → provider → doctor.
+
+    Detects the OS / Ubuntu version and installs the right packages
+    (deadsnakes Python on 22.04, native on 24.04+, sandbox `bwrap`, the
+    llama.cpp build toolchain), scaffolds `~/.oxenclaw/config.yaml`,
+    generates the gateway token, optionally sets up a local model, then
+    runs `oxenclaw doctor`.
+    """
+    _run_full_setup(
+        yes=yes,
+        skip_apt=skip_apt,
+        print_only=print_only,
+        skip_provider=skip_provider,
+    )
+
+
 @setup_app.command("model")
 def setup_model() -> None:
     """Pick a default provider + model interactively."""
@@ -216,10 +294,12 @@ _INLINE_BASE_URL_HINT: dict[str, str] = {
 __all__ = [
     "doctor",
     "doctor_app",
+    "setup_all",
     "setup_app",
     "setup_llamacpp",
     "setup_model",
     "setup_provider",
+    "setup_root",
 ]
 
 

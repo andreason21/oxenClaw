@@ -19,12 +19,23 @@ from oxenclaw.flows.doctor import (
     DoctorSeverity,
     run_doctor,
 )
+from oxenclaw.flows.full_setup import (
+    FullSetupResult,
+    FullSetupWizard,
+)
 from oxenclaw.flows.model_picker import (
     ModelPickerChoice,
     pick_model_interactively,
 )
 from oxenclaw.flows.provider_flow import (
     list_provider_flow_contributions,
+)
+from oxenclaw.flows.system_deps import (
+    AptPlan,
+    PlatformInfo,
+    apt_plan_for,
+    detect_platform,
+    non_apt_guidance,
 )
 from oxenclaw.flows.types import (
     FlowContribution,
@@ -37,6 +48,7 @@ from oxenclaw.flows.types import (
 )
 
 __all__ = [
+    "AptPlan",
     "DoctorFinding",
     "DoctorReport",
     "DoctorSeverity",
@@ -46,8 +58,14 @@ __all__ = [
     "FlowDocsLink",
     "FlowOption",
     "FlowOptionGroup",
+    "FullSetupResult",
+    "FullSetupWizard",
     "ModelPickerChoice",
+    "PlatformInfo",
+    "apt_plan_for",
+    "detect_platform",
     "list_provider_flow_contributions",
+    "non_apt_guidance",
     "pick_model_interactively",
     "run_doctor",
     "sort_flow_contributions_by_label",

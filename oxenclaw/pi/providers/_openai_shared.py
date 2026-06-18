@@ -204,11 +204,17 @@ async def stream_openai_compatible(
     *,
     payload_patch: PayloadPatch | None = None,
     path: str = "/chat/completions",
+    auth_scheme: str = "bearer",
 ) -> AsyncIterator[AssistantMessageEvent]:
     """OpenAI-shape SSE stream → AssistantMessageEvent iterator.
 
     `payload_patch` is a hook for provider-specific tweaks (extra params,
     field renames) that `streamWithPayloadPatch` provides on the TS side.
+
+    `auth_scheme` selects how the API key is presented:
+    - ``"bearer"`` (default) → ``Authorization: Bearer <key>`` (OpenAI,
+      Gemini OpenAI-compat, local OpenAI-shape servers).
+    - ``"azure"`` → ``api-key: <key>`` (Azure OpenAI's key-based auth).
     """
     payload = build_openai_payload(ctx, stream=True)
     if opts.extra_params:
@@ -221,7 +227,10 @@ async def stream_openai_compatible(
         "Accept": "text/event-stream",
     }
     if ctx.api.api_key:
-        headers["Authorization"] = f"Bearer {ctx.api.api_key}"
+        if auth_scheme == "azure":
+            headers["api-key"] = ctx.api.api_key
+        else:
+            headers["Authorization"] = f"Bearer {ctx.api.api_key}"
     if ctx.api.organization:
         headers["OpenAI-Organization"] = ctx.api.organization
     headers.update(ctx.api.extra_headers)

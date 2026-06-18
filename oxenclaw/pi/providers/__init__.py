@@ -1,10 +1,12 @@
 """Provider stream wrappers.
 
-oxenClaw ships with **five** provider wrappers, all targeting on-host /
-LAN inference. Each module registers itself via
+oxenClaw is local-first: five on-host / LAN wrappers plus three opt-in
+hosted cloud wrappers (`openai`, `gemini`, `azure-openai` — in `cloud.py`)
+that only fire when an agent is explicitly configured with the matching
+provider id and an API key. Each module registers itself via
 `register_provider_stream(provider_id, fn)` at import time.
 
-Bundled providers:
+Bundled on-host providers:
 
 - `ollama`            — native `/api/chat`, bypasses Ollama's OpenAI
                         shim because the shim drops `num_ctx` and
@@ -27,6 +29,7 @@ configuration guide.
 """
 
 from oxenclaw.pi.providers import (  # noqa: F401  (registers via side effect)
+    cloud,
     llamacpp_direct,
     ollama,
     openai,

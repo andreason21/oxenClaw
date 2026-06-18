@@ -181,6 +181,56 @@ def test_pick_model_azure_requires_base_url() -> None:
     assert choice.api_key == "az-key"
 
 
+# ─── provider_config.py ──────────────────────────────────────────────
+
+
+def test_configure_hosted_provider_persists_key(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("OXENCLAW_HOME", str(tmp_path))
+    from oxenclaw.flows.provider_config import configure_hosted_provider
+
+    emitted: list[str] = []
+    prompter = _StubPrompter(texts=["", "sk-test"])  # default model, api key
+    result = configure_hosted_provider("openai", prompter=prompter, emit=emitted.append)
+
+    assert result.provider == "openai"
+    assert result.model == "gpt-4o-mini"
+    assert result.base_url is None
+    assert result.api_key_saved is True
+    assert 'export OPENAI_API_KEY="sk-test"' in (tmp_path / "env").read_text(encoding="utf-8")
+    assert any("gateway start --provider openai" in m for m in emitted)
+
+
+def test_configure_hosted_provider_azure_prompts_base_url(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("OXENCLAW_HOME", str(tmp_path))
+    from oxenclaw.flows.provider_config import configure_hosted_provider
+
+    prompter = _StubPrompter(texts=["", "https://res.openai.azure.com", "az-key"])
+    result = configure_hosted_provider("azure-openai", prompter=prompter, emit=lambda _m: None)
+
+    assert result.base_url == "https://res.openai.azure.com"
+    assert result.api_key_saved is True
+    assert 'export AZURE_OPENAI_API_KEY="az-key"' in (tmp_path / "env").read_text(encoding="utf-8")
+
+
+def test_configure_hosted_provider_empty_key_writes_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("OXENCLAW_HOME", str(tmp_path))
+    from oxenclaw.flows.provider_config import configure_hosted_provider
+
+    emitted: list[str] = []
+    prompter = _StubPrompter(texts=["", ""])  # default model, empty key
+    result = configure_hosted_provider("gemini", prompter=prompter, emit=emitted.append)
+
+    assert result.api_key_saved is False
+    assert not (tmp_path / "env").exists()
+    assert any("export GEMINI_API_KEY" in m for m in emitted)
+
+
 # ─── doctor.py ───────────────────────────────────────────────────────
 
 
@@ -222,6 +272,62 @@ def test_doctor_context_engine_probe_returns_legacy(tmp_path: Path) -> None:
     ce = next(f for f in report.findings if f.area == "context-engine")
     assert ce.severity == "ok"
     assert "legacy" in (ce.detail or "")
+
+
+def _clear_hosted_keys(monkeypatch: pytest.MonkeyPatch) -> None:
+    for var in ("OPENAI_API_KEY", "GEMINI_API_KEY", "AZURE_OPENAI_API_KEY"):
+        monkeypatch.delenv(var, raising=False)
+
+
+def test_doctor_provider_auth_ok_with_no_hosted_keys(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Local-first default: no hosted key is a clean state, not an error."""
+    _clear_hosted_keys(monkeypatch)
+    report = run_doctor(_fresh_paths(tmp_path), probe_embeddings=False)
+    pa = next(f for f in report.findings if f.area == "provider-auth")
+    assert pa.severity == "ok"
+    assert "local-first" in pa.message
+
+
+def test_doctor_provider_auth_reports_configured_key(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A key in the environment (as `setup provider` persists) shows up OK."""
+    _clear_hosted_keys(monkeypatch)
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-xyz")
+    report = run_doctor(_fresh_paths(tmp_path), probe_embeddings=False)
+    pa = next(f for f in report.findings if f.area == "provider-auth")
+    assert pa.severity == "ok"
+    assert "OPENAI_API_KEY set" in (pa.detail or "")
+
+
+def test_doctor_provider_auth_errors_when_config_pins_hosted_without_key(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _clear_hosted_keys(monkeypatch)
+    paths = _fresh_paths(tmp_path)
+    paths.config_file.write_text("agents:\n  default:\n    provider: openai\n", encoding="utf-8")
+    report = run_doctor(paths, probe_embeddings=False)
+    pa = next(f for f in report.findings if f.area == "provider-auth")
+    assert pa.severity == "error"
+    assert "no API key" in pa.message
+    assert report.ok is False
+
+
+def test_doctor_provider_auth_errors_on_azure_without_base_url(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _clear_hosted_keys(monkeypatch)
+    monkeypatch.setenv("AZURE_OPENAI_API_KEY", "az-key")
+    paths = _fresh_paths(tmp_path)
+    paths.config_file.write_text(
+        "agents:\n  default:\n    provider: azure-openai\n", encoding="utf-8"
+    )
+    report = run_doctor(paths, probe_embeddings=False)
+    pa = next(f for f in report.findings if f.area == "provider-auth")
+    assert pa.severity == "error"
+    assert "base_url" in pa.message
 
 
 # ─── CLI integration ────────────────────────────────────────────────
@@ -267,3 +373,18 @@ def test_oxenclaw_setup_provider_cli_unknown_provider_errors() -> None:
     runner = CliRunner()
     result = runner.invoke(app, ["setup", "provider", "definitely-not-a-provider"])
     assert result.exit_code == 1
+
+
+def test_oxenclaw_setup_provider_cli_hosted_show_does_not_persist(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`--show` (and any non-tty run) reports requirements without writing."""
+    monkeypatch.setenv("OXENCLAW_HOME", str(tmp_path))
+    from oxenclaw.cli.__main__ import app
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["setup", "provider", "openai", "--show"])
+    assert result.exit_code == 0, result.output
+    assert "hosted" in result.output
+    assert "OPENAI_API_KEY" in result.output
+    assert not (tmp_path / "env").exists()

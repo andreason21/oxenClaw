@@ -235,6 +235,101 @@ def _probe_providers(report: DoctorReport) -> None:
     report.add("providers", "ok", detail)
 
 
+def _canonical_provider(provider: str) -> str:
+    """Resolve `auto` / legacy aliases to a concrete catalog id without the
+    deprecation log the factory emits (doctor shouldn't spam warnings)."""
+    if provider in ("auto", "local", "pi"):
+        try:
+            from oxenclaw.agents.factory import resolve_default_local_provider
+
+            return resolve_default_local_provider()
+        except Exception:
+            return "ollama"
+    return provider
+
+
+def _probe_provider_auth(paths: OxenclawPaths, report: DoctorReport) -> None:
+    """Verify hosted-provider credentials are reachable.
+
+    oxenClaw is local-first, so *no* hosted key is a clean state — not an
+    error. The CLI auto-loads `~/.oxenclaw/env` on entry, so keys saved by
+    `oxenclaw setup provider` show up in the environment here. We:
+
+    - confirm which hosted catalog providers have their `<PROVIDER>_API_KEY`
+      visible (positive feedback that `setup provider` worked), and
+    - hard-fail when config.yaml pins an agent to a hosted provider whose
+      key (or required base URL) is missing — the gateway would 401 / error
+      at run time otherwise.
+    """
+    import os as _os
+
+    try:
+        import oxenclaw.pi.providers  # noqa: F401  registers wrappers
+        from oxenclaw.agents.factory import CATALOG_PROVIDERS
+        from oxenclaw.pi.auth import _HOSTED_DEFAULT_BASE_URL  # type: ignore[attr-defined]
+        from oxenclaw.pi.registry import EnvAuthStorage, is_inline_provider
+    except Exception as exc:
+        report.add("provider-auth", "warn", "credential probe import failed", str(exc))
+        return
+
+    def _env_var(pid: str) -> str:
+        return EnvAuthStorage._env_key(pid)  # type: ignore[attr-defined]
+
+    hosted = [p for p in CATALOG_PROVIDERS if not is_inline_provider(p)]
+    configured = [p for p in hosted if _os.environ.get(_env_var(p), "").strip()]
+
+    # Cross-check config.yaml: an agent pinned to a hosted provider must have
+    # a credential (env var OR an api_key in its config block) and, for
+    # resource-specific providers (Azure), a base_url.
+    agents: dict = {}
+    if paths.config_file.exists():
+        try:
+            from oxenclaw.config import load_config
+
+            agents = load_config(paths).agents or {}
+        except Exception:
+            agents = {}  # the config probe already reported the parse error
+
+    errored = False
+    for name, agent in agents.items():
+        provider = _canonical_provider(getattr(agent, "provider", None) or "auto")
+        if provider not in hosted:
+            continue  # inline / auto-resolved-local / unknown — not our concern here
+        extra = getattr(agent, "model_extra", None) or {}
+        env_var = _env_var(provider)
+        key_present = bool(_os.environ.get(env_var, "").strip()) or bool(extra.get("api_key"))
+        if not key_present:
+            report.add(
+                "provider-auth",
+                "error",
+                f"agent '{name}' uses hosted provider '{provider}' but no API key found",
+                f"run `oxenclaw setup provider {provider}` or set {env_var}",
+            )
+            errored = True
+            continue
+        if provider not in _HOSTED_DEFAULT_BASE_URL and not extra.get("base_url"):
+            report.add(
+                "provider-auth",
+                "error",
+                f"agent '{name}' uses '{provider}' which needs a resource-specific base_url",
+                "set model.extra.base_url in config or pass --base-url at start",
+            )
+            errored = True
+
+    if errored:
+        return
+    if configured:
+        detail = ", ".join(f"{_env_var(p)} set" for p in configured)
+        report.add(
+            "provider-auth",
+            "ok",
+            f"{len(configured)} hosted provider credential(s) configured",
+            detail,
+        )
+    else:
+        report.add("provider-auth", "ok", "no hosted provider credentials (local-first default)")
+
+
 def _probe_llamacpp_direct(report: DoctorReport) -> None:
     """Surface the two manual prerequisites for `--provider llamacpp-direct`.
 
@@ -437,6 +532,7 @@ def run_doctor(
     _probe_credentials(resolved, report)
     _probe_mcp(resolved, report)
     _probe_providers(report)
+    _probe_provider_auth(resolved, report)
     _probe_llamacpp_direct(report)
     _probe_context_engines(report)
     _probe_plugins(report)

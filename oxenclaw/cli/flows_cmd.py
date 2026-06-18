@@ -252,12 +252,23 @@ def setup_llamacpp() -> None:
 @setup_app.command("provider")
 def setup_provider(
     provider_id: str = typer.Argument(..., help="Catalog provider id (e.g. openai, gemini, ollama)."),
+    show: bool = typer.Option(
+        False,
+        "--show",
+        help="Only print what the provider needs; don't prompt for or persist a key.",
+    ),
 ) -> None:
-    """Show what oxenClaw needs to use a given catalog provider.
+    """Configure a catalog provider.
 
-    For inline providers (Ollama / vLLM / lmstudio / etc.) reports the
-    default base URL. For hosted providers reports the env var name
-    that EnvAuthStorage reads on startup.
+    Hosted providers (OpenAI / Gemini / Azure OpenAI): prompt for the API
+    key — and a resource-specific base URL where there's no bundled default
+    (Azure) — then save the key to `~/.oxenclaw/env` (mode 0600) as
+    `<PROVIDER>_API_KEY` so the gateway reads it via EnvAuthStorage on the
+    next start. Inline providers (Ollama / vLLM / lmstudio / …) need no
+    credential, so this just reports their default base URL.
+
+    Pass `--show` (or run with a non-interactive stdin) to print the
+    requirements without prompting or writing anything.
     """
     from oxenclaw.agents.factory import CATALOG_PROVIDERS, PROVIDER_DEFAULT_MODELS
     from oxenclaw.pi.auth import _HOSTED_DEFAULT_BASE_URL  # type: ignore[attr-defined]
@@ -272,16 +283,31 @@ def setup_provider(
     default_model = PROVIDER_DEFAULT_MODELS.get(provider_id)
     if default_model:
         typer.echo(f"  default model: {default_model}")
+
     if is_inline_provider(provider_id):
         typer.echo("  kind: inline (no API key required)")
         typer.echo(f"  default base_url: {_INLINE_BASE_URL_HINT.get(provider_id, '(per-model)')}")
-    else:
-        typer.echo("  kind: hosted (API key required)")
-        env_var = EnvAuthStorage._env_key(provider_id)  # type: ignore[attr-defined]
-        typer.echo(f"  env var: {env_var}")
+        typer.echo(f"  Start with: oxenclaw gateway start --provider {provider_id}")
+        return
+
+    # Hosted provider — needs an API key.
+    env_var = EnvAuthStorage._env_key(provider_id)  # type: ignore[attr-defined]
+    typer.echo("  kind: hosted (API key required)")
+    typer.echo(f"  env var: {env_var}")
+    typer.echo(
+        f"  default base_url: {_HOSTED_DEFAULT_BASE_URL.get(provider_id, '(required — resource-specific)')}"
+    )
+
+    if show or not sys.stdin.isatty():
         typer.echo(
-            f"  default base_url: {_HOSTED_DEFAULT_BASE_URL.get(provider_id, '(plugin-defined)')}"
+            f"  → run `oxenclaw setup provider {provider_id}` interactively to enter "
+            f"and save the key, or export {env_var} yourself."
         )
+        return
+
+    from oxenclaw.flows.provider_config import configure_hosted_provider
+
+    configure_hosted_provider(provider_id, prompter=_TyperPrompter(), emit=typer.echo)
 
 
 _INLINE_BASE_URL_HINT: dict[str, str] = {

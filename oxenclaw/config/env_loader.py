@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import logging
 import os
+import stat
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -37,6 +38,31 @@ def env_file_path() -> Path:
     home_override = os.environ.get("OXENCLAW_HOME", "").strip()
     base = Path(os.path.expanduser(home_override)) if home_override else Path.home() / ".oxenclaw"
     return base / "env"
+
+
+def persist_env_var(key: str, value: str, *, path: Path | None = None) -> Path:
+    """Non-destructively upsert `export <key>="<value>"` into `~/.oxenclaw/env`.
+
+    Any prior assignment of `key` (with or without an `export ` prefix) is
+    dropped so re-running setup updates the value in place rather than
+    appending duplicates. The file is chmod'd 0600 afterwards because it may
+    now hold a secret (a provider API key). Returns the resolved path.
+    """
+    target = path if path is not None else env_file_path()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    kept: list[str] = []
+    if target.exists():
+        for raw in target.read_text(encoding="utf-8").splitlines():
+            body = raw.strip()
+            if body.startswith("export "):
+                body = body[len("export ") :].lstrip()
+            if body.split("=", 1)[0].strip() == key:
+                continue  # drop the prior assignment of this var
+            kept.append(raw)
+    kept.append(f'export {key}="{value}"')
+    target.write_text("\n".join(kept) + "\n", encoding="utf-8")
+    os.chmod(target, stat.S_IRUSR | stat.S_IWUSR)
+    return target
 
 
 def _strip_quotes(value: str) -> str:
@@ -114,4 +140,5 @@ __all__ = [
     "env_file_path",
     "load_oxenclaw_env_file",
     "parse_env_file",
+    "persist_env_var",
 ]

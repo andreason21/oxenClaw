@@ -11,13 +11,10 @@ from oxenclaw.agents.prompts import (
     TIME_GUIDANCE,
     TOOL_CALL_BASIC,
     TOOL_USE_ENFORCEMENT,
-    WEATHER_PLAYBOOK,
     WEB_RESEARCH_PLAYBOOK,
-    WIKI_PLAYBOOK,
     build_system_prompt,
     needs_tool_use_enforcement,
 )
-
 
 # ── needs_tool_use_enforcement ───────────────────────────────────────
 
@@ -65,9 +62,7 @@ def test_minimal_prompt_has_only_always_on_sections() -> None:
     assert MEMORY_GUIDANCE not in p
     assert SKILLS_GUIDANCE not in p
     assert ANTI_REFUSAL not in p
-    assert WEATHER_PLAYBOOK not in p
     assert WEB_RESEARCH_PLAYBOOK not in p
-    assert WIKI_PLAYBOOK not in p
 
 
 def test_memory_section_only_when_memory_save_loaded() -> None:
@@ -97,13 +92,14 @@ def test_skills_section_drags_in_anti_refusal() -> None:
     assert ANTI_REFUSAL in p
 
 
-def test_per_tool_playbooks_each_gated_independently() -> None:
-    p = build_system_prompt(
-        model_id="claude-sonnet-4-6", tool_names=("weather", "wiki_search")
-    )
-    assert WEATHER_PLAYBOOK in p
-    assert WIKI_PLAYBOOK in p
-    assert WEB_RESEARCH_PLAYBOOK not in p
+def test_research_discipline_gated_on_web_search() -> None:
+    """The only per-tool section left is general research discipline,
+    gated on `web_search`. Domain playbooks (weather / wiki / stock) were
+    removed — that guidance belongs in each tool's own description."""
+    p_off = build_system_prompt(model_id="claude-sonnet-4-6", tool_names=("memory_save",))
+    p_on = build_system_prompt(model_id="claude-sonnet-4-6", tool_names=("web_search",))
+    assert WEB_RESEARCH_PLAYBOOK not in p_off
+    assert WEB_RESEARCH_PLAYBOOK in p_on
 
 
 # ── model-family overlay ─────────────────────────────────────────────
@@ -172,12 +168,12 @@ def test_section_order_is_stable_across_calls() -> None:
     prompt cache can match the prefix across turns."""
     p1 = build_system_prompt(
         model_id="qwen3.5:9b",
-        tool_names=("memory_save", "skill_run", "weather", "web_search"),
+        tool_names=("memory_save", "skill_run", "web_search"),
         channel="slack",
     )
     p2 = build_system_prompt(
         model_id="qwen3.5:9b",
-        tool_names=("memory_save", "skill_run", "weather", "web_search"),
+        tool_names=("memory_save", "skill_run", "web_search"),
         channel="slack",
     )
     assert p1 == p2
@@ -186,7 +182,7 @@ def test_section_order_is_stable_across_calls() -> None:
 def test_identity_always_at_top() -> None:
     p = build_system_prompt(
         model_id="qwen3.5:9b",
-        tool_names=("memory_save", "skill_run", "weather"),
+        tool_names=("memory_save", "skill_run", "web_search"),
         channel="slack",
     )
     assert p.startswith(DEFAULT_IDENTITY)

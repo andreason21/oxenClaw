@@ -59,9 +59,9 @@ TOOL_USE_ENFORCEMENT_MODELS: tuple[str, ...] = (
 
 TIME_GUIDANCE = (
     "Time + freshness. You do NOT know the current date or time without "
-    "calling a tool. If the user asks about \"now\", \"today\", \"이번 주\", "
-    "\"지금\", or any question whose answer depends on the current "
-    "date/time, call `get_time` first. Never guess the date."
+    "calling a tool. For any question about \"now\" / \"today\" or whose "
+    "answer depends on the current date/time, call `get_time` first. "
+    "Never guess the date."
 )
 
 
@@ -71,50 +71,41 @@ TIME_GUIDANCE = (
 # request). Keep memories as facts about the world / user, never as
 # instructions to the agent.
 MEMORY_GUIDANCE = (
-    "Memory playbook. Long-term facts about the user / project / past "
-    "decisions live in a vector-indexed memory store with two tiers: "
-    "the raw `inbox` (everything you save) and the curated "
-    "`short_term` tier (durable facts you've explicitly promoted).\n"
+    "Memory playbook. Durable facts about the user / project / past "
+    "decisions live in a vector-indexed store with two tiers: the raw "
+    "`inbox` (everything you save) and the curated `short_term` tier "
+    "(facts you've explicitly promoted).\n"
     "  - `memory_save(text=\"...\", tags=[\"...\"])` — append a stable "
-    "fact to the inbox whenever the user asks you to remember "
-    "something OR you learn a durable preference (their name, role, "
-    "deadline, tooling preference).\n"
-    "  - Write memories as DECLARATIVE FACTS, never as instructions "
-    "to yourself. \"User prefers concise responses\" ✓; \"Always "
-    "respond concisely\" ✗. \"User lives in Suwon\" ✓; \"When asked "
-    "for weather, use Suwon\" ✗. Imperative phrasing gets re-read as "
-    "a directive in later sessions and can override the user's "
-    "current request.\n"
+    "fact whenever the user asks you to remember something OR you learn "
+    "a durable preference (their name, role, deadline, tooling choice).\n"
+    "  - Write memories as DECLARATIVE FACTS, never as instructions to "
+    "yourself. \"User prefers concise responses\" ✓; \"Always respond "
+    "concisely\" ✗. Imperative phrasing gets re-read as a directive in "
+    "later sessions and can override the user's current request.\n"
     "  - Write COMPLETE natural-language sentences, not `key:value` "
-    "lines. When the user wrote in a non-English language, include "
-    "BOTH that language and English so the embedding store hits "
-    "cross-language queries.\n"
-    "  - Skip ephemeral chat-transcript details. Save WHAT IS, not "
-    "WHAT TO DO.\n"
+    "lines. When the user wrote in a non-English language, include BOTH "
+    "that language and English so the store hits cross-language "
+    "queries.\n"
+    "  - Save WHAT IS, not WHAT TO DO; skip ephemeral chat-transcript "
+    "details.\n"
     "  - `memory_search(query, k?)` — explicit recall when the auto-"
-    "injected memory block at prompt-time didn't surface what you "
-    "need.\n"
-    "  - When the user explicitly says \"this is important, don't "
-    "forget\" or you've verified a fact across multiple turns, use "
-    "`memory.promote` (RPC) to lift the inbox chunk into "
-    "`short_term`."
+    "injected memory block didn't surface what you need.\n"
+    "  - Promote a fact you've verified or the user flagged as "
+    "important into `short_term` via `memory.promote` (RPC)."
 )
 
 
 SKILLS_GUIDANCE = (
     "Skill discovery + execution. The system prompt's "
     "`<available_skills>` block lists installed skills with their "
-    "SKILL.md `<usage>` excerpt. To run an installed skill's "
-    "documented script, call the `skill_run` tool — e.g.:\n"
-    "  `skill_run(skill=\"stock-analysis\", script=\"analyze_stock.py\","
-    " args=[\"005930.KS\"])`\n"
-    "(Korean tickers use the `<6-digit>.KS` (KOSPI) / `.KQ` (KOSDAQ) "
-    "Yahoo suffix.) Pick the right script + args from the `<usage>` "
-    "excerpt; do NOT emit a tool_use block named after the skill — "
-    "the registry has no such function and the call will fail.\n"
-    "If the user's request implies a domain no installed skill "
-    "covers, call `skill_resolver(query=\"...\")` — it searches "
-    "ClawHub, installs the best match, then call `skill_run` "
+    "SKILL.md `<usage>` excerpt. To run a skill's documented script, "
+    "call the `skill_run` tool with the script + args drawn from that "
+    "`<usage>` excerpt — e.g. `skill_run(skill=\"<name>\", "
+    "script=\"<script>\", args=[...])`. Do NOT emit a tool_use block "
+    "named after the skill itself; the registry has no such function "
+    "and the call will fail. If the request implies a domain no "
+    "installed skill covers, call `skill_resolver(query=\"...\")` — it "
+    "searches ClawHub, installs the best match, then call `skill_run` "
     "afterwards."
 )
 
@@ -125,49 +116,26 @@ SKILLS_GUIDANCE = (
 # rule is redundant.
 ANTI_REFUSAL = (
     "Anti-refusal. When an installed skill in `<available_skills>` "
-    "covers the user's domain (stocks → stock-analysis, weather → "
-    "weather, etc.) DO NOT reply 'I can't access real-time / live "
-    "data'. The skill IS your access. Call `skill_run`; if you don't "
-    "know the right script, call it with your best guess and read the "
-    "error message — the tool lists every available script."
+    "covers the user's domain, DO NOT reply 'I can't access real-time / "
+    "live data' — the skill IS your access. Call `skill_run`; if you "
+    "don't know the right script, call it with your best guess and read "
+    "the error message — the tool lists every available script."
 )
 
 
-WEATHER_PLAYBOOK = (
-    "Weather playbook. For weather / temperature / forecast questions "
-    "(\"날씨\", \"weather\", \"forecast\") prefer the dedicated `weather` "
-    "tool — do NOT use web_search. Required arg: `city` (string) OR "
-    "`lat`+`lon` (numbers). Call shape: `weather(city=\"<city>\")`. If "
-    "the user didn't name a city, check the recalled-memories block "
-    "first for a location fact. Only ask (\"어느 도시 날씨를 "
-    "알려드릴까요?\") when neither the question nor recall reveals one."
-)
-
-
+# General research discipline (gated on `web_search`). Domain-specific
+# routing — which tool answers which kind of question — belongs in each
+# tool's own description, not here; this section only carries the
+# tool-agnostic "search → fetch → vary → cite, and prefer a specific
+# tool over a general one" behaviour.
 WEB_RESEARCH_PLAYBOOK = (
-    "Web research playbook. For factual / current-events / market-"
-    "research questions:\n"
-    "  1. Try `web_search` first — ranked URL list.\n"
-    "  2. If 0 hits OR snippets aren't enough, do NOT give up — pick "
-    "the best URL (or a known authoritative source) and call "
-    "`web_fetch` to load the actual page body. A 404 from web_fetch "
-    "is data, not a stopping signal.\n"
-    "  3. Try alternate query phrasings (English / Korean / `site:` "
-    "filters) before reporting nothing was found.\n"
-    "  4. Cite the URLs you fetched.\n"
-    "  5. NEVER use web_search when a dedicated tool exists "
-    "(weather → `weather`, current time → `get_time`)."
-)
-
-
-WIKI_PLAYBOOK = (
-    "Wiki playbook. The wiki vault stores durable knowledge that "
-    "survives across many sessions (decisions, entities, concepts).\n"
-    "  - When the user asks 'what do you know about X?' or 'remember "
-    "our decision on Y', call `wiki_search` first.\n"
-    "  - If nothing matches AND the user is sharing a new "
-    "authoritative claim or decision, propose `wiki_save` — explain "
-    "the page (kind, title, body) before calling it."
+    "Research discipline. For factual / current-events questions: try "
+    "`web_search` first for a ranked URL list. If there are no hits or "
+    "the snippets aren't enough, do NOT give up — pick the best URL and "
+    "call `web_fetch` to load the actual page body (a 404 is data, not "
+    "a stop signal). Vary the query phrasing before reporting nothing "
+    "was found, prefer a dedicated tool over `web_search` whenever one "
+    "fits the question, and cite the URLs you used."
 )
 
 
@@ -270,12 +238,8 @@ def build_system_prompt(
         parts.append(SKILLS_GUIDANCE)
         parts.append(ANTI_REFUSAL)
 
-    if "weather" in tools:
-        parts.append(WEATHER_PLAYBOOK)
     if "web_search" in tools:
         parts.append(WEB_RESEARCH_PLAYBOOK)
-    if "wiki_search" in tools:
-        parts.append(WIKI_PLAYBOOK)
 
     # Tool-use enforcement only when (a) the model needs steering AND
     # (b) at least one tool is actually registered. With zero tools the

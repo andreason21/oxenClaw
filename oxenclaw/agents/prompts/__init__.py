@@ -24,9 +24,7 @@ from oxenclaw.agents.prompts.builder import (
     TOOL_CALL_BASIC,
     TOOL_USE_ENFORCEMENT,
     TOOL_USE_ENFORCEMENT_MODELS,
-    WEATHER_PLAYBOOK,
     WEB_RESEARCH_PLAYBOOK,
-    WIKI_PLAYBOOK,
     build_system_prompt,
     needs_tool_use_enforcement,
 )
@@ -41,9 +39,7 @@ __all__ = [
     "TOOL_CALL_BASIC",
     "TOOL_USE_ENFORCEMENT",
     "TOOL_USE_ENFORCEMENT_MODELS",
-    "WEATHER_PLAYBOOK",
     "WEB_RESEARCH_PLAYBOOK",
-    "WIKI_PLAYBOOK",
     "build_system_prompt",
     "needs_tool_use_enforcement",
 ]

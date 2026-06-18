@@ -471,22 +471,18 @@ def test_pi_agent_set_model_id_rejects_unknown_model(tmp_path: Path) -> None:
         agent.set_model_id("ghost-model")
 
 
-def test_default_system_prompt_routes_weather_to_dedicated_tool() -> None:
-    """Production hit: gemma4 called `web_search` for "날씨 알려줘"
-    instead of the dedicated `weather` tool, then gave up when DDG
-    returned 0 hits. The system prompt must now explicitly steer
-    weather queries to `weather(city=...)` AND tell the model to
-    pull a city from the recalled-memories block when the user
-    didn't name one."""
+def test_default_system_prompt_prefers_dedicated_tools_generally() -> None:
+    """The weather / wiki micro-playbooks were removed in the prompt
+    cleanup (hermes-level: tool-specific routing lives in each tool's own
+    description, not the global prompt). The production fix for gemma4
+    calling `web_search` for "날씨 알려줘" survives as one general rule —
+    prefer a dedicated tool over `web_search` — with no weather-specific
+    section."""
     from oxenclaw.agents.pi_agent import DEFAULT_SYSTEM_PROMPT
 
-    assert "Weather playbook" in DEFAULT_SYSTEM_PROMPT
-    assert "`weather` tool" in DEFAULT_SYSTEM_PROMPT
-    assert "do NOT use web_search" in DEFAULT_SYSTEM_PROMPT
-    assert "weather(city=" in DEFAULT_SYSTEM_PROMPT
-    assert "recalled-memories" in DEFAULT_SYSTEM_PROMPT
-    # Web research playbook now also has a "specialised tool first" rule.
-    assert "weather → `weather`" in DEFAULT_SYSTEM_PROMPT
+    assert "prefer a dedicated tool over `web_search`" in DEFAULT_SYSTEM_PROMPT
+    assert "Weather playbook" not in DEFAULT_SYSTEM_PROMPT
+    assert "Wiki playbook" not in DEFAULT_SYSTEM_PROMPT
 
 
 async def test_pi_agent_injects_recall_prelude_into_user_message(tmp_path: Path) -> None:

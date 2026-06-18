@@ -57,15 +57,21 @@ logger = logging.getLogger(__name__)
 # `tests/test_agents_factory.py::test_catalog_providers_match_pi_registrations`
 # enforces the invariant.
 CATALOG_PROVIDERS: tuple[str, ...] = (
-    # On-host-only catalog. Cloud / aggregator providers were removed
-    # 2026-04-29; oxenClaw is local-first by design. Plugins can still
-    # add their own provider id at install time by registering a stream
-    # wrapper + extending this tuple.
+    # Local-first catalog. The five on-host providers are the default;
+    # `--provider auto` only ever picks among these. The three hosted
+    # cloud providers below are opt-in — they require an explicit
+    # `provider:` + a `<PROVIDER>_API_KEY`. Plugins can add further
+    # provider ids by registering a stream wrapper + extending this tuple.
     "ollama",
     "llamacpp-direct",
     "llamacpp",
     "vllm",
     "lmstudio",
+    # Opt-in hosted cloud providers (OpenAI-compatible SSE; see
+    # `oxenclaw/pi/providers/cloud.py`).
+    "openai",
+    "gemini",
+    "azure-openai",
 )
 
 # `echo` is a hidden test backend — not a real provider, but exposed
@@ -131,6 +137,12 @@ PROVIDER_DEFAULT_MODELS: dict[str, str] = {
     "llamacpp": "qwen3.5:9b",
     "vllm": "qwen3.5:9b",
     "lmstudio": "qwen3.5:9b",
+    # Hosted cloud defaults — cheap, broadly-available models. Override with
+    # `--model` / config `model:`. For azure-openai the id doubles as the
+    # default deployment name unless `extra.azure_deployment` is set.
+    "openai": "gpt-4o-mini",
+    "gemini": "gemini-2.5-flash",
+    "azure-openai": "gpt-4o-mini",
 }
 
 # Reasonable default context windows for synthesised (non-catalog) models.

@@ -1,11 +1,12 @@
 """High-level credential resolution.
 
-Combines `Model` + `AuthStorage` → `Api`. The catalog is on-host-only,
-so every supported provider is `is_inline_provider(...)` → True and the
-resolution is just a thin wrapper around `inline_api(model)`. The
-hosted-provider code path is preserved as a stub so external plugins
-that register their own provider id can still slot in by extending
-`_HOSTED_DEFAULT_BASE_URL` (currently empty).
+Combines `Model` + `AuthStorage` → `Api`. Local-first providers (Ollama /
+LM Studio / vLLM / llama.cpp / llamacpp-direct) are `is_inline_provider(...)`
+→ True and resolve via `inline_api(model)` with no credential. The opt-in
+hosted providers (`openai`, `gemini`, `azure-openai`) take the credentialed
+path: an API key from `AuthStorage` plus a base URL from
+`model.extra['base_url']` or `_HOSTED_DEFAULT_BASE_URL`. External plugins can
+register further hosted providers by extending `_HOSTED_DEFAULT_BASE_URL`.
 """
 
 from __future__ import annotations
@@ -13,9 +14,16 @@ from __future__ import annotations
 from oxenclaw.pi.models import Api, Model, ProviderId
 from oxenclaw.pi.registry import AuthStorage, inline_api, is_inline_provider
 
-# Empty by default: oxenClaw's bundled catalog is local-only. Plugins that
-# want to add a hosted provider should append to this dict at import time.
-_HOSTED_DEFAULT_BASE_URL: dict[ProviderId, str] = {}
+# Default base URLs for the bundled hosted providers. oxenClaw is local-first;
+# these only matter when an agent is explicitly configured with one of these
+# provider ids (and the matching `<PROVIDER>_API_KEY`). `azure-openai` is
+# intentionally absent — an Azure endpoint is resource-specific, so the
+# operator must supply `model.extra['base_url']` / `--base-url`. Plugins can
+# append further hosted providers to this dict at import time.
+_HOSTED_DEFAULT_BASE_URL: dict[ProviderId, str] = {
+    "openai": "https://api.openai.com/v1",
+    "gemini": "https://generativelanguage.googleapis.com/v1beta/openai",
+}
 
 
 class MissingCredential(RuntimeError):

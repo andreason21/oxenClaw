@@ -116,7 +116,7 @@ def test_pick_model_inline_provider_with_default_model_no_overrides() -> None:
 def test_pick_model_llamacpp_direct_no_base_url_prompt() -> None:
     """llamacpp-direct: managed-server path — no base_url override
     prompt (oxenClaw picks an ephemeral port itself) and no api_key
-    prompt (the catalog has no hosted providers)."""
+    prompt (it is an inline/local provider)."""
     prompter = _StubPrompter(
         selects=["llamacpp-direct"],
         confirms=[True],  # accept default model — no override / no key prompts follow
@@ -142,12 +142,43 @@ def test_pick_model_inline_provider_with_base_url_override() -> None:
 def test_pick_model_user_supplies_custom_model() -> None:
     prompter = _StubPrompter(
         selects=["openai"],
-        confirms=[False],  # don't accept default model
-        texts=["gpt-4o", ""],  # custom model + skip api key
+        confirms=[False, False],  # don't accept default model, no base_url override
+        texts=["gpt-4o", ""],  # custom model + empty api key (read from env later)
     )
     choice = pick_model_interactively(prompter)
+    assert choice.provider == "openai"
     assert choice.model == "gpt-4o"
+    assert choice.base_url is None
     assert choice.api_key is None
+
+
+def test_pick_model_hosted_provider_persists_api_key() -> None:
+    """openai: hosted provider with a bundled default base URL — accept the
+    default model, decline the base_url override, and supply a key."""
+    prompter = _StubPrompter(
+        selects=["openai"],
+        confirms=[True, False],  # accept default model, no base_url override
+        texts=["sk-test"],  # api key
+    )
+    choice = pick_model_interactively(prompter)
+    assert choice.provider == "openai"
+    assert choice.model == "gpt-4o-mini"
+    assert choice.base_url is None
+    assert choice.api_key == "sk-test"
+
+
+def test_pick_model_azure_requires_base_url() -> None:
+    """azure-openai has no bundled default endpoint, so the base URL is
+    prompted unconditionally (no confirm) before the API key."""
+    prompter = _StubPrompter(
+        selects=["azure-openai"],
+        confirms=[True],  # accept default model
+        texts=["https://res.openai.azure.com", "az-key"],  # base_url (required) + api key
+    )
+    choice = pick_model_interactively(prompter)
+    assert choice.provider == "azure-openai"
+    assert choice.base_url == "https://res.openai.azure.com"
+    assert choice.api_key == "az-key"
 
 
 # ─── doctor.py ───────────────────────────────────────────────────────

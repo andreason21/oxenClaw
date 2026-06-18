@@ -78,25 +78,46 @@ def pick_model_interactively(prompter: Prompter) -> ModelPickerChoice:
             default="",
         )
 
-    base_url: str | None = None
-    # Catalog is local-only — every provider is inline. base_url
-    # override is offered for the OpenAI-compat trio (vllm / lmstudio /
-    # llamacpp) since those typically run on operator-chosen ports.
-    # Ollama uses the daemon's well-known port; llamacpp-direct picks
-    # an ephemeral port at spawn time and ignores --base-url.
-    if provider in {"vllm", "lmstudio", "llamacpp"}:
-        change_url = prompter.confirm(
-            f"Override the {provider} base URL? (default endpoint will be used otherwise)",
-            default=False,
-        )
-        if change_url:
-            base_url = prompter.text(f"{provider} base URL", default="")
+    from oxenclaw.pi.registry import is_inline_provider
 
+    base_url: str | None = None
     api_key: str | None = None
-    # No hosted providers in the catalog → nothing to prompt for keys.
-    if False:
-        # Hosted providers — ask for a key. Empty answer means "leave
-        # the env var to provide it later" (EnvAuthStorage path).
+    if is_inline_provider(provider):
+        # Inline (local) providers need no credential. A base_url
+        # override is offered for the OpenAI-compat trio (vllm / lmstudio /
+        # llamacpp) since those typically run on operator-chosen ports.
+        # Ollama uses the daemon's well-known port; llamacpp-direct picks
+        # an ephemeral port at spawn time and ignores --base-url.
+        if provider in {"vllm", "lmstudio", "llamacpp"}:
+            change_url = prompter.confirm(
+                f"Override the {provider} base URL? (default endpoint will be used otherwise)",
+                default=False,
+            )
+            if change_url:
+                base_url = prompter.text(f"{provider} base URL", default="") or None
+    else:
+        # Hosted providers (openai / gemini / azure-openai). Some have a
+        # bundled default endpoint; resource-specific ones (azure-openai)
+        # have none and must be told their base URL.
+        from oxenclaw.pi.auth import _HOSTED_DEFAULT_BASE_URL
+
+        if provider not in _HOSTED_DEFAULT_BASE_URL:
+            base_url = (
+                prompter.text(
+                    f"{provider} base URL (required — resource-specific endpoint)",
+                    default="",
+                )
+                or None
+            )
+        else:
+            change_url = prompter.confirm(
+                f"Override the {provider} base URL? (default endpoint will be used otherwise)",
+                default=False,
+            )
+            if change_url:
+                base_url = prompter.text(f"{provider} base URL", default="") or None
+        # Ask for a key. Empty answer means "leave the env var to provide
+        # it later" — EnvAuthStorage reads `<PROVIDER>_API_KEY` at run time.
         secret = prompter.text(
             f"{provider} API key (leave empty to read from env at run time)",
             default="",

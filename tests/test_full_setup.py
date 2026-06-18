@@ -318,6 +318,88 @@ def test_wizard_macos_prints_brew_guidance(
     assert any("brew" in m for m in io.messages)
 
 
+# ─── hosted provider step ────────────────────────────────────────────
+
+
+def test_wizard_hosted_provider_persists_key(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Picking the hosted backend → openai with the default model + a key
+    writes `OPENAI_API_KEY` to ~/.oxenclaw/env (mode 0600)."""
+    import stat
+
+    monkeypatch.setenv("OXENCLAW_HOME", str(tmp_path))
+    prompter = _StubPrompter(
+        selects=["hosted", "openai"],
+        texts=["", "sk-test"],  # accept default model (empty→default), api key
+    )
+    io = _StubIO()
+    wizard = FullSetupWizard(
+        prompter=prompter,
+        io=io,
+        interactive=True,
+        platform_override=_ubuntu("24.04"),
+    )
+    choice = wizard.step_provider()
+
+    assert choice == "openai"
+    env_file = tmp_path / "env"
+    assert env_file.is_file()
+    assert 'export OPENAI_API_KEY="sk-test"' in env_file.read_text(encoding="utf-8")
+    assert stat.S_IMODE(env_file.stat().st_mode) == 0o600
+    blob = "\n".join(io.messages)
+    assert "OPENAI_API_KEY" in blob
+    assert "oxenclaw gateway start --provider openai" in blob
+
+
+def test_wizard_hosted_azure_prompts_required_base_url(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """azure-openai has no bundled endpoint, so the base URL is prompted and
+    echoed in the start command."""
+    monkeypatch.setenv("OXENCLAW_HOME", str(tmp_path))
+    prompter = _StubPrompter(
+        selects=["hosted", "azure-openai"],
+        texts=["", "https://res.openai.azure.com", "az-key"],  # model, base_url, key
+    )
+    io = _StubIO()
+    wizard = FullSetupWizard(
+        prompter=prompter,
+        io=io,
+        interactive=True,
+        platform_override=_ubuntu("24.04"),
+    )
+    choice = wizard.step_provider()
+
+    assert choice == "azure-openai"
+    assert 'export AZURE_OPENAI_API_KEY="az-key"' in (tmp_path / "env").read_text(encoding="utf-8")
+    blob = "\n".join(io.messages)
+    assert "--base-url https://res.openai.azure.com" in blob
+
+
+def test_wizard_hosted_provider_without_key_prints_export_hint(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Empty key → no env file written, just an export hint."""
+    monkeypatch.setenv("OXENCLAW_HOME", str(tmp_path))
+    prompter = _StubPrompter(
+        selects=["hosted", "gemini"],
+        texts=["", ""],  # default model, empty key
+    )
+    io = _StubIO()
+    wizard = FullSetupWizard(
+        prompter=prompter,
+        io=io,
+        interactive=True,
+        platform_override=_ubuntu("24.04"),
+    )
+    choice = wizard.step_provider()
+
+    assert choice == "gemini"
+    assert not (tmp_path / "env").exists()
+    assert any("export GEMINI_API_KEY" in m for m in io.messages)
+
+
 # ─── CLI integration ─────────────────────────────────────────────────
 
 

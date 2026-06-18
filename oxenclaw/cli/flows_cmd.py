@@ -191,8 +191,10 @@ def setup_all(
     Detects the OS / Ubuntu version and installs the right packages
     (deadsnakes Python on 22.04, native on 24.04+, sandbox `bwrap`, the
     llama.cpp build toolchain), scaffolds `~/.oxenclaw/config.yaml`,
-    generates the gateway token, optionally sets up a local model, then
-    runs `oxenclaw doctor`.
+    generates the gateway token, optionally sets up a chat provider — a
+    local model (llamacpp-direct / Ollama) or a hosted one (OpenAI /
+    Gemini / Azure OpenAI, persisting its API key to `~/.oxenclaw/env`) —
+    then runs `oxenclaw doctor`.
     """
     _run_full_setup(
         yes=yes,
@@ -249,7 +251,7 @@ def setup_llamacpp() -> None:
 
 @setup_app.command("provider")
 def setup_provider(
-    provider_id: str = typer.Argument(..., help="Catalog provider id (e.g. anthropic, openai)."),
+    provider_id: str = typer.Argument(..., help="Catalog provider id (e.g. openai, gemini, ollama)."),
 ) -> None:
     """Show what oxenClaw needs to use a given catalog provider.
 

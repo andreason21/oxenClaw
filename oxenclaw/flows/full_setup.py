@@ -12,8 +12,11 @@ ready-to-start gateway with a single command:
    `config.yaml` when one doesn't exist yet.
 3. **Gateway token** — generate + persist the bearer token so the
    dashboard login works on first start.
-4. **Provider** — optionally chain into the `llamacpp-direct` wizard or
-   print the Ollama recipe.
+4. **Provider** — pick a chat backend: chain into the `llamacpp-direct`
+   wizard, print the Ollama recipe, or configure a hosted provider
+   (OpenAI / Gemini / Azure OpenAI) — prompting for the model + API key
+   and saving the key to `~/.oxenclaw/env` (mode 0600) so the gateway
+   reads it via `EnvAuthStorage` on the next start.
 5. **Doctor** — run the aggregated health check and surface the verdict.
 
 Like `LlamaCppSetupWizard`, the wizard takes an injectable `Prompter`
@@ -53,7 +56,8 @@ channels: {}
 agents:
   default:
     id: default
-    provider: auto          # auto | llamacpp-direct | ollama | vllm | anthropic | ...
+    provider: auto          # auto | llamacpp-direct | ollama | vllm | lmstudio
+                            # hosted (API key required): openai | gemini | azure-openai
     model: qwen3.5:9b
     system_prompt: |
       You are a helpful assistant.
@@ -247,9 +251,10 @@ class FullSetupWizard:
 
         llamacpp = "llamacpp-direct — managed local llama.cpp (recommended, ~3x faster)"
         ollama = "ollama — classic local server (also used for embeddings)"
+        hosted = "hosted — OpenAI / Gemini / Azure OpenAI (API key required)"
         choice = self.prompter.select(
             "Which chat backend would you like to set up now?",
-            choices=[llamacpp, ollama, _CANCEL],
+            choices=[llamacpp, ollama, hosted, _CANCEL],
             default=llamacpp,
         )
         if choice == _CANCEL:
@@ -257,6 +262,8 @@ class FullSetupWizard:
             return None
         if choice.startswith("llamacpp-direct"):
             return self._run_llamacpp_wizard()
+        if choice.startswith("hosted"):
+            return self._hosted_recipe()
         return self._ollama_recipe()
 
     def _run_llamacpp_wizard(self) -> str:
@@ -277,6 +284,90 @@ class FullSetupWizard:
         self.io.emit("    ollama pull nomic-embed-text     # embeddings")
         self.io.emit("  Then start with: oxenclaw gateway start --provider ollama")
         return "ollama"
+
+    def _hosted_recipe(self) -> str | None:
+        """Configure an opt-in hosted provider: pick provider + model, then
+        persist its API key to `~/.oxenclaw/env` so the gateway reads it via
+        `EnvAuthStorage` on the next start. Returns the provider id (or None
+        when cancelled)."""
+        from oxenclaw.agents.factory import CATALOG_PROVIDERS, PROVIDER_DEFAULT_MODELS
+        from oxenclaw.pi.auth import _HOSTED_DEFAULT_BASE_URL
+        from oxenclaw.pi.registry import EnvAuthStorage, is_inline_provider
+
+        hosted = sorted(p for p in CATALOG_PROVIDERS if not is_inline_provider(p))
+        if not hosted:
+            self.io.emit("  No hosted providers are registered in this build.")
+            return None
+
+        provider = self.prompter.select(
+            "Which hosted provider?",
+            choices=[*hosted, _CANCEL],
+            default=hosted[0],
+        )
+        if provider == _CANCEL:
+            self.io.emit("  Skipping hosted provider; the gateway defaults to `--provider auto`.")
+            return None
+
+        default_model = PROVIDER_DEFAULT_MODELS.get(provider, "")
+        model = self.prompter.text(f"Model id for {provider}", default=default_model) or default_model
+
+        # Resource-specific providers (azure-openai) have no bundled default
+        # endpoint and must be told their base URL.
+        base_url: str | None = None
+        if provider not in _HOSTED_DEFAULT_BASE_URL:
+            base_url = (
+                self.prompter.text(
+                    f"{provider} base URL (required — e.g. https://<resource>.openai.azure.com)",
+                    default="",
+                )
+                or None
+            )
+
+        env_var = EnvAuthStorage._env_key(provider)  # type: ignore[attr-defined]
+        key = self.prompter.text(
+            f"{provider} API key (saved to ~/.oxenclaw/env as {env_var}; "
+            "leave empty to set it yourself later)",
+            default="",
+            secret=True,
+        )
+        if key:
+            path = self._persist_provider_key(env_var, key)
+            self.io.emit(f"  [OK]    saved {env_var} → {path} (mode 0600)")
+        else:
+            self.io.emit("  No key entered. Export it before starting, e.g.:")
+            self.io.emit(f"    export {env_var}='<your key>'")
+
+        start = f"oxenclaw gateway start --provider {provider} --model {model}"
+        if base_url:
+            start += f" --base-url {base_url}"
+        self.io.emit(f"  Then start with: {start}")
+        return provider
+
+    @staticmethod
+    def _persist_provider_key(env_var: str, value: str) -> Path:
+        """Non-destructively upsert `export <env_var>="<value>"` into
+        `~/.oxenclaw/env` (honouring $OXENCLAW_HOME) and chmod it 0600 — the
+        file now holds a secret. Mirrors the llamacpp wizard's env persistence
+        but scoped to a single credential."""
+        import stat
+
+        from oxenclaw.config.env_loader import env_file_path
+
+        path = env_file_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        kept: list[str] = []
+        if path.exists():
+            for ln in path.read_text(encoding="utf-8").splitlines():
+                body = ln.strip()
+                if body.startswith("export "):
+                    body = body[len("export ") :]
+                if body.split("=", 1)[0].strip() == env_var:
+                    continue  # drop any prior assignment of this var
+                kept.append(ln)
+        kept.append(f'export {env_var}="{value}"')
+        path.write_text("\n".join(kept) + "\n", encoding="utf-8")
+        os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
+        return path
 
     # — Step 5: doctor ────────────────────────────────────────────────
 
